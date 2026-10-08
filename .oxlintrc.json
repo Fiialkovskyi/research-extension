@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "react-perf", "import", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "typescript/consistent-type-imports": "error",
+    "import/no-duplicates": "error",
+    "no-console": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/entrypoints/**/main.tsx", "vitest.setup.ts"],
+      "rules": {
+        "import/no-unassigned-import": "off"
+      }
+    },
+    {
+      "files": [
+        "wxt.config.ts",
+        "vitest.config.ts",
+        "vitest.setup.ts",
+        "e2e/**/*.ts",
+        "**/*.spec.ts",
+        "**/*.spec.tsx"
+      ],
+      "env": { "node": true }
+    }
+  ],
+  "ignorePatterns": [".output", ".wxt", "node_modules", "coverage"]
+}

@@ -1,0 +1,54 @@
+{
+  "name": "research-graph-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Research Graph browser extension — local-only research graph capture and synthesis",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "postinstall": "wxt prepare",
+    "dev": "wxt -b firefox",
+    "build:firefox": "wxt build -b firefox",
+    "zip:firefox": "wxt zip -b firefox",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run zip:firefox && wdio run e2e/wdio.conf.ts",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run test:e2e"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@wdio/cli": "^10.0.1",
+    "@wdio/globals": "^10.0.1",
+    "@wdio/local-runner": "^10.0.1",
+    "@wdio/mocha-framework": "^10.0.1",
+    "@wdio/spec-reporter": "^10.0.1",
+    "@wxt-dev/module-react": "^1.2.2",
+    "geckodriver": "^7.0.0",
+    "jsdom": "^29.1.1",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3",
+    "web-ext": "^10.7.0",
+    "wxt": "^0.21.4"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}
