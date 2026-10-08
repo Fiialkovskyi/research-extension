@@ -1,0 +1,15 @@
+# dependencies
+node_modules/
+
+# build output
+.output/
+.wxt/
+dist/
+
+# test & tooling artifacts
+coverage/
+logs/
+*.log
+
+# macOS
+.DS_Store
