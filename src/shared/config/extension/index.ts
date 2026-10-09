@@ -14,3 +14,6 @@ export const FIREFOX_MIN_VERSION = "140.0";
 
 /** Path of the toolbar action's popup document inside the package. */
 export const POPUP_PATH = "popup.html";
+
+/** Path of the options document inside the package, where models are managed. */
+export const OPTIONS_PATH = "options.html";

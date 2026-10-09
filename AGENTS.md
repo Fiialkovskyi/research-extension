@@ -174,6 +174,32 @@ strict mode with `noUncheckedIndexedAccess`; imports within `src/` use the `@/` 
 inside a single entity use relative paths. Auto-imports are deliberately disabled in `wxt.config.ts`
 — write imports explicitly.
 
+**Functions are arrow functions assigned to a `const`.**
+
+```ts
+export const getToolbarWidgetId = (addOnId: string): string => { … };
+```
+
+Not for brevity — for the two things it rules out. A `const` cannot be hoisted, so a module reads in
+dependency order rather than letting a call appear above the thing it calls; and it cannot be
+redeclared, so a second function of the same name in the same file is an error instead of a silent
+replacement.
+
+**React components are the exception** and keep a declaration:
+
+```tsx
+export function Panel({ children }: PanelProps) { … }
+```
+
+A declaration gives a component its name in stack traces, in React's developer tools and in test
+failure output, where an anonymous arrow shows up as `<Unknown>`. They are already the exception for
+naming — PascalCase from a camelCase directory — so this is the same exception, not a new one.
+
+**Most of the existing code predates this rule**, so a declaration you find is not evidence the rule
+was dropped. Conversion happens as files are touched for other reasons, deliberately rather than as
+one sweep: a rename across nearly every file would bury whatever change it travelled with. So write
+new functions as arrows, convert the ones you are already editing, and leave the rest alone.
+
 ## Testing Guidelines
 
 Two layers, with no overlap in file patterns:
