@@ -2,6 +2,10 @@
 
 ## Project Structure & Module Organization
 
+This file is the short version. The detailed rules, with examples and the list of places where the
+code still deviates from them, are in [`docs/codeGuide/`](docs/codeGuide/README.md). Directories and
+files are camelCase; Markdown documents are `UPPER_SNAKE_CASE.md`.
+
 The extension source lives in `src/`, organised in four layers that may only import downward
 (`entrypoints` → `app` → `features` → `shared`):
 
@@ -21,12 +25,16 @@ The extension source lives in `src/`, organised in four layers that may only imp
   root owns dispatch and takes everything the browser provides as a dependency, so the path a
   message travels is exercised in unit tests without an extension runtime.
 - `src/features/` — user-facing capabilities, each split into `model/` (pure logic) and `ui/`
-  (components). A feature's `index.ts` is its only public surface; nothing outside may reach past it.
-- `src/shared/` — reusable primitives: `ui/` components, `config/` constants, `styles/` the single
-  Tailwind entry stylesheet, `rpc/` the typed message envelope every context speaks, `storage/` the
-  versioned local database and its forward-only migrations, and `modelManifest/` the shape of an
-  installed model. The last two hold types that several features read, which is why they sit here
-  rather than beside any one of them.
+  (components). A feature's `index.ts` is its only public surface; nothing outside may reach past it,
+  with two exceptions: a module that pulls in a heavy runtime (below), and the feature's components,
+  which the barrel never exports — the surface that renders one imports it from `ui/` by path, so
+  the background can import any feature barrel without React.
+- `src/shared/` — reusable primitives, each imported as `@/shared/<name>` and never deeper: `ui/`
+  components, `config/` constants (one module, one barrel, a subdirectory per topic), `styles/` the
+  single Tailwind entry stylesheet, `rpc/` the typed message envelope every context speaks,
+  `storage/` the versioned local database and its forward-only migrations, and `modelManifest/` the
+  shape of an installed model. The last two hold types that several features read, which is why they
+  sit here rather than beside any one of them.
 
 Every entity is a directory whose `index.ts` / `index.tsx` is its public surface, with its unit test
 beside it as `index.spec.ts(x)`. Add a capability by adding a directory, not by widening a barrel.
@@ -150,10 +158,13 @@ that happened to need it first. A precomputed instance hides that a value is der
 time, and gives the module a second export that has to be kept in step with the first.
 
 A type belongs to the function that defines its shape — declare it in that function's file and let
-callers import it from there, rather than collecting types in a separate file. A value used by more
-than one file in a module lives in that module's `constants.ts`; one used by a single file stays in
-that file. Logic that touches the live browser is kept thin, with the pure parts it needs — script
-construction, payload building, response parsing — extracted as helpers so they carry unit tests.
+callers import it from there. When a file would declare more than two types (schema-derived ones
+included), all of them move to a `types.ts` beside it. A value used by more than one file in a
+module lives in that module's `constants.ts`, which holds plain values only; one used by a single
+file stays in that file. Every valibot schema lives in a `schemas.ts` — the entity's own when one
+entity uses it, the module's when several files do — never inline. Neither file holds types. Logic
+that touches the live browser is kept thin, with the pure parts it needs — script construction,
+payload building, response parsing — extracted as helpers so they carry unit tests.
 
 End-to-end tests live in `e2e/` (WebdriverIO config, Firefox fixtures, specs) and never under `src/`.
 A fixture follows the same atomic rule as `src/`: each helper is a folder under its `utils/` with an
@@ -230,11 +241,14 @@ Two layers, with no overlap in file patterns:
   packages the extension, installs it temporarily into a throwaway profile, clicks the real toolbar
   icon, and reads the popup through Firefox's chrome context.
 
-**A module that only declares constants carries no spec of its own.** `constants.ts` and a
-`shared/config/*` module such as `extension/index.ts` hold values, not logic — a test that just
-re-asserts a literal (`expect(POPUP_PATH).toBe("popup.html")`) changes in lockstep with the constant
-and can never fail on its own, so it catches nothing a type error would not already catch. Put the
-coverage on the function that consumes the constant, where the value's effect is observable instead.
+**A module that only declares constants carries no spec of its own.** `constants.ts` and
+`schemas.ts` hold values, not logic — a test that just re-asserts a literal
+(`expect(POPUP_PATH).toBe("popup.html")`) changes in lockstep with the constant and can never fail on
+its own, so it catches nothing a type error would not already catch. Put the coverage on the
+function that consumes the constant, where the value's effect is observable instead. The one
+exception is a **guard**: when a value carries a costly invariant no type can express — a model
+profile pinned to a commit, a runtime path that must never be a remote origin — a
+`constants.spec.ts` may check that invariant and nothing else.
 
 Name tests for the behaviour under test. Everything that touches Firefox UI internals
 (`CustomizableUI`, panel ids, the Marionette actor used to read the popup's DOM) stays inside
