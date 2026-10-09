@@ -119,9 +119,28 @@ path from the one context that runs it, and the barrel carries a comment saying 
 otherwise the next tidy-up of the exports puts it back.
 
 A `utils/` directory appears only to hold helpers private to one function. A group of sibling
-functions is not "utils" — it is the module, and its `index.ts` re-exports them. A helper that a
-second module starts using is no longer private: lift it to sit beside its callers. The depth of a
-helper therefore records how far it is shared, and nesting stops being arbitrary.
+functions is not "utils" — it is the module, and its `index.ts` re-exports them.
+
+**`utils/` is one level and never nests inside another `utils/`.** A helper that a helper needs sits
+flat beside it in the same directory:
+
+```
+collectPolicyViolations/
+├── index.ts
+├── index.spec.ts
+└── utils/
+    ├── buildBlockedRequest/   # index.ts calls this
+    └── readOrigin/            # only buildBlockedRequest calls this — still flat
+```
+
+Not `utils/buildBlockedRequest/utils/readOrigin/`. Nesting by who-calls-whom reads as a hierarchy
+the code does not have, and a path with two `utils` segments tells a reader nothing the first one
+did not. One level keeps every private helper of a module visible in a single listing.
+
+Sharing is recorded by _where_ a helper lives, not by how deep it sits. A helper that a second
+function in the same module starts using is already in the right place. One that a second module
+starts using is no longer private: lift it out of `utils/` to sit beside its callers, and out of the
+feature entirely once a third reaches for it.
 
 Do not freeze a function's result into a module-level constant for convenience, and do not wrap a
 call in a narrower function for convenience either — call the function where the value is needed,
@@ -210,6 +229,12 @@ Two layers, with no overlap in file patterns:
 - **End-to-end** — WebdriverIO with Mocha against the locally installed Firefox, headless. The suite
   packages the extension, installs it temporarily into a throwaway profile, clicks the real toolbar
   icon, and reads the popup through Firefox's chrome context.
+
+**A module that only declares constants carries no spec of its own.** `constants.ts` and a
+`shared/config/*` module such as `extension/index.ts` hold values, not logic — a test that just
+re-asserts a literal (`expect(POPUP_PATH).toBe("popup.html")`) changes in lockstep with the constant
+and can never fail on its own, so it catches nothing a type error would not already catch. Put the
+coverage on the function that consumes the constant, where the value's effect is observable instead.
 
 Name tests for the behaviour under test. Everything that touches Firefox UI internals
 (`CustomizableUI`, panel ids, the Marionette actor used to read the popup's DOM) stays inside
