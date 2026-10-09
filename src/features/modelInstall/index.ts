@@ -2,7 +2,7 @@
  * Getting a model's files onto the machine, and refusing anything that does not
  * match what the manifest describes.
  *
- * Second step of the pipeline. Nothing here starts on its own: an install
+ * Step 4 of the pipeline (files are fetched and verified). Nothing here starts on its own: an install
  * happens only in answer to an explicit message, files are fetched one at a
  * time with no credentials, each is checked against its digest *before* being
  * stored, and a single failure removes everything the attempt wrote.
@@ -12,8 +12,12 @@
  * has had its say.
  */
 
-export { modelInstallRequestSchemas, modelInstallResponseSchemas } from "./constants";
-export type { ModelInstallRequestType, ModelInstallResponseType } from "./constants";
+// `ui/` is deliberately absent from this barrel: its components stay out of it so that
+// the background, which imports feature barrels and has no use for React, never pulls React in.
+// The surface that renders a component imports it from `ui/` by path.
+
+export { modelInstallRequestSchemas, modelInstallResponseSchemas } from "./schemas";
+export type { ModelInstallRequestType, ModelInstallResponseType } from "./types";
 export { assertFileDigest } from "./model/assertFileDigest";
 export { downloadModelFiles } from "./model/downloadModelFiles";
 export type { InstallProgress } from "./model/downloadModelFiles";

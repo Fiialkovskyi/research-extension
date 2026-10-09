@@ -321,35 +321,4 @@ an entrypoint that is itself a single instance (the worker's `loaded` model).
 
 ## 3.11 Known deviations
 
-Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
-
-**Function declarations that are not components:**
-
-- `src/features/greeting/model/getGreetingMessage/index.ts`
-- `e2e/specs/popupTheme.e2e.ts` — `openPopupUnder`
-- Every helper in `e2e/fixtures/firefoxExtension/` and `e2e/fixtures/firefoxToolbar/` (25 files)
-
-**Casts standing in for validation:**
-
-- `e2e/fixtures/firefoxToolbar/readPopup/utils/parsePopupSnapshot/index.ts` —
-  `JSON.parse(raw) as PopupSnapshot`
-- `e2e/fixtures/firefoxToolbar/getPopupPanelState/utils/parsePanelState/index.ts` —
-  `JSON.parse(raw) as PopupPanelState`
-- `e2e/fixtures/firefoxToolbar/clickToolbarAction/index.ts` — the `findElement` result cast to a
-  record
-
-**Casts without a comment:**
-
-- `src/app/optionsApp/index.tsx` — `response as OptionsEvent`
-- `src/shared/rpc/readMessageField/index.ts` — `candidate as Record<string, unknown>` (case 1, needs
-  the comment)
-- `src/shared/rpc/parseRpcMessage/index.ts` — `as ParsedRpcMessage<TSchemas>`
-
-**Other:**
-
-- `ConformanceOutcome` (`src/features/modelConformance/model/runEmbeddingConformance/`) is
-  `{ passed: boolean; reason?: string }` → a discriminated union.
-- `e2e/fixtures/firefoxToolbar/readPopup/utils/interpretReaderResult/index.ts` returns
-  `string | null` to its caller → `string | undefined`.
-- `e2e/fixtures/firefoxToolbar/clickToolbarAction/utils/buildPointerClickActions/index.ts` — exported
-  without a return type.
+None found on 2026-10-09.

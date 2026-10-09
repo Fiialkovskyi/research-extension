@@ -1,8 +1,8 @@
 import { expect } from "@wdio/globals";
 
-import { EXTENSION_ID, POPUP_PATH } from "@/shared/config/extension";
+import { EXTENSION_ID, POPUP_PATH } from "@/shared/config";
 
-import { getExtensionUrl } from "../fixtures/firefoxExtension";
+import { getExtensionUrl } from "../fixtures/firefoxExtension/utils";
 import {
   clickToolbarAction,
   closePopup,
@@ -12,7 +12,7 @@ import {
   readPopup,
   getToolbarWidgetId,
   waitForPopupPanel,
-} from "../fixtures/firefoxToolbar";
+} from "../fixtures/firefoxToolbar/utils";
 
 describe("toolbar popup", () => {
   before(async () => {

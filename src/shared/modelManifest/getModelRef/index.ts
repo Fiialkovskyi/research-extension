@@ -1,4 +1,4 @@
-import type { ModelReference } from "../constants";
+import type { ModelReference } from "../types";
 
 /**
  * Stable identity of an installed model: repository and the commit it is pinned

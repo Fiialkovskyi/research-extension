@@ -291,48 +291,4 @@ Specs follow the same rules; helpers in a spec are functions too.
 
 ## 2.13 Known deviations
 
-Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
-
-**Functions named as nouns, in source:**
-
-- `src/app/optionsApp/index.tsx` — `unavailable` → `isDeviceUnavailable`
-- `src/features/modelInstall/model/assertFileDigest/utils/getFileDigest/index.ts` — `toHex` →
-  `getHexString`
-
-**Functions named as nouns, in specs** (builders → `build…`, doubles → `create…`):
-
-- `src/app/backgroundApp/index.spec.ts` — `deps`, `failingWorker`, `freshDatabase`, `fakePort`,
-  `bodyFor`, `databaseWithModel`, `stubWorker`, `stubHubFetch`
-- `src/app/optionsApp/index.spec.tsx` — `stubClient`
-- `src/shared/collectPolicyViolations/index.spec.ts` — `fakeTarget`
-- `src/shared/modelManifest/constants.spec.ts` — `accepts`, `fileWith`
-- `src/shared/rpc/parseRpcMessage/index.spec.ts` — `rejectionOf`
-- `src/shared/storage/openModelDatabase/utils/applyModelDatabaseUpgrade/index.spec.ts` —
-  `nextDatabaseName`
-- `src/features/inference/model/createModelFileCache/index.spec.ts` — `urlFor`
-- `src/features/inference/model/loadModelIntoWorker/index.spec.ts` — `stubWorker`, `storeFiles`
-- `src/features/inference/model/createExtOrtProvider/utils/getPrefixedTexts/index.spec.ts` —
-  `contractWith`
-- `src/features/inferenceBenchmark/model/measureEmbeddingThroughput/index.spec.ts` — `stepClock`,
-  `stubSession`
-- `src/features/modelConformance/model/runEmbeddingConformance/utils/buildProbeResults/index.spec.ts`
-  — `probeOf`, `angle`
-- `src/features/modelConformance/model/runEmbeddingConformance/index.spec.ts` — `angle`
-- `src/features/modelConformance/model/runEmbeddingConformance/utils/buildDeterminismProbe/index.spec.ts`
-  — `embedReturning`
-- `src/features/modelInstall/model/installModel/index.spec.ts`,
-  `downloadModelFiles/index.spec.ts`, `modelRegistry/model/resolveModelRevision/index.spec.ts` —
-  `stubFetch`
-- `src/features/modelRegistry/model/buildModelManifest/index.spec.ts` — `gitOid`
-- `e2e/specs/modelInstallNetwork.e2e.ts` — `refOf`
-
-**Other:**
-
-- `MAX_INFERENCE_RUNS` (`src/shared/storage/constants.ts`) → `MAXIMUM_INFERENCE_RUNS`.
-- `setSystemColourScheme`, `clearSystemColourScheme` (`e2e/fixtures/firefoxToolbar/`) — British
-  spelling → `…ColorScheme`.
-- `catch (err)` in `e2e/fixtures/firefoxExtension/resolveFirefoxZip/index.ts` → `error`.
-- `interpretReaderResult` (`e2e/fixtures/firefoxToolbar/readPopup/utils/`) — not in the dictionary;
-  it validates the reader's output, so → `parseReaderResult`.
-- The worker protocol's `infer.embed` / `infer.embedded` use a verb as the domain; the other worker
-  messages use `worker.*` → `worker.embed` / `worker.embedded`.
+None found on 2026-10-09.

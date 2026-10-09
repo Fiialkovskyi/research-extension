@@ -2,7 +2,7 @@ import { env, pipeline } from "@huggingface/transformers";
 
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import type { InferenceDevice, ModelManifest } from "@/shared/modelManifest";
-import type { EmbedResult, LoadedModel } from "../../constants";
+import type { EmbedResult, LoadedModel } from "../../types";
 import {
   createModelFileCache,
   type ModelFileCache,
@@ -107,7 +107,8 @@ const configureRuntime = (options: LoadModelOptions): ModelFileCache => {
  * Everything here is configuration and glue. The parts worth reasoning about —
  * which weight variant to request, which pooling to apply, how to cut a batch
  * apart — live in `utils/` where they carry tests, because this module cannot
- * be exercised without loading real WebAssembly.
+ * be exercised without loading real WebAssembly. That is why it has no spec of
+ * its own.
  */
 export const createExtOrtProvider = (): InferenceProvider => {
   return {

@@ -5,13 +5,13 @@ import "fake-indexeddb/auto";
 import { createBackgroundApp, type BackgroundDependencies } from ".";
 import type { InferenceWorker } from "@/features/inference";
 import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/utils/getFileDigest";
-import { MINILM_L6_V2 } from "@/shared/config/modelProfiles";
+import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import { MODEL_FILE_STORE, MODEL_STORE, openModelDatabase } from "@/shared/storage";
 
 const pong = { availableDevices: ["wasm"] as const, crossOriginIsolated: false, threadCount: 1 };
 
-const stubWorker = (overrides: Partial<InferenceWorker> = {}): InferenceWorker => {
+const createStubWorker = (overrides: Partial<InferenceWorker> = {}): InferenceWorker => {
   return {
     request: vi.fn().mockResolvedValue(buildRpcMessage("worker.pong", pong)),
     terminate: vi.fn(),
@@ -20,9 +20,11 @@ const stubWorker = (overrides: Partial<InferenceWorker> = {}): InferenceWorker =
 };
 
 /** Dependencies with inert defaults, so a test names only what it cares about. */
-const deps = (overrides: Partial<BackgroundDependencies> = {}): BackgroundDependencies => {
+const buildDependencies = (
+  overrides: Partial<BackgroundDependencies> = {},
+): BackgroundDependencies => {
   return {
-    createInferenceWorker: () => stubWorker(),
+    createInferenceWorker: () => createStubWorker(),
     openDatabase: () => Promise.reject(new Error("no database in this test")),
     fetchResource: (() => Promise.reject(new Error("no network in this test"))) as typeof fetch,
     policyViolations: { read: () => [] },
@@ -33,8 +35,8 @@ const deps = (overrides: Partial<BackgroundDependencies> = {}): BackgroundDepend
 const encode = (text: string) => new TextEncoder().encode(text).buffer as ArrayBuffer;
 
 /** A worker that fails every load, as a poisoned runtime would. */
-const failingWorker = () => {
-  return stubWorker({
+const createFailingWorker = () => {
+  return createStubWorker({
     request: vi.fn((type: string) =>
       type === "model.load"
         ? Promise.reject(new Error("no available backend found"))
@@ -44,7 +46,7 @@ const failingWorker = () => {
 };
 
 /** An empty database, so one test's installs cannot be seen by the next. */
-const freshDatabase = async () => {
+const createFreshDatabase = async () => {
   const database = await openModelDatabase();
 
   await database.clear(MODEL_STORE);
@@ -54,7 +56,7 @@ const freshDatabase = async () => {
 };
 
 /** A stand-in for a runtime port, capturing what the background posts back. */
-const fakePort = () => {
+const createFakePort = () => {
   const listeners: ((message: unknown) => void)[] = [];
   const posted: unknown[] = [];
 
@@ -76,7 +78,7 @@ const fakePort = () => {
 
 describe("createBackgroundApp", () => {
   it("answers a probe with what the worker reports", async () => {
-    const app = createBackgroundApp(deps());
+    const app = createBackgroundApp(buildDependencies());
 
     const response = await app.handleMessage(buildRpcMessage("inference.probe", {}));
 
@@ -84,16 +86,16 @@ describe("createBackgroundApp", () => {
   });
 
   it("starts no worker until something is actually asked of it", () => {
-    const createInferenceWorker = vi.fn(() => stubWorker());
+    const createInferenceWorker = vi.fn(() => createStubWorker());
 
-    createBackgroundApp(deps({ createInferenceWorker }));
+    createBackgroundApp(buildDependencies({ createInferenceWorker }));
 
     expect(createInferenceWorker).not.toHaveBeenCalled();
   });
 
   it("reuses one worker across requests, rather than spawning per message", async () => {
-    const createInferenceWorker = vi.fn(() => stubWorker());
-    const app = createBackgroundApp(deps({ createInferenceWorker }));
+    const createInferenceWorker = vi.fn(() => createStubWorker());
+    const app = createBackgroundApp(buildDependencies({ createInferenceWorker }));
 
     await app.handleMessage(buildRpcMessage("inference.probe", {}));
     await app.handleMessage(buildRpcMessage("inference.probe", {}));
@@ -102,7 +104,7 @@ describe("createBackgroundApp", () => {
   });
 
   it("refuses a message type it does not handle", async () => {
-    const app = createBackgroundApp(deps());
+    const app = createBackgroundApp(buildDependencies());
 
     const response = await app.handleMessage(buildRpcMessage("session.start", {}));
 
@@ -114,7 +116,7 @@ describe("createBackgroundApp", () => {
   });
 
   it("refuses something that is not an envelope at all", async () => {
-    const app = createBackgroundApp(deps());
+    const app = createBackgroundApp(buildDependencies());
 
     expect(await app.handleMessage("nonsense")).toMatchObject({
       type: "rpc.refused",
@@ -123,7 +125,7 @@ describe("createBackgroundApp", () => {
   });
 
   it("refuses a payload its schema does not admit, saying which check failed", async () => {
-    const app = createBackgroundApp(deps());
+    const app = createBackgroundApp(buildDependencies());
 
     const response = await app.handleMessage(buildRpcMessage("model.activate", { ref: "" }));
 
@@ -134,7 +136,7 @@ describe("createBackgroundApp", () => {
   });
 
   it("answers an unexpected failure with the request it belonged to", async () => {
-    const app = createBackgroundApp(deps());
+    const app = createBackgroundApp(buildDependencies());
 
     const response = await app.handleMessage(buildRpcMessage("model.list", {}));
 
@@ -145,10 +147,10 @@ describe("createBackgroundApp", () => {
   });
 
   it("reports a worker failure as a reason rather than throwing at the surface", async () => {
-    const worker = stubWorker({
+    const worker = createStubWorker({
       request: vi.fn().mockRejectedValue(new Error("worker crashed")),
     });
-    const app = createBackgroundApp(deps({ createInferenceWorker: () => worker }));
+    const app = createBackgroundApp(buildDependencies({ createInferenceWorker: () => worker }));
 
     const response = await app.handleMessage(buildRpcMessage("inference.probe", {}));
 
@@ -157,14 +159,14 @@ describe("createBackgroundApp", () => {
   });
 
   it("reports an unexpected worker response instead of passing it on", async () => {
-    const worker = stubWorker({
+    const worker = createStubWorker({
       request: vi
         .fn()
         .mockResolvedValue(
           buildRpcMessage("worker.error", { requestType: "worker.ping", reason: "bad" }),
         ),
     });
-    const app = createBackgroundApp(deps({ createInferenceWorker: () => worker }));
+    const app = createBackgroundApp(buildDependencies({ createInferenceWorker: () => worker }));
 
     const response = await app.handleMessage(buildRpcMessage("inference.probe", {}));
 
@@ -172,8 +174,8 @@ describe("createBackgroundApp", () => {
   });
 
   it("releases the worker on shutdown", async () => {
-    const worker = stubWorker();
-    const app = createBackgroundApp(deps({ createInferenceWorker: () => worker }));
+    const worker = createStubWorker();
+    const app = createBackgroundApp(buildDependencies({ createInferenceWorker: () => worker }));
 
     await app.handleMessage(buildRpcMessage("inference.probe", {}));
     app.shutdown();
@@ -182,15 +184,15 @@ describe("createBackgroundApp", () => {
   });
 
   it("shuts down safely when no worker was ever started", () => {
-    const app = createBackgroundApp(deps());
+    const app = createBackgroundApp(buildDependencies());
 
     expect(() => app.shutdown()).not.toThrow();
   });
 
   describe("over a port", () => {
     it("answers a request on the same port it arrived on", async () => {
-      const app = createBackgroundApp(deps());
-      const { port, posted, send } = fakePort();
+      const app = createBackgroundApp(buildDependencies());
+      const { port, posted, send } = createFakePort();
 
       app.attachPort(port);
       send(buildRpcMessage("inference.probe", {}));
@@ -200,8 +202,8 @@ describe("createBackgroundApp", () => {
     });
 
     it("answers each of several requests on one port", async () => {
-      const app = createBackgroundApp(deps());
-      const { port, posted, send } = fakePort();
+      const app = createBackgroundApp(buildDependencies());
+      const { port, posted, send } = createFakePort();
 
       app.attachPort(port);
       send(buildRpcMessage("inference.probe", {}));
@@ -214,8 +216,8 @@ describe("createBackgroundApp", () => {
     });
 
     it("reports a refusal over the port rather than staying silent", async () => {
-      const app = createBackgroundApp(deps());
-      const { port, posted, send } = fakePort();
+      const app = createBackgroundApp(buildDependencies());
+      const { port, posted, send } = createFakePort();
 
       app.attachPort(port);
       send("nonsense");
@@ -225,9 +227,9 @@ describe("createBackgroundApp", () => {
     });
 
     it("serves two ports independently", async () => {
-      const app = createBackgroundApp(deps());
-      const first = fakePort();
-      const second = fakePort();
+      const app = createBackgroundApp(buildDependencies());
+      const first = createFakePort();
+      const second = createFakePort();
 
       app.attachPort(first.port);
       app.attachPort(second.port);
@@ -239,8 +241,8 @@ describe("createBackgroundApp", () => {
   });
 
   it("starts a fresh worker after a shutdown", async () => {
-    const createInferenceWorker = vi.fn(() => stubWorker());
-    const app = createBackgroundApp(deps({ createInferenceWorker }));
+    const createInferenceWorker = vi.fn(() => createStubWorker());
+    const app = createBackgroundApp(buildDependencies({ createInferenceWorker }));
 
     await app.handleMessage(buildRpcMessage("inference.probe", {}));
     app.shutdown();
@@ -254,7 +256,7 @@ describe("installing a model through the background", () => {
   const configJson = '{"model_type":"bert","hidden_size":384,"max_position_embeddings":512}';
   const tokenizerConfigJson = '{"model_max_length":512}';
 
-  const bodyFor = (path: string) =>
+  const buildBody = (path: string) =>
     path === "config.json"
       ? configJson
       : path === "tokenizer_config.json"
@@ -269,13 +271,13 @@ describe("installing a model through the background", () => {
       [...new Set(paths)].map(async (path) => ({
         type: "file",
         path,
-        size: new TextEncoder().encode(bodyFor(path)).byteLength,
-        lfs: { oid: await getFileDigest(encode(bodyFor(path)), "sha256") },
+        size: new TextEncoder().encode(buildBody(path)).byteLength,
+        lfs: { oid: await getFileDigest(encode(buildBody(path)), "sha256") },
       })),
     );
   };
 
-  const stubHubFetch = (tree: unknown, corrupt = false) => {
+  const createStubHubFetch = (tree: unknown, corrupt = false) => {
     return vi.fn((rawUrl: string) => {
       const url = String(rawUrl);
 
@@ -286,7 +288,7 @@ describe("installing a model through the background", () => {
       const path = [...MINILM_L6_V2.files, "tokenizer_config.json"].find((candidate) =>
         url.endsWith(`/${candidate}`),
       );
-      const text = corrupt && path?.endsWith(".onnx") ? "tampered" : bodyFor(path ?? "");
+      const text = corrupt && path?.endsWith(".onnx") ? "tampered" : buildBody(path ?? "");
 
       return Promise.resolve({
         ok: true,
@@ -301,18 +303,18 @@ describe("installing a model through the background", () => {
     const fetchResource = vi.fn() as unknown as typeof fetch;
     const openDatabase = vi.fn();
 
-    createBackgroundApp(deps({ fetchResource, openDatabase }));
+    createBackgroundApp(buildDependencies({ fetchResource, openDatabase }));
 
     expect(fetchResource).not.toHaveBeenCalled();
     expect(openDatabase).not.toHaveBeenCalled();
   });
 
   it("installs a bundled profile and reports where it landed", async () => {
-    const database = await freshDatabase();
+    const database = await createFreshDatabase();
     const app = createBackgroundApp(
-      deps({
+      buildDependencies({
         openDatabase: () => Promise.resolve(database),
-        fetchResource: stubHubFetch(await buildTree()),
+        fetchResource: createStubHubFetch(await buildTree()),
       }),
     );
 
@@ -330,7 +332,7 @@ describe("installing a model through the background", () => {
   });
 
   it("refuses a repository that is not a bundled profile", async () => {
-    const app = createBackgroundApp(deps());
+    const app = createBackgroundApp(buildDependencies());
 
     const response = await app.handleMessage(
       buildRpcMessage("model.install", { repository: "someone/untrusted-model" }),
@@ -343,11 +345,11 @@ describe("installing a model through the background", () => {
   });
 
   it("reports an install failure as a reason rather than throwing", async () => {
-    const database = await freshDatabase();
+    const database = await createFreshDatabase();
     const app = createBackgroundApp(
-      deps({
+      buildDependencies({
         openDatabase: () => Promise.resolve(database),
-        fetchResource: stubHubFetch(await buildTree(), true),
+        fetchResource: createStubHubFetch(await buildTree(), true),
       }),
     );
 
@@ -362,14 +364,14 @@ describe("installing a model through the background", () => {
   });
 
   it("streams progress over a port, with the outcome last", async () => {
-    const database = await freshDatabase();
+    const database = await createFreshDatabase();
     const app = createBackgroundApp(
-      deps({
+      buildDependencies({
         openDatabase: () => Promise.resolve(database),
-        fetchResource: stubHubFetch(await buildTree()),
+        fetchResource: createStubHubFetch(await buildTree()),
       }),
     );
-    const { port, posted, send } = fakePort();
+    const { port, posted, send } = createFakePort();
 
     app.attachPort(port);
     send(buildRpcMessage("model.install", { repository: MINILM_L6_V2.repository }));
@@ -383,11 +385,11 @@ describe("installing a model through the background", () => {
   });
 
   it("still answers a one-shot install, dropping the progress it cannot stream", async () => {
-    const database = await freshDatabase();
+    const database = await createFreshDatabase();
     const app = createBackgroundApp(
-      deps({
+      buildDependencies({
         openDatabase: () => Promise.resolve(database),
-        fetchResource: stubHubFetch(await buildTree()),
+        fetchResource: createStubHubFetch(await buildTree()),
       }),
     );
 
@@ -397,10 +399,10 @@ describe("installing a model through the background", () => {
   });
 
   it("opens the database once across several installs", async () => {
-    const database = await freshDatabase();
+    const database = await createFreshDatabase();
     const openDatabase = vi.fn(() => Promise.resolve(database));
     const app = createBackgroundApp(
-      deps({ openDatabase, fetchResource: stubHubFetch(await buildTree()) }),
+      buildDependencies({ openDatabase, fetchResource: createStubHubFetch(await buildTree()) }),
     );
 
     await app.handleMessage(
@@ -442,8 +444,8 @@ describe("the background's worker and the compute path", () => {
     installedAt: 1,
   } as const;
 
-  const databaseWithModel = async () => {
-    const database = await freshDatabase();
+  const createDatabaseWithModel = async () => {
+    const database = await createFreshDatabase();
 
     await database.put(MODEL_STORE, installed as never);
     await database.put(MODEL_FILE_STORE, {
@@ -456,11 +458,11 @@ describe("the background's worker and the compute path", () => {
   };
 
   it("starts a fresh worker when the compute path changes", async () => {
-    const workers = [failingWorker(), failingWorker()];
-    const createInferenceWorker = vi.fn(() => workers.shift() ?? failingWorker());
-    const database = await databaseWithModel();
+    const workers = [createFailingWorker(), createFailingWorker()];
+    const createInferenceWorker = vi.fn(() => workers.shift() ?? createFailingWorker());
+    const database = await createDatabaseWithModel();
     const app = createBackgroundApp(
-      deps({ createInferenceWorker, openDatabase: () => Promise.resolve(database) }),
+      buildDependencies({ createInferenceWorker, openDatabase: () => Promise.resolve(database) }),
     );
 
     await app.handleMessage(
@@ -476,10 +478,10 @@ describe("the background's worker and the compute path", () => {
   });
 
   it("discards a worker whose load failed, rather than asking it again", async () => {
-    const createInferenceWorker = vi.fn(() => failingWorker());
-    const database = await databaseWithModel();
+    const createInferenceWorker = vi.fn(() => createFailingWorker());
+    const database = await createDatabaseWithModel();
     const app = createBackgroundApp(
-      deps({ createInferenceWorker, openDatabase: () => Promise.resolve(database) }),
+      buildDependencies({ createInferenceWorker, openDatabase: () => Promise.resolve(database) }),
     );
 
     await app.handleMessage(
@@ -495,10 +497,10 @@ describe("the background's worker and the compute path", () => {
   });
 
   it("reports an activation failure as a reason", async () => {
-    const database = await databaseWithModel();
+    const database = await createDatabaseWithModel();
     const app = createBackgroundApp(
-      deps({
-        createInferenceWorker: () => failingWorker(),
+      buildDependencies({
+        createInferenceWorker: () => createFailingWorker(),
         openDatabase: () => Promise.resolve(database),
       }),
     );
@@ -511,8 +513,8 @@ describe("the background's worker and the compute path", () => {
   });
 
   it("keeps one worker while the path stays the same and loads succeed", async () => {
-    const createInferenceWorker = vi.fn(() => stubWorker());
-    const app = createBackgroundApp(deps({ createInferenceWorker }));
+    const createInferenceWorker = vi.fn(() => createStubWorker());
+    const app = createBackgroundApp(buildDependencies({ createInferenceWorker }));
 
     await app.handleMessage(buildRpcMessage("inference.probe", {}));
     await app.handleMessage(buildRpcMessage("inference.probe", {}));

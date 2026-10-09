@@ -4,7 +4,7 @@ import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { getActiveModel } from ".";
-import { MINILM_L6_V2 } from "@/shared/config/modelProfiles";
+import { MINILM_L6_V2 } from "@/shared/config";
 import type { ModelManifest } from "@/shared/modelManifest";
 import {
   MODEL_STORE,

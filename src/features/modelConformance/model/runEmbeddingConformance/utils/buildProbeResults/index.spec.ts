@@ -32,10 +32,15 @@ const buildVectors = (count: number, wrongPairs = 0) => {
   const others: Float32Array[] = [];
 
   for (let index = 0; index < count; index += 1) {
-    const angle = (index * Math.PI) / count;
-    const anchor = unit([Math.cos(angle), Math.sin(angle), 0, 0]);
-    const near = unit([Math.cos(angle + 0.01), Math.sin(angle + 0.01), 0, 0]);
-    const far = unit([0, 0, Math.cos(angle), Math.sin(angle)]);
+    const buildVectorAtAngle = (index * Math.PI) / count;
+    const anchor = unit([Math.cos(buildVectorAtAngle), Math.sin(buildVectorAtAngle), 0, 0]);
+    const near = unit([
+      Math.cos(buildVectorAtAngle + 0.01),
+      Math.sin(buildVectorAtAngle + 0.01),
+      0,
+      0,
+    ]);
+    const far = unit([0, 0, Math.cos(buildVectorAtAngle), Math.sin(buildVectorAtAngle)]);
 
     anchors.push(anchor);
 
@@ -47,7 +52,7 @@ const buildVectors = (count: number, wrongPairs = 0) => {
   return { anchors, others };
 };
 
-const probeOf = (results: ReturnType<typeof buildProbeResults>, name: string) =>
+const buildProbe = (results: ReturnType<typeof buildProbeResults>, name: string) =>
   results.find((probe) => probe.name.includes(name));
 
 const probeCount = PARAPHRASE_PROBES.length;
@@ -66,7 +71,7 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), anchors.slice(0, 5), others);
 
-    expect(probeOf(results, "one vector per text")?.passed).toBe(false);
+    expect(buildProbe(results, "one vector per text")?.passed).toBe(false);
   });
 
   it("names the counts it expected and received", () => {
@@ -74,7 +79,7 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), anchors, others.slice(0, 2));
 
-    expect(probeOf(results, "one vector per text")?.detail).toMatch(/Expected \d+ vectors/);
+    expect(buildProbe(results, "one vector per text")?.detail).toMatch(/Expected \d+ vectors/);
   });
 
   it("fails when a vector does not match the declared dimensionality", () => {
@@ -83,8 +88,10 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), mangled, others);
 
-    expect(probeOf(results, "declared dimensionality")?.passed).toBe(false);
-    expect(probeOf(results, "declared dimensionality")?.detail).toContain(String(DIMENSIONS + 1));
+    expect(buildProbe(results, "declared dimensionality")?.passed).toBe(false);
+    expect(buildProbe(results, "declared dimensionality")?.detail).toContain(
+      String(DIMENSIONS + 1),
+    );
   });
 
   it("fails when a model declaring normalization returns longer vectors", () => {
@@ -93,7 +100,7 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), unnormalized, others);
 
-    expect(probeOf(results, "normalizes as declared")?.passed).toBe(false);
+    expect(buildProbe(results, "normalizes as declared")?.passed).toBe(false);
   });
 
   it("does not judge normalization a model never declared", () => {
@@ -102,7 +109,7 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract({ normalize: false }), unnormalized, others);
 
-    expect(probeOf(results, "normalizes as declared")).toBeUndefined();
+    expect(buildProbe(results, "normalizes as declared")).toBeUndefined();
     expect(results.every((probe) => probe.passed)).toBe(true);
   });
 
@@ -111,7 +118,7 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), anchors, others);
 
-    expect(probeOf(results, "paraphrase closer")?.passed).toBe(false);
+    expect(buildProbe(results, "paraphrase closer")?.passed).toBe(false);
   });
 
   it("passes ordering at exactly the required number", () => {
@@ -119,14 +126,14 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), anchors, others);
 
-    expect(probeOf(results, "paraphrase closer")?.passed).toBe(true);
+    expect(buildProbe(results, "paraphrase closer")?.passed).toBe(true);
   });
 
   it("reports how many pairs were ordered, not just the verdict", () => {
     const { anchors, others } = buildVectors(probeCount);
 
     expect(
-      probeOf(buildProbeResults(contract(), anchors, others), "paraphrase closer")?.detail,
+      buildProbe(buildProbeResults(contract(), anchors, others), "paraphrase closer")?.detail,
     ).toMatch(new RegExp(`${probeCount} of ${probeCount}`));
   });
 
@@ -137,14 +144,14 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), mangled, others);
 
-    expect(probeOf(results, "paraphrase closer")).toBeUndefined();
+    expect(buildProbe(results, "paraphrase closer")).toBeUndefined();
   });
 
   it("fails the count probe for a model that returned nothing", () => {
     const results = buildProbeResults(contract(), [], []);
 
-    expect(probeOf(results, "one vector per text")?.passed).toBe(false);
-    expect(probeOf(results, "paraphrase closer")).toBeUndefined();
+    expect(buildProbe(results, "one vector per text")?.passed).toBe(false);
+    expect(buildProbe(results, "paraphrase closer")).toBeUndefined();
   });
 
   it("fails the count probe when the two roles come back lopsided", () => {
@@ -152,6 +159,6 @@ describe("buildProbeResults", () => {
 
     const results = buildProbeResults(contract(), anchors, others.slice(0, probeCount));
 
-    expect(probeOf(results, "one vector per text")?.passed).toBe(false);
+    expect(buildProbe(results, "one vector per text")?.passed).toBe(false);
   });
 });

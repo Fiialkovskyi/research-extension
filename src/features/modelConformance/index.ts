@@ -1,7 +1,7 @@
 /**
  * Deciding whether a loaded model actually works, before anything relies on it.
  *
- * Fifth step of the pipeline, and the reason the fourth is not enough. A model
+ * Step 6 of the pipeline, and the reason step 5 (loading) is not enough. A model
  * that loads is not a model that works, and the failure mode of a
  * misconfigured encoder is not an error: it returns vectors of exactly the
  * declared width, at unit length, that encode nothing useful. Nothing
@@ -14,12 +14,11 @@
  */
 
 export {
-  type EmbedForConformance,
   MINIMUM_DETERMINISM_SIMILARITY,
   MINIMUM_ORDERED_PROBES,
   NORM_TOLERANCE,
-  type ParaphraseProbe,
   PARAPHRASE_PROBES,
 } from "./constants";
+export type { EmbedForConformance, ParaphraseProbe } from "./types";
 export { runEmbeddingConformance } from "./model/runEmbeddingConformance";
 export type { ConformanceOutcome, ProbeResult } from "./model/runEmbeddingConformance";

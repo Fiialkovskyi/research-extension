@@ -141,7 +141,4 @@ A pull request description has:
 
 ## 11.11 Known deviations
 
-Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
-
-- `Research Graph Extension Spec.md` and `LLMReserch.md` — see
-  [1.12](./PROJECT_STRUCTURE.md#112-known-deviations).
+None found on 2026-10-09.

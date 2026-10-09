@@ -1,24 +1,10 @@
 import * as v from "valibot";
 
-import type { RpcMessage } from "../buildRpcMessage";
-import { type RPC_REJECTIONS, RPC_VERSION } from "../constants";
+import { RPC_VERSION } from "../constants";
+import { envelopeSchema } from "./schemas";
+import type { ParsedRpcMessage, RpcRejection, RpcSchemaMap } from "./types";
 
-/**
- * Payload schemas keyed by message type.
- *
- * Each feature supplies the schemas for the messages it owns, so `shared` never
- * needs to know the full set. A type absent from the map is unknown by
- * definition and is rejected.
- */
-export type RpcSchemaMap = Record<string, v.GenericSchema>;
-
-/** The messages a given schema map admits, as a discriminated union. */
-export type ParsedRpcMessage<TSchemas extends RpcSchemaMap> = {
-  [TType in keyof TSchemas & string]: RpcMessage<TType, v.InferOutput<TSchemas[TType]>>;
-}[keyof TSchemas & string];
-
-/** Why a message was refused. Carried so a receiver can reply usefully. */
-export type RpcRejection = (typeof RPC_REJECTIONS)[number];
+export type { ParsedRpcMessage, RpcRejection, RpcSchemaMap };
 
 /** Raised when a candidate message cannot be trusted. */
 export class RpcMessageError extends Error {
@@ -30,13 +16,6 @@ export class RpcMessageError extends Error {
     this.name = "RpcMessageError";
   }
 }
-
-const envelopeSchema = v.object({
-  v: v.number(),
-  type: v.string(),
-  id: v.string(),
-  payload: v.unknown(),
-});
 
 /**
  * Validates an untrusted value as a message the given schema map admits.
@@ -55,13 +34,13 @@ export const parseRpcMessage = <TSchemas extends RpcSchemaMap>(
   const envelope = v.safeParse(envelopeSchema, candidate);
 
   if (!envelope.success) {
-    throw new RpcMessageError("not-an-envelope", "Message is not an RPC envelope");
+    throw new RpcMessageError("not-an-envelope", "Message is not an RPC envelope.");
   }
 
   if (envelope.output.v !== RPC_VERSION) {
     throw new RpcMessageError(
       "unsupported-version",
-      `Unsupported RPC version ${envelope.output.v}; this build speaks ${RPC_VERSION}`,
+      `Unsupported RPC version ${envelope.output.v}; this build speaks ${RPC_VERSION}.`,
     );
   }
 
@@ -70,7 +49,7 @@ export const parseRpcMessage = <TSchemas extends RpcSchemaMap>(
     : undefined;
 
   if (payloadSchema === undefined) {
-    throw new RpcMessageError("unknown-type", `Unknown message type "${envelope.output.type}"`);
+    throw new RpcMessageError("unknown-type", `Unknown message type "${envelope.output.type}".`);
   }
 
   const payload = v.safeParse(payloadSchema, envelope.output.payload);
@@ -78,10 +57,13 @@ export const parseRpcMessage = <TSchemas extends RpcSchemaMap>(
   if (!payload.success) {
     throw new RpcMessageError(
       "invalid-payload",
-      `Payload for "${envelope.output.type}" is invalid: ${payload.issues[0]?.message ?? "unknown issue"}`,
+      `Payload for "${envelope.output.type}" is invalid: ${payload.issues[0]?.message ?? "unknown issue"}.`,
     );
   }
 
+  // The payload was validated against the schema registered for this exact type,
+  // which is what the generic return type promises; the compiler cannot follow
+  // that through the dynamic lookup above.
   return {
     v: RPC_VERSION,
     type: envelope.output.type,

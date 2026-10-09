@@ -1,7 +1,6 @@
 import { expect } from "@wdio/globals";
 
-import { OPTIONS_PATH } from "../../src/shared/config/extension";
-import { BGE_SMALL_EN_V1_5, MINILM_L6_V2 } from "../../src/shared/config/modelProfiles";
+import { BGE_SMALL_EN_V1_5, MINILM_L6_V2, OPTIONS_PATH } from "@/shared/config";
 import {
   activateInstalledModel,
   installModelFromHub,
@@ -9,7 +8,7 @@ import {
   openOptionsSurface,
   readOptionsSurface,
   selectComputeDevice,
-} from "../fixtures/optionsSurface";
+} from "../fixtures/optionsSurface/utils";
 
 /**
  * The run that actually answers this change's questions.
@@ -25,7 +24,7 @@ import {
 const networkSuite = process.env["E2E_NETWORK"] === "true" ? describe : describe.skip;
 
 /** Repository and pinned revision, as the surface identifies an install. */
-const refOf = (profile: { repository: string; revision: string }) =>
+const getRef = (profile: { repository: string; revision: string }) =>
   `${profile.repository}@${profile.revision}`;
 
 networkSuite("installing a model from Hugging Face", () => {
@@ -67,7 +66,7 @@ networkSuite("installing a model from Hugging Face", () => {
   it("passes its conformance suite on the software path", async () => {
     await selectComputeDevice("wasm");
 
-    const reported = await activateInstalledModel(refOf(MINILM_L6_V2));
+    const reported = await activateInstalledModel(getRef(MINILM_L6_V2));
     const snapshot = await readOptionsSurface();
 
     console.log("[activation problem, if any]", snapshot.problem || "none");
@@ -82,7 +81,7 @@ networkSuite("installing a model from Hugging Face", () => {
   });
 
   it("measures throughput on the software path", async () => {
-    const measured = await measureThroughput(refOf(MINILM_L6_V2));
+    const measured = await measureThroughput(getRef(MINILM_L6_V2));
     const snapshot = await readOptionsSurface();
 
     // The number every budget in the target spec is judged against, because
@@ -103,7 +102,7 @@ networkSuite("installing a model from Hugging Face", () => {
     }
 
     await selectComputeDevice("webgpu");
-    const measured = await measureThroughput(refOf(MINILM_L6_V2));
+    const measured = await measureThroughput(getRef(MINILM_L6_V2));
     const snapshot = await readOptionsSurface();
 
     console.log("\n[THROUGHPUT, accelerated path]", snapshot.benchmark || "none");
@@ -149,7 +148,7 @@ networkSuite("installing a model from Hugging Face", () => {
     // This profile instructs the query side only, which the default profile
     // cannot exercise at all. A prefix applied to the wrong side shows up here
     // as a drop in ordering accuracy rather than passing unnoticed.
-    const reported = await activateInstalledModel(refOf(BGE_SMALL_EN_V1_5));
+    const reported = await activateInstalledModel(getRef(BGE_SMALL_EN_V1_5));
     const snapshot = await readOptionsSurface();
 
     console.log("[second profile problem, if any]", snapshot.problem || "none");

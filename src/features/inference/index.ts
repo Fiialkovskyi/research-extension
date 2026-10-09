@@ -2,7 +2,7 @@
  * Running a model: the worker that hosts it, the protocol for talking to it,
  * and the contract every provider honours.
  *
- * Fourth step of the pipeline. The background reads verified files out of
+ * Step 5 of the pipeline. The background reads verified files out of
  * storage and hands them to the worker, which loads them into the runtime and
  * answers embedding requests. Nothing here fetches anything: by the time a byte
  * reaches the runtime it has already been checked against a manifest.
@@ -18,12 +18,14 @@
 export {
   INFERENCE_REQUEST_TIMEOUT_MS,
   INFERENCE_WORKER_PATH,
+  SUPPORTED_QUANTIZATIONS,
+} from "./constants";
+export {
   inferenceRequestSchemas,
   inferenceResponseSchemas,
-  SUPPORTED_QUANTIZATIONS,
   workerRequestSchemas,
   workerResponseSchemas,
-} from "./constants";
+} from "./schemas";
 export type {
   ChatMessage,
   EmbedRequest,
@@ -38,7 +40,7 @@ export type {
   WorkerPong,
   WorkerRequestType,
   WorkerResponseType,
-} from "./constants";
+} from "./types";
 export { createInferenceWorker } from "./model/createInferenceWorker";
 export type { InferenceWorker } from "./model/createInferenceWorker";
 // `model/createExtOrtProvider` is deliberately absent from this barrel: it

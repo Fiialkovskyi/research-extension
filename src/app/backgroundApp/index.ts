@@ -1,23 +1,13 @@
 import type { IDBPDatabase } from "idb";
 
-import {
-  type InferenceWorker,
-  inferenceRequestSchemas,
-  loadModelIntoWorker,
-} from "@/features/inference";
-import { benchmarkRequestSchemas, measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
-import { diagnosticsRequestSchemas } from "@/features/diagnostics";
+import { type InferenceWorker, loadModelIntoWorker } from "@/features/inference";
+import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
 import { runEmbeddingConformance } from "@/features/modelConformance";
-import { installModel, modelInstallRequestSchemas } from "@/features/modelInstall";
-import {
-  activateModel,
-  listInstalledModels,
-  modelRegistryRequestSchemas,
-} from "@/features/modelRegistry";
-import { BUNDLED_MODEL_PROFILES } from "@/shared/config/modelProfiles";
+import { installModel } from "@/features/modelInstall";
+import { activateModel, listInstalledModels } from "@/features/modelRegistry";
+import { BUNDLED_MODEL_PROFILES } from "@/shared/config";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
 import type { InferenceDevice } from "@/shared/modelManifest";
-import type { PolicyViolationLog } from "@/shared/collectPolicyViolations";
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import {
   buildRpcMessage,
@@ -28,77 +18,10 @@ import {
 } from "@/shared/rpc";
 import { MODEL_STORE, type ModelDatabaseSchema } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
+import { requestSchemas } from "./schemas";
+import type { BackgroundApp, BackgroundDependencies, Emit } from "./types";
 
-/**
- * Composition root for the background context.
- *
- * The background is the extension's only coordinator: it owns the inference
- * worker and is the only context that writes local storage. Surfaces send it
- * intents and render what comes back.
- *
- * Everything the browser provides arrives as a dependency, so the whole
- * dispatch path is exercised in unit tests without an extension runtime. The
- * entrypoint does nothing but supply the real implementations.
- */
-export interface BackgroundDependencies {
-  /** Spawns the inference worker. Called at most once, on first need. */
-  createInferenceWorker: () => InferenceWorker;
-  /** Opens the add-on's database. Called at most once, on first need. */
-  openDatabase: () => Promise<IDBPDatabase<ModelDatabaseSchema>>;
-  fetchResource: typeof fetch;
-  /**
-   * What the content security policy has refused.
-   *
-   * Attached in this context because violations are reported where they
-   * occur, and this is the context that fetches model files — a listener on a
-   * surface would never see them.
-   */
-  policyViolations: PolicyViolationLog;
-}
-
-/**
- * The part of a runtime port this app uses.
- *
- * Declared structurally so the relay is exercised without an extension
- * runtime; the real port satisfies it.
- */
-export interface BackgroundPort {
-  postMessage: (message: unknown) => void;
-  onMessage: { addListener: (listener: (message: unknown) => void) => void };
-}
-
-/** Sends a message that is not the answer to a request, such as progress. */
-type Emit = (message: RpcMessage<string, unknown>) => void;
-
-export interface BackgroundApp {
-  /**
-   * Validates an untrusted message from a surface and answers it.
-   *
-   * One-shot messaging carries no intermediate updates, so progress a handler
-   * would stream is dropped. A surface that wants it connects a port.
-   */
-  handleMessage: (candidate: unknown) => Promise<RpcMessage<string, unknown>>;
-  /**
-   * Serves a surface's long-lived connection, answering on the same port.
-   *
-   * A port rather than one-shot messages because progress has to stream while
-   * work is still running — an install reports bytes as they arrive — and
-   * because holding one open is what keeps the event page from unloading
-   * mid-job.
-   */
-  attachPort: (port: BackgroundPort) => void;
-  /** Releases the worker, if one was ever started. */
-  shutdown: () => void;
-}
-
-/** Every message a surface may send, contributed by the features that own them. */
-const requestSchemas = {
-  ...benchmarkRequestSchemas,
-  ...diagnosticsRequestSchemas,
-  ...inferenceRequestSchemas,
-  ...modelInstallRequestSchemas,
-  ...modelRegistryRequestSchemas,
-} as const;
+export type { BackgroundApp, BackgroundDependencies, BackgroundPort } from "./types";
 
 /** Answers a request that could not be trusted, saying which check it failed. */
 const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown> => {

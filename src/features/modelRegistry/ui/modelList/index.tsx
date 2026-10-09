@@ -1,4 +1,4 @@
-import type { InstalledModelSummary } from "../../constants";
+import type { InstalledModelSummary } from "../../types";
 import { getReadableSize } from "./utils/getReadableSize";
 
 export interface ModelListProps {

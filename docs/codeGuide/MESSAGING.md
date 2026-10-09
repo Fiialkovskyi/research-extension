@@ -246,11 +246,4 @@ a stub.
 
 ## 5.10 Known deviations
 
-Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
-
-- `InferenceWorker.request(type, payload: unknown)` — the outgoing payload is not checked against
-  the request schema for its type; a typo in a payload is found only when the worker refuses it.
-- `src/features/modelRegistry/constants.ts` — the conformance statuses are typed out as
-  `v.picklist(["pending", "passed", "failed"])` twice, and the probe shape is repeated inline;
-  both should derive from one definition.
-- The worker protocol's `infer.*` domain (see [2.13](./NAMING.md#213-known-deviations)).
+None found on 2026-10-09.

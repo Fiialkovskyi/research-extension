@@ -13,17 +13,20 @@
  * report start-up as throughput.
  */
 
+// `ui/` is deliberately absent from this barrel: its components stay out of it so that
+// the background, which imports feature barrels and has no use for React, never pulls React in.
+// The surface that renders a component imports it from `ui/` by path.
+
 export {
   BENCHMARK_CHUNK_COUNT,
-  benchmarkRequestSchemas,
-  benchmarkResponseSchemas,
   BENCHMARK_CHUNK_WORDS,
   MINIMUM_CHUNKS_PER_SECOND,
 } from "./constants";
+export { benchmarkRequestSchemas, benchmarkResponseSchemas } from "./schemas";
 export { buildBenchmarkChunks } from "./model/buildBenchmarkChunks";
 export { measureEmbeddingThroughput } from "./model/measureEmbeddingThroughput";
 export type {
   MeasureEmbeddingThroughputOptions,
   ThroughputMeasurement,
 } from "./model/measureEmbeddingThroughput";
-export type { BenchmarkRequestType, BenchmarkResponseType } from "./constants";
+export type { BenchmarkRequestType, BenchmarkResponseType } from "./types";

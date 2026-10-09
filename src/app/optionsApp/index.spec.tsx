@@ -2,11 +2,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { OptionsApp, type SurfaceClient } from ".";
-import { MINILM_L6_V2 } from "@/shared/config/modelProfiles";
+import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 
 /** A client that records what was sent and can push answers back. */
-const stubClient = () => {
+const createStubClient = () => {
   const sent: { type: string; payload: unknown }[] = [];
   const listeners: ((message: unknown) => void)[] = [];
 
@@ -38,7 +38,7 @@ const capabilities = { availableDevices: ["wasm"], crossOriginIsolated: false, t
 
 describe("OptionsApp", () => {
   it("asks what this installation can run, what is installed, and what the policy refused", () => {
-    const { client, sent } = stubClient();
+    const { client, sent } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
@@ -50,7 +50,7 @@ describe("OptionsApp", () => {
   });
 
   it("says it is still checking before an answer arrives", () => {
-    const { client } = stubClient();
+    const { client } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
@@ -58,7 +58,7 @@ describe("OptionsApp", () => {
   });
 
   it("reports the devices and that it runs single-threaded", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("inference.capabilities", capabilities);
@@ -68,7 +68,7 @@ describe("OptionsApp", () => {
   });
 
   it("says plainly that the realm is not cross-origin isolated", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("inference.capabilities", capabilities);
@@ -79,7 +79,7 @@ describe("OptionsApp", () => {
   });
 
   it("shows the empty state until a model is installed", () => {
-    const { client } = stubClient();
+    const { client } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
@@ -87,7 +87,7 @@ describe("OptionsApp", () => {
   });
 
   it("lists what the background reports as installed", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.listed", {
@@ -111,7 +111,7 @@ describe("OptionsApp", () => {
   });
 
   it("offers every bundled profile for installation", () => {
-    const { client } = stubClient();
+    const { client } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
@@ -119,7 +119,7 @@ describe("OptionsApp", () => {
   });
 
   it("asks the background to install the profile the user chose", () => {
-    const { client, sent } = stubClient();
+    const { client, sent } = createStubClient();
 
     render(<OptionsApp client={client} />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
@@ -131,7 +131,7 @@ describe("OptionsApp", () => {
   });
 
   it("shows progress while the install runs", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
@@ -147,7 +147,7 @@ describe("OptionsApp", () => {
   });
 
   it("prevents a second install while one is running", () => {
-    const { client } = stubClient();
+    const { client } = createStubClient();
 
     render(<OptionsApp client={client} />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
@@ -156,7 +156,7 @@ describe("OptionsApp", () => {
   });
 
   it("refreshes the list once a model is installed", async () => {
-    const { client, sent, answer } = stubClient();
+    const { client, sent, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
@@ -166,7 +166,7 @@ describe("OptionsApp", () => {
   });
 
   it("shows why an install failed", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
@@ -181,7 +181,7 @@ describe("OptionsApp", () => {
   });
 
   it("surfaces a refusal from the background", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("inference.failed", { reason: "worker crashed" });
@@ -192,7 +192,7 @@ describe("OptionsApp", () => {
   });
 
   it("surfaces a protocol refusal from the background", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("rpc.refused", { rejection: "unknown-type", reason: "Unknown message type" });
@@ -203,7 +203,7 @@ describe("OptionsApp", () => {
   });
 
   it("ignores a message it cannot validate rather than breaking the surface", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.listed", { models: "not a list" });
@@ -213,7 +213,7 @@ describe("OptionsApp", () => {
   });
 
   it("stops listening when it unmounts", () => {
-    const { client, listenerCount } = stubClient();
+    const { client, listenerCount } = createStubClient();
     const { unmount } = render(<OptionsApp client={client} />);
 
     unmount();
@@ -222,7 +222,7 @@ describe("OptionsApp", () => {
   });
 
   it("offers only the profiles it is given", () => {
-    const { client } = stubClient();
+    const { client } = createStubClient();
 
     render(<OptionsApp client={client} profiles={[]} />);
 
@@ -230,7 +230,7 @@ describe("OptionsApp", () => {
   });
 
   it("carries a light and dark pair, so it follows the system scheme", () => {
-    const { client } = stubClient();
+    const { client } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
@@ -263,7 +263,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   };
 
   it("offers the software path and the accelerated one", () => {
-    const { client } = stubClient();
+    const { client } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
@@ -272,7 +272,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("disables a path this installation cannot reach", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("inference.capabilities", capabilities);
@@ -282,7 +282,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("activates a model on the chosen path", async () => {
-    const { client, sent, answer } = stubClient();
+    const { client, sent, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.listed", { models: [installed] });
@@ -298,7 +298,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("carries the newly chosen path into the next request", async () => {
-    const { client, sent, answer } = stubClient();
+    const { client, sent, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.listed", { models: [installed] });
@@ -314,7 +314,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("shows every check an activation ran, passed or failed", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.activated", {
@@ -339,7 +339,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("reports a refusal even when the request itself succeeded", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.activated", {
@@ -357,7 +357,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("refreshes the list after an activation, since what it shows has changed", async () => {
-    const { client, sent, answer } = stubClient();
+    const { client, sent, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     const listsBefore = sent.filter((message) => message.type === "model.list").length;
@@ -376,7 +376,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("shows the measurement against the budget", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("benchmark.measured", measured);
@@ -387,7 +387,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("says it is measuring while the run is in flight", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.listed", { models: [installed] });
@@ -398,7 +398,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("reports a failed measurement", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("benchmark.failed", { ref: installed.ref, reason: "the runtime gave up" });
@@ -409,7 +409,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("prevents a second operation while one is running, since they share one worker", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("model.listed", { models: [installed] });
@@ -421,7 +421,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   });
 
   it("discards a measurement when the device changes under it", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("benchmark.measured", measured);
@@ -435,7 +435,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
 
 describe("OptionsApp, reporting the network policy", () => {
   it("shows what the package may reach once the background has said", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("diagnostics.report", {
@@ -448,7 +448,7 @@ describe("OptionsApp, reporting the network policy", () => {
   });
 
   it("names an origin the policy refused", async () => {
-    const { client, answer } = stubClient();
+    const { client, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     answer("diagnostics.report", {
@@ -462,7 +462,7 @@ describe("OptionsApp, reporting the network policy", () => {
   });
 
   it("asks again after an install, which is when a refusal would have happened", async () => {
-    const { client, sent, answer } = stubClient();
+    const { client, sent, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     const before = sent.filter((message) => message.type === "diagnostics.read").length;
@@ -475,7 +475,7 @@ describe("OptionsApp, reporting the network policy", () => {
   });
 
   it("asks again after a failed install, which is the case that needs the reason", async () => {
-    const { client, sent, answer } = stubClient();
+    const { client, sent, answer } = createStubClient();
 
     render(<OptionsApp client={client} />);
     const before = sent.filter((message) => message.type === "diagnostics.read").length;

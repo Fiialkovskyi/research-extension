@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { getPrefixedTexts } from ".";
-import { BGE_SMALL_EN_V1_5, MINILM_L6_V2 } from "@/shared/config/modelProfiles";
+import { BGE_SMALL_EN_V1_5, MINILM_L6_V2 } from "@/shared/config";
 import type { EmbeddingContract } from "@/shared/modelManifest";
 
-const contractWith = (prefixes: EmbeddingContract["prefixes"]): EmbeddingContract => ({
+const buildContract = (prefixes: EmbeddingContract["prefixes"]): EmbeddingContract => ({
   family: "embedding",
   dimensions: 384,
   maxInputTokens: 512,
@@ -15,12 +15,12 @@ const contractWith = (prefixes: EmbeddingContract["prefixes"]): EmbeddingContrac
 });
 
 /** The real prefixes of the two bundled profiles. */
-const symmetric = contractWith(
+const symmetric = buildContract(
   MINILM_L6_V2.contract.family === "embedding"
     ? MINILM_L6_V2.contract.prefixes
     : { query: "", document: "" },
 );
-const asymmetric = contractWith(
+const asymmetric = buildContract(
   BGE_SMALL_EN_V1_5.contract.family === "embedding"
     ? BGE_SMALL_EN_V1_5.contract.prefixes
     : { query: "", document: "" },

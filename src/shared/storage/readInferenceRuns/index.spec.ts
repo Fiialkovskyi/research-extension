@@ -4,11 +4,8 @@ import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { readInferenceRuns } from ".";
-import {
-  INFERENCE_RUN_STORE,
-  type ModelDatabaseSchema,
-  type StoredInferenceRun,
-} from "../constants";
+import { INFERENCE_RUN_STORE } from "../constants";
+import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
 import { openModelDatabase } from "../openModelDatabase";
 import { recordInferenceRun } from "../recordInferenceRun";
 

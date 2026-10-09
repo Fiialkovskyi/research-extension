@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { buildModelManifest, resolveModelRevision } from "@/features/modelRegistry";
-import type { ModelProfile } from "@/shared/config/modelProfiles";
+import type { ModelProfile } from "@/shared/config";
 import { getModelRef } from "@/shared/modelManifest";
 import { MODEL_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
 import { downloadModelFiles, type InstallProgress } from "../downloadModelFiles";

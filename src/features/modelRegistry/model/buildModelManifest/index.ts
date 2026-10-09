@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import type { ModelProfile } from "@/shared/config/modelProfiles";
+import type { ModelProfile } from "@/shared/config";
 import { type ModelManifest, modelManifestSchema } from "@/shared/modelManifest";
 import { buildModelContract } from "./utils/buildModelContract";
 import { parseModelTree } from "./utils/parseModelTree";

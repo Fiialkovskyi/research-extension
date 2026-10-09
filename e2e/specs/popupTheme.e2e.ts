@@ -1,20 +1,20 @@
 import { expect } from "@wdio/globals";
 
 import {
-  type SystemColourScheme,
-  clearSystemColourScheme,
+  type SystemColorScheme,
+  clearSystemColorScheme,
   clickToolbarAction,
   closePopup,
   enterBrowserChrome,
   leaveBrowserChrome,
   placeToolbarAction,
   readPopup,
-  setSystemColourScheme,
+  setSystemColorScheme,
   waitForPopupPanel,
-} from "../fixtures/firefoxToolbar";
+} from "../fixtures/firefoxToolbar/utils";
 
-async function openPopupUnder(scheme: SystemColourScheme) {
-  await setSystemColourScheme(scheme);
+const openPopupUnder = async (scheme: SystemColorScheme) => {
+  await setSystemColorScheme(scheme);
   await clickToolbarAction();
   await waitForPopupPanel();
 
@@ -22,7 +22,7 @@ async function openPopupUnder(scheme: SystemColourScheme) {
   await closePopup();
 
   return snapshot;
-}
+};
 
 describe("popup appearance", () => {
   before(async () => {
@@ -31,7 +31,7 @@ describe("popup appearance", () => {
   });
 
   after(async () => {
-    await clearSystemColourScheme();
+    await clearSystemColorScheme();
     await leaveBrowserChrome();
   });
 

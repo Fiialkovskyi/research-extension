@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { MODEL_STORE, type ModelDatabaseSchema } from "@/shared/storage";
-import type { InstalledModelSummary } from "../../constants";
+import type { InstalledModelSummary } from "../../types";
 
 /**
  * Lists what is installed, newest first, flattened for rendering.

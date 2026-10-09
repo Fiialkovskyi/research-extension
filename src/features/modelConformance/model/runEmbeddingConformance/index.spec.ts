@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { runEmbeddingConformance } from ".";
-import { type EmbedForConformance, PARAPHRASE_PROBES } from "../../constants";
+import { type EmbedForConformance } from "../../types";
+import { PARAPHRASE_PROBES } from "../../constants";
 import type { EmbeddingContract } from "@/shared/modelManifest";
 
 const DIMENSIONS = 4;
@@ -31,12 +32,20 @@ const buildLookup = (swapPairs = 0): Map<string, Float32Array> => {
   const lookup = new Map<string, Float32Array>();
 
   for (const [index, probe] of PARAPHRASE_PROBES.entries()) {
-    const angle = (index * Math.PI) / PARAPHRASE_PROBES.length;
-    const near = unit([Math.cos(angle + 0.01), Math.sin(angle + 0.01), 0, 0]);
-    const far = unit([0, 0, Math.cos(angle), Math.sin(angle)]);
+    const buildVectorAtAngle = (index * Math.PI) / PARAPHRASE_PROBES.length;
+    const near = unit([
+      Math.cos(buildVectorAtAngle + 0.01),
+      Math.sin(buildVectorAtAngle + 0.01),
+      0,
+      0,
+    ]);
+    const far = unit([0, 0, Math.cos(buildVectorAtAngle), Math.sin(buildVectorAtAngle)]);
     const swapped = index < swapPairs;
 
-    lookup.set(probe.anchor, unit([Math.cos(angle), Math.sin(angle), 0, 0]));
+    lookup.set(
+      probe.anchor,
+      unit([Math.cos(buildVectorAtAngle), Math.sin(buildVectorAtAngle), 0, 0]),
+    );
     lookup.set(probe.paraphrase, swapped ? far : near);
     lookup.set(probe.unrelated, swapped ? near : far);
   }
@@ -91,7 +100,7 @@ describe("runEmbeddingConformance", () => {
     const outcome = await runEmbeddingConformance(contract(), buildEmbed());
 
     expect(outcome.passed).toBe(true);
-    expect(outcome.reason).toBeUndefined();
+    expect(outcome).not.toHaveProperty("reason");
   });
 
   it("embeds anchors as queries and the rest as documents", async () => {
@@ -122,14 +131,14 @@ describe("runEmbeddingConformance", () => {
     );
 
     expect(outcome.passed).toBe(false);
-    expect(outcome.reason).toMatch(/dimensions/);
+    expect(outcome).toMatchObject({ reason: expect.stringMatching(/dimensions/) });
   });
 
   it("fails a model that declares normalization and does not deliver it", async () => {
     const outcome = await runEmbeddingConformance(contract(), buildEmbed({ scale: 4 }));
 
     expect(outcome.passed).toBe(false);
-    expect(outcome.reason).toMatch(/normalized/);
+    expect(outcome).toMatchObject({ reason: expect.stringMatching(/normalized/) });
   });
 
   it("fails a model that cannot reproduce its own vector", async () => {
@@ -139,7 +148,7 @@ describe("runEmbeddingConformance", () => {
     );
 
     expect(outcome.passed).toBe(false);
-    expect(outcome.reason).toMatch(/similarity of/);
+    expect(outcome).toMatchObject({ reason: expect.stringMatching(/similarity of/) });
   });
 
   it("fails a model that puts strangers closer than paraphrases", async () => {
@@ -149,7 +158,7 @@ describe("runEmbeddingConformance", () => {
     );
 
     expect(outcome.passed).toBe(false);
-    expect(outcome.reason).toMatch(/ordered correctly/);
+    expect(outcome).toMatchObject({ reason: expect.stringMatching(/ordered correctly/) });
   });
 
   it("tolerates a couple of wrong pairs, which no model gets perfect", async () => {
@@ -166,7 +175,7 @@ describe("runEmbeddingConformance", () => {
     );
 
     expect(outcome.passed).toBe(false);
-    expect(outcome.reason).toContain("no WebAssembly backend");
+    expect(outcome).toMatchObject({ reason: expect.stringContaining("no WebAssembly backend") });
   });
 
   it("names every probe it ran, so a surface can show the detail", async () => {

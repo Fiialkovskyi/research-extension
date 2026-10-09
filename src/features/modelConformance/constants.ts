@@ -1,4 +1,4 @@
-import type { EmbeddingRole } from "@/features/inference";
+import type { ParaphraseProbe } from "./types";
 
 /**
  * The bundled conformance suite for the embedding family.
@@ -8,24 +8,6 @@ import type { EmbeddingRole } from "@/features/inference";
  * them, because the failure mode of a wrongly-configured encoder is not an
  * error — it is vectors of the right width and unit length that encode nothing.
  */
-
-/**
- * Embeds a batch of texts in a role.
- *
- * Injected throughout the suite rather than imported, so every probe runs
- * against a stub and each failure mode is reachable without a real model.
- */
-export type EmbedForConformance = (
-  texts: readonly string[],
-  role: EmbeddingRole,
-) => Promise<Float32Array[]>;
-
-/** A probe pair: the paraphrase should sit closer to the anchor than the stranger. */
-export interface ParaphraseProbe {
-  anchor: string;
-  paraphrase: string;
-  unrelated: string;
-}
 
 /**
  * Twenty pairs spanning everyday topics rather than one domain.

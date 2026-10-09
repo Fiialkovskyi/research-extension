@@ -12,18 +12,17 @@
  * read back out of storage.
  */
 
+export { INFERENCE_DEVICES, MODEL_FAMILIES } from "./constants";
 export {
   commitRevisionSchema,
   embeddingContractSchema,
   fileDigestSchema,
-  INFERENCE_DEVICES,
-  MODEL_FAMILIES,
   modelContractSchema,
   modelFileSchema,
   modelManifestSchema,
   modelReferenceSchema,
   textGenerationContractSchema,
-} from "./constants";
+} from "./schemas";
 export type {
   EmbeddingContract,
   FileDigest,
@@ -34,5 +33,5 @@ export type {
   ModelManifest,
   ModelReference,
   TextGenerationContract,
-} from "./constants";
+} from "./types";
 export { getModelRef } from "./getModelRef";

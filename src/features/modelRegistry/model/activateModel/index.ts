@@ -46,7 +46,7 @@ export const activateModel = async (options: ActivateModelOptions): Promise<Stor
   const recorded: StoredModel = {
     ...model,
     conformance: outcome.passed ? "passed" : "failed",
-    conformanceReason: outcome.reason,
+    conformanceReason: outcome.passed ? undefined : outcome.reason,
     active: outcome.passed,
   };
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildModelContract } from ".";
-import { MINILM_L6_V2, type ModelProfile } from "@/shared/config/modelProfiles";
+import { MINILM_L6_V2, type ModelProfile } from "@/shared/config";
 
 const textGenerationProfile: ModelProfile = {
   repository: "onnx-community/Qwen3-0.6B-ONNX",

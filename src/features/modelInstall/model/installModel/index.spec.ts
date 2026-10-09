@@ -4,7 +4,7 @@ import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { installModel } from ".";
-import { MINILM_L6_V2, type ModelProfile } from "@/shared/config/modelProfiles";
+import { MINILM_L6_V2, type ModelProfile } from "@/shared/config";
 import {
   MODEL_FILE_STORE,
   MODEL_STORE,
@@ -40,7 +40,10 @@ const buildTree = async () => {
 };
 
 /** Routes by URL shape: the listing endpoint, or a file at a pinned commit. */
-const stubFetch = (tree: unknown, overrides: { treeOk?: boolean; weightsBody?: string } = {}) => {
+const createStubFetch = (
+  tree: unknown,
+  overrides: { treeOk?: boolean; weightsBody?: string } = {},
+) => {
   return vi.fn((rawUrl: string) => {
     const url = String(rawUrl);
 
@@ -79,21 +82,21 @@ beforeEach(async () => {
 
 describe("installModel", () => {
   it("records the model under its repository and pinned commit", async () => {
-    const model = await installModel({ profile, database, fetchResource: stubFetch(tree) });
+    const model = await installModel({ profile, database, fetchResource: createStubFetch(tree) });
 
     expect(model.ref).toBe(`${profile.repository}@${profile.revision}`);
     expect(await database.get(MODEL_STORE, model.ref)).toMatchObject({ ref: model.ref });
   });
 
   it("records it inactive and pending, so nothing can use it yet", async () => {
-    const model = await installModel({ profile, database, fetchResource: stubFetch(tree) });
+    const model = await installModel({ profile, database, fetchResource: createStubFetch(tree) });
 
     expect(model.active).toBe(false);
     expect(model.conformance).toBe("pending");
   });
 
   it("derives a contract from the repository's own configuration", async () => {
-    const model = await installModel({ profile, database, fetchResource: stubFetch(tree) });
+    const model = await installModel({ profile, database, fetchResource: createStubFetch(tree) });
 
     expect(model.manifest.contract).toMatchObject({
       family: "embedding",
@@ -103,14 +106,14 @@ describe("installModel", () => {
   });
 
   it("stores the files the profile lists", async () => {
-    const model = await installModel({ profile, database, fetchResource: stubFetch(tree) });
+    const model = await installModel({ profile, database, fetchResource: createStubFetch(tree) });
     const stored = await database.getAllFromIndex(MODEL_FILE_STORE, "ref", model.ref);
 
     expect(stored.map((file) => file.path).toSorted()).toEqual([...profile.files].toSorted());
   });
 
   it("records how much disk the model occupies", async () => {
-    const model = await installModel({ profile, database, fetchResource: stubFetch(tree) });
+    const model = await installModel({ profile, database, fetchResource: createStubFetch(tree) });
 
     expect(model.diskBytes).toBe(
       byteLength(fileContents["config.json"] ?? "") +
@@ -119,7 +122,7 @@ describe("installModel", () => {
   });
 
   it("does not re-resolve a profile that is already pinned", async () => {
-    const fetchResource = stubFetch(tree);
+    const fetchResource = createStubFetch(tree);
 
     await installModel({ profile, database, fetchResource });
 
@@ -131,14 +134,14 @@ describe("installModel", () => {
   it("reports progress while fetching", async () => {
     const onProgress = vi.fn();
 
-    await installModel({ profile, database, fetchResource: stubFetch(tree), onProgress });
+    await installModel({ profile, database, fetchResource: createStubFetch(tree), onProgress });
 
     expect(onProgress).toHaveBeenCalled();
   });
 
   it("records nothing when the listing cannot be read", async () => {
     await expect(
-      installModel({ profile, database, fetchResource: stubFetch(tree, { treeOk: false }) }),
+      installModel({ profile, database, fetchResource: createStubFetch(tree, { treeOk: false }) }),
     ).rejects.toThrow(/could not list/i);
 
     expect(await database.count(MODEL_STORE)).toBe(0);
@@ -149,7 +152,7 @@ describe("installModel", () => {
       installModel({
         profile,
         database,
-        fetchResource: stubFetch(tree, { weightsBody: "tampered" }),
+        fetchResource: createStubFetch(tree, { weightsBody: "tampered" }),
       }),
     ).rejects.toThrow(/does not match its manifest/);
 
@@ -163,14 +166,14 @@ describe("installModel", () => {
     );
 
     await expect(
-      installModel({ profile, database, fetchResource: stubFetch(withoutWeights) }),
+      installModel({ profile, database, fetchResource: createStubFetch(withoutWeights) }),
     ).rejects.toThrow(/model_quantized\.onnx/);
 
     expect(await database.count(MODEL_STORE)).toBe(0);
   });
 
   it("can be run twice without fetching the files again", async () => {
-    const fetchResource = stubFetch(tree);
+    const fetchResource = createStubFetch(tree);
 
     await installModel({ profile, database, fetchResource });
     const callsAfterFirst = vi.mocked(fetchResource).mock.calls.length;

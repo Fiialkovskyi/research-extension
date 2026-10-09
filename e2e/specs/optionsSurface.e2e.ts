@@ -1,19 +1,19 @@
 import { expect } from "@wdio/globals";
 
-import { OPTIONS_PATH } from "../../src/shared/config/extension";
+import { OPTIONS_PATH } from "@/shared/config";
 import {
-  clearSystemColourScheme,
+  clearSystemColorScheme,
   enterBrowserChrome,
   leaveBrowserChrome,
-  setSystemColourScheme,
-  type SystemColourScheme,
-} from "../fixtures/firefoxToolbar";
-import { openOptionsSurface, readOptionsSurface } from "../fixtures/optionsSurface";
+  setSystemColorScheme,
+  type SystemColorScheme,
+} from "../fixtures/firefoxToolbar/utils";
+import { openOptionsSurface, readOptionsSurface } from "../fixtures/optionsSurface/utils";
 
 /** Sets the system preference, which needs the privileged context, then reads the page. */
-const readSurfaceUnder = async (scheme: SystemColourScheme) => {
+const readSurfaceUnder = async (scheme: SystemColorScheme) => {
   await enterBrowserChrome();
-  await setSystemColourScheme(scheme);
+  await setSystemColorScheme(scheme);
   await leaveBrowserChrome();
 
   await openOptionsSurface(OPTIONS_PATH);
@@ -24,7 +24,7 @@ const readSurfaceUnder = async (scheme: SystemColourScheme) => {
 describe("options surface", () => {
   after(async () => {
     await enterBrowserChrome();
-    await clearSystemColourScheme();
+    await clearSystemColorScheme();
     await leaveBrowserChrome();
   });
 

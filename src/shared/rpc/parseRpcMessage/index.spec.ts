@@ -13,7 +13,7 @@ const schemas = {
 /** The rejection reason, or the symbol below when nothing was thrown. */
 const didNotThrow = Symbol("did not throw");
 
-const rejectionOf = (candidate: unknown): string | typeof didNotThrow => {
+const getRejection = (candidate: unknown): string | typeof didNotThrow => {
   try {
     parseRpcMessage(candidate, schemas);
     return didNotThrow;
@@ -47,19 +47,19 @@ describe("parseRpcMessage", () => {
     ["an array", []],
     ["an object missing the envelope fields", { type: "worker.ping" }],
   ])("refuses %s as not an envelope", (_label, candidate) => {
-    expect(rejectionOf(candidate)).toBe("not-an-envelope");
+    expect(getRejection(candidate)).toBe("not-an-envelope");
   });
 
   it("refuses a version this build does not speak", () => {
     const candidate = { v: RPC_VERSION + 1, type: "worker.ping", id: "a", payload: {} };
 
-    expect(rejectionOf(candidate)).toBe("unsupported-version");
+    expect(getRejection(candidate)).toBe("unsupported-version");
   });
 
   it("refuses a type absent from the schema map", () => {
     const candidate = { v: RPC_VERSION, type: "session.start", id: "a", payload: {} };
 
-    expect(rejectionOf(candidate)).toBe("unknown-type");
+    expect(getRejection(candidate)).toBe("unknown-type");
   });
 
   it("refuses a payload that does not match its schema", () => {
@@ -70,7 +70,7 @@ describe("parseRpcMessage", () => {
       payload: { repository: 7 },
     };
 
-    expect(rejectionOf(candidate)).toBe("invalid-payload");
+    expect(getRejection(candidate)).toBe("invalid-payload");
   });
 
   it("does not treat an inherited property as a known type", () => {
@@ -78,7 +78,7 @@ describe("parseRpcMessage", () => {
     // would resolve it and hand a function to the payload check.
     const candidate = { v: RPC_VERSION, type: "toString", id: "a", payload: {} };
 
-    expect(rejectionOf(candidate)).toBe("unknown-type");
+    expect(getRejection(candidate)).toBe("unknown-type");
   });
 
   it("names the offending type in the error, so a receiver can report it", () => {

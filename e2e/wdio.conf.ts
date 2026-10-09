@@ -1,6 +1,6 @@
 import { browser } from "@wdio/globals";
 
-import { buildProfilePreferences, readFirefoxZipAsBase64 } from "./fixtures/firefoxExtension";
+import { buildProfilePreferences, readFirefoxZipAsBase64 } from "./fixtures/firefoxExtension/utils";
 
 const headless = process.env.E2E_HEADED !== "true";
 

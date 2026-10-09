@@ -6,7 +6,7 @@ const commit = "751bff37182d3f1213fa05d7196b954e230abad9";
 const repository = "Xenova/all-MiniLM-L6-v2";
 
 /** A fetch that answers once with the given body and status. */
-const stubFetch = (body: unknown, init: { ok?: boolean; status?: number } = {}) => {
+const createStubFetch = (body: unknown, init: { ok?: boolean; status?: number } = {}) => {
   return vi.fn().mockResolvedValue({
     ok: init.ok ?? true,
     status: init.status ?? 200,
@@ -17,19 +17,23 @@ const stubFetch = (body: unknown, init: { ok?: boolean; status?: number } = {}) 
 describe("resolveModelRevision", () => {
   it("resolves a branch name to the commit it points at", async () => {
     expect(
-      await resolveModelRevision(repository, "main", stubFetch({ sha: commit, gated: false })),
+      await resolveModelRevision(
+        repository,
+        "main",
+        createStubFetch({ sha: commit, gated: false }),
+      ),
     ).toBe(commit);
   });
 
   it("returns a reference that is already a commit, without asking the hub", async () => {
-    const fetchResource = stubFetch({ sha: "0".repeat(40) });
+    const fetchResource = createStubFetch({ sha: "0".repeat(40) });
 
     expect(await resolveModelRevision(repository, commit, fetchResource)).toBe(commit);
     expect(fetchResource).not.toHaveBeenCalled();
   });
 
   it("asks the hub's revision endpoint for the repository and reference", async () => {
-    const fetchResource = stubFetch({ sha: commit });
+    const fetchResource = createStubFetch({ sha: commit });
 
     await resolveModelRevision(repository, "main", fetchResource);
 
@@ -40,7 +44,7 @@ describe("resolveModelRevision", () => {
   });
 
   it("sends no credentials, so a download carries no identity", async () => {
-    const fetchResource = stubFetch({ sha: commit });
+    const fetchResource = createStubFetch({ sha: commit });
 
     await resolveModelRevision(repository, "main", fetchResource);
 
@@ -51,7 +55,7 @@ describe("resolveModelRevision", () => {
   });
 
   it("reports the status when the hub refuses the request", async () => {
-    const fetchResource = stubFetch({}, { ok: false, status: 404 });
+    const fetchResource = createStubFetch({}, { ok: false, status: 404 });
 
     await expect(resolveModelRevision(repository, "main", fetchResource)).rejects.toThrow(/404/);
   });
@@ -62,7 +66,7 @@ describe("resolveModelRevision", () => {
     ["a truncated commit", { sha: commit.slice(0, 7) }],
     ["a non-object answer", "main"],
   ])("refuses %s rather than recording it as an identity", async (_label, body) => {
-    await expect(resolveModelRevision(repository, "main", stubFetch(body))).rejects.toThrow(
+    await expect(resolveModelRevision(repository, "main", createStubFetch(body))).rejects.toThrow(
       /commit identifier/,
     );
   });
@@ -73,22 +77,28 @@ describe("resolveModelRevision", () => {
     ["a boolean flag", true],
   ])("refuses a repository under %s", async (_label, gated) => {
     await expect(
-      resolveModelRevision(repository, "main", stubFetch({ sha: commit, gated })),
+      resolveModelRevision(repository, "main", createStubFetch({ sha: commit, gated })),
     ).rejects.toThrow(/gated/);
   });
 
   it("accepts a repository the hub reports as not gated", async () => {
     expect(
-      await resolveModelRevision(repository, "main", stubFetch({ sha: commit, gated: false })),
+      await resolveModelRevision(
+        repository,
+        "main",
+        createStubFetch({ sha: commit, gated: false }),
+      ),
     ).toBe(commit);
   });
 
   it("accepts a repository whose answer omits the gating field", async () => {
-    expect(await resolveModelRevision(repository, "main", stubFetch({ sha: commit }))).toBe(commit);
+    expect(await resolveModelRevision(repository, "main", createStubFetch({ sha: commit }))).toBe(
+      commit,
+    );
   });
 
   it("refuses a reference that would address another endpoint", async () => {
-    const fetchResource = stubFetch({ sha: commit });
+    const fetchResource = createStubFetch({ sha: commit });
 
     await expect(resolveModelRevision(repository, "../../etc", fetchResource)).rejects.toThrow(
       /relative/,

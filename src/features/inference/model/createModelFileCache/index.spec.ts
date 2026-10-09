@@ -18,29 +18,29 @@ const files = [
 ];
 
 const cache = () => createModelFileCache(reference, files);
-const urlFor = (path: string) => getHuggingFaceFileUrl(reference, path);
+const buildUrl = (path: string) => getHuggingFaceFileUrl(reference, path);
 
 describe("createModelFileCache", () => {
   it("serves a file under the url the library resolves it to", async () => {
-    const response = await cache().match(urlFor("config.json"));
+    const response = await cache().match(buildUrl("config.json"));
 
     expect(await response?.text()).toBe('{"hidden_size":384}');
   });
 
   it("serves a nested weight file", async () => {
-    const response = await cache().match(urlFor("onnx/model_quantized.onnx"));
+    const response = await cache().match(buildUrl("onnx/model_quantized.onnx"));
 
     expect(await response?.text()).toBe("the weights");
   });
 
   it("labels json so the library's parser accepts it", async () => {
-    const response = await cache().match(urlFor("config.json"));
+    const response = await cache().match(buildUrl("config.json"));
 
     expect(response?.headers.get("content-type")).toBe("application/json");
   });
 
   it("labels weights as bytes rather than guessing a text type", async () => {
-    const response = await cache().match(urlFor("onnx/model_quantized.onnx"));
+    const response = await cache().match(buildUrl("onnx/model_quantized.onnx"));
 
     expect(response?.headers.get("content-type")).toBe("application/octet-stream");
   });
@@ -51,7 +51,7 @@ describe("createModelFileCache", () => {
   });
 
   it("misses on a file that was not installed", async () => {
-    expect(await cache().match(urlFor("tokenizer.json"))).toBeUndefined();
+    expect(await cache().match(buildUrl("tokenizer.json"))).toBeUndefined();
   });
 
   it("serves a file asked for under another revision, including a branch name", async () => {
@@ -87,19 +87,25 @@ describe("createModelFileCache", () => {
   it("refuses to store anything, so unverified bytes cannot join verified ones", async () => {
     const instance = cache();
 
-    await instance.put(urlFor("tokenizer.json"));
+    await instance.put(buildUrl("tokenizer.json"));
 
-    expect(await instance.match(urlFor("tokenizer.json"))).toBeUndefined();
+    expect(await instance.match(buildUrl("tokenizer.json"))).toBeUndefined();
   });
 
   it("can be read twice, so a reloaded model does not consume its own files", async () => {
     const instance = cache();
 
-    expect(await (await instance.match(urlFor("config.json")))?.text()).toBe('{"hidden_size":384}');
-    expect(await (await instance.match(urlFor("config.json")))?.text()).toBe('{"hidden_size":384}');
+    expect(await (await instance.match(buildUrl("config.json")))?.text()).toBe(
+      '{"hidden_size":384}',
+    );
+    expect(await (await instance.match(buildUrl("config.json")))?.text()).toBe(
+      '{"hidden_size":384}',
+    );
   });
 
   it("serves nothing when no files were provided", async () => {
-    expect(await createModelFileCache(reference, []).match(urlFor("config.json"))).toBeUndefined();
+    expect(
+      await createModelFileCache(reference, []).match(buildUrl("config.json")),
+    ).toBeUndefined();
   });
 });

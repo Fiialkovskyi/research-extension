@@ -23,7 +23,7 @@ describe("BenchmarkReport", () => {
   });
 
   it("says it is measuring while a run is in flight", () => {
-    render(<BenchmarkReport running />);
+    render(<BenchmarkReport isRunning />);
 
     expect(screen.getByTestId("benchmark-running")).toBeInTheDocument();
   });

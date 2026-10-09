@@ -250,12 +250,5 @@ A new colour needs a meaning that none of these has.
 
 Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
 
-- `src/features/modelInstall/ui/installProgress/index.tsx` — `getPercentComplete` is defined in the
-  component file → `installProgress/utils/getPercentComplete/`.
-- `src/features/inferenceBenchmark/ui/benchmarkReport/index.tsx` — nested ternary for the thread
-  count; boolean prop `running` → `isRunning`.
-- `src/app/optionsApp/index.tsx` — the same button class string is written three times →
-  `shared/ui/button`; `unavailable` (see [2.13](./NAMING.md#213-known-deviations)).
-- `src/app/optionsApp/utils/reduceOptionsState/index.ts` — boolean state field `busy` → `isBusy`.
 - `InstalledModelSummary.active` and `StoredModel.active` → `isActive`. The stored field needs a
   database migration (see the Storage section), so it moves together with the next schema change.

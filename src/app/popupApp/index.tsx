@@ -1,5 +1,5 @@
-import { Greeting } from "@/features/greeting";
-import { Panel } from "@/shared/ui/panel";
+import { Greeting } from "@/features/greeting/ui/greeting";
+import { Panel } from "@/shared/ui";
 
 /** Composition root of the toolbar popup surface. */
 export function PopupApp() {

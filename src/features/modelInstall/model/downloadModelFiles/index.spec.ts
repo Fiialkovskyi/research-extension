@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { downloadModelFiles, type InstallProgress } from ".";
 import type { ModelManifest } from "@/shared/modelManifest";
 import { MODEL_FILE_STORE, type ModelDatabaseSchema, openModelDatabase } from "@/shared/storage";
-import { getFileDigest } from "../assertFileDigest/utils/getFileDigest";
 
 const revision = "751bff37182d3f1213fa05d7196b954e230abad9";
 const ref = `Xenova/all-MiniLM-L6-v2@${revision}`;
@@ -18,19 +17,25 @@ const contentsByPath: Record<string, string> = {
 
 const encode = (text: string) => new TextEncoder().encode(text).buffer as ArrayBuffer;
 
+const getSha256 = async (text: string): Promise<string> => {
+  const digest = await crypto.subtle.digest("SHA-256", encode(text));
+
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
 const buildManifest = async (): Promise<ModelManifest> => {
   const files = await Promise.all(
     Object.entries(contentsByPath).map(async ([path, text]) => ({
       path,
       digest: {
         algorithm: "sha256" as const,
-        value: await getFileDigest(encode(text), "sha256"),
+        value: await getSha256(text),
       },
       bytes: new TextEncoder().encode(text).byteLength,
     })),
   );
 
-  return {
+  const manifest: ModelManifest = {
     manifestVersion: 1,
     reference: { hub: "huggingface", repository: "Xenova/all-MiniLM-L6-v2", revision },
     format: "onnx",
@@ -45,11 +50,13 @@ const buildManifest = async (): Promise<ModelManifest> => {
       similarity: "cosine",
       prefixes: { query: "", document: "" },
     },
-  } as ModelManifest;
+  };
+
+  return manifest;
 };
 
 /** Answers with the real contents of whichever path the url names. */
-const stubFetch = (overrides: { body?: string; ok?: boolean; status?: number } = {}) => {
+const createStubFetch = (overrides: { body?: string; ok?: boolean; status?: number } = {}) => {
   return vi.fn((url: string) => {
     const path = Object.keys(contentsByPath).find((candidate) => url.endsWith(`/${candidate}`));
     const text = overrides.body ?? (path === undefined ? "" : contentsByPath[path]);
@@ -73,7 +80,7 @@ beforeEach(async () => {
 
 describe("downloadModelFiles", () => {
   it("stores every file of the manifest", async () => {
-    await downloadModelFiles({ manifest, database, fetchResource: stubFetch() });
+    await downloadModelFiles({ manifest, database, fetchResource: createStubFetch() });
 
     const stored = await database.getAllFromIndex(MODEL_FILE_STORE, "ref", ref);
 
@@ -86,14 +93,14 @@ describe("downloadModelFiles", () => {
     const { diskBytes } = await downloadModelFiles({
       manifest,
       database,
-      fetchResource: stubFetch(),
+      fetchResource: createStubFetch(),
     });
 
     expect(diskBytes).toBe(manifest.files.reduce((total, file) => total + file.bytes, 0));
   });
 
   it("sends no credentials with any request", async () => {
-    const fetchResource = stubFetch();
+    const fetchResource = createStubFetch();
 
     await downloadModelFiles({ manifest, database, fetchResource });
 
@@ -103,7 +110,7 @@ describe("downloadModelFiles", () => {
   });
 
   it("addresses every file at the pinned commit", async () => {
-    const fetchResource = stubFetch();
+    const fetchResource = createStubFetch();
 
     await downloadModelFiles({ manifest, database, fetchResource });
 
@@ -118,7 +125,7 @@ describe("downloadModelFiles", () => {
     await downloadModelFiles({
       manifest,
       database,
-      fetchResource: stubFetch(),
+      fetchResource: createStubFetch(),
       onProgress: (update) => progress.push(update),
     });
 
@@ -136,7 +143,7 @@ describe("downloadModelFiles", () => {
     await downloadModelFiles({
       manifest,
       database,
-      fetchResource: stubFetch(),
+      fetchResource: createStubFetch(),
       onProgress: (update) => totals.add(update.totalBytes),
     });
 
@@ -144,7 +151,7 @@ describe("downloadModelFiles", () => {
   });
 
   it("does nothing when every file is already stored", async () => {
-    const fetchResource = stubFetch();
+    const fetchResource = createStubFetch();
 
     await downloadModelFiles({ manifest, database, fetchResource });
     const callsAfterFirst = vi.mocked(fetchResource).mock.calls.length;
@@ -155,7 +162,7 @@ describe("downloadModelFiles", () => {
   });
 
   it("leaves nothing behind when a file does not match its manifest", async () => {
-    const fetchResource = stubFetch({ body: "tampered" });
+    const fetchResource = createStubFetch({ body: "tampered" });
 
     await expect(downloadModelFiles({ manifest, database, fetchResource })).rejects.toThrow(
       /does not match its manifest/,
@@ -188,7 +195,7 @@ describe("downloadModelFiles", () => {
       downloadModelFiles({
         manifest,
         database,
-        fetchResource: stubFetch({ ok: false, status: 403 }),
+        fetchResource: createStubFetch({ ok: false, status: 403 }),
       }),
     ).rejects.toThrow(/403/);
   });
@@ -198,7 +205,7 @@ describe("downloadModelFiles", () => {
       downloadModelFiles({
         manifest,
         database,
-        fetchResource: stubFetch({ ok: false, status: 500 }),
+        fetchResource: createStubFetch({ ok: false, status: 500 }),
       }),
     ).rejects.toThrow();
 
@@ -213,7 +220,11 @@ describe("downloadModelFiles", () => {
     });
 
     await expect(
-      downloadModelFiles({ manifest, database, fetchResource: stubFetch({ body: "tampered" }) }),
+      downloadModelFiles({
+        manifest,
+        database,
+        fetchResource: createStubFetch({ body: "tampered" }),
+      }),
     ).rejects.toThrow();
 
     expect(await database.count(MODEL_FILE_STORE)).toBe(1);

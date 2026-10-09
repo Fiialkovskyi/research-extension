@@ -1,4 +1,5 @@
 import type { InstallProgress as Progress } from "../../model/downloadModelFiles";
+import { getPercentComplete } from "./utils/getPercentComplete";
 
 /** Where an install has got to, from the surface's point of view. */
 export type InstallState =
@@ -10,15 +11,6 @@ export type InstallState =
 export interface InstallProgressProps {
   state: InstallState;
 }
-
-/** Share of the download completed, as a whole percentage. */
-const getPercentComplete = (progress: Progress): number => {
-  if (progress.totalBytes === 0) {
-    return 0;
-  }
-
-  return Math.round((progress.completedBytes / progress.totalBytes) * 100);
-};
 
 /**
  * Reports an install honestly, including when it fails.

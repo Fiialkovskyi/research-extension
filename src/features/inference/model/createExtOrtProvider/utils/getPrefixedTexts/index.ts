@@ -1,5 +1,5 @@
 import type { EmbeddingContract } from "@/shared/modelManifest";
-import type { EmbeddingRole } from "../../../../constants";
+import type { EmbeddingRole } from "../../../../types";
 
 /**
  * Applies the prefix a model's contract declares for the text's role.

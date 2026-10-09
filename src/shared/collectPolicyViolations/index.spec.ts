@@ -9,7 +9,7 @@ import { collectPolicyViolations, type PolicyViolation } from ".";
  * accumulating and deduplicating. What counts as a reportable violation, and
  * how a blocked URI becomes an origin, are tested where those decisions live.
  */
-const fakeTarget = () => {
+const createFakeTarget = () => {
   const listeners: ((event: PolicyViolation) => void)[] = [];
 
   return {
@@ -28,13 +28,13 @@ const fakeTarget = () => {
 
 describe("collectPolicyViolations", () => {
   it("records nothing before anything is blocked", () => {
-    const { target } = fakeTarget();
+    const { target } = createFakeTarget();
 
     expect(collectPolicyViolations(target).read()).toEqual([]);
   });
 
   it("records a blocked request once it is reported", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     report("https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.wasm");
@@ -43,7 +43,7 @@ describe("collectPolicyViolations", () => {
   });
 
   it("collapses repeated blocks to one entry, since an install makes many requests", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     report("https://cdn.example.com/a");
@@ -54,7 +54,7 @@ describe("collectPolicyViolations", () => {
   });
 
   it("keeps the first report of a pair, not the last", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     report("https://cdn.example.com/first");
@@ -64,7 +64,7 @@ describe("collectPolicyViolations", () => {
   });
 
   it("keeps two origins apart", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     report("https://first.example.com/a");
@@ -77,7 +77,7 @@ describe("collectPolicyViolations", () => {
   });
 
   it("keeps one origin refused by two directives apart", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     report("https://example.com/a", "connect-src");
@@ -87,7 +87,7 @@ describe("collectPolicyViolations", () => {
   });
 
   it("ignores a report the collector is told is not worth recording", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     report("");
@@ -96,7 +96,7 @@ describe("collectPolicyViolations", () => {
   });
 
   it("reads the same log twice without consuming it", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     report("https://example.com/a");
@@ -106,7 +106,7 @@ describe("collectPolicyViolations", () => {
   });
 
   it("reflects a report that arrives after an earlier read", () => {
-    const { target, report } = fakeTarget();
+    const { target, report } = createFakeTarget();
     const log = collectPolicyViolations(target);
 
     expect(log.read()).toEqual([]);

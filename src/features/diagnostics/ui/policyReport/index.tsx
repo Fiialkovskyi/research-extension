@@ -1,4 +1,4 @@
-import type { BlockedRequestReport } from "../../constants";
+import type { BlockedRequestReport } from "../../types";
 
 export interface PolicyReportProps {
   permittedOrigins?: readonly string[];

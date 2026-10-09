@@ -1,30 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import { buildModelManifest } from ".";
-import { MINILM_L6_V2 } from "@/shared/config/modelProfiles";
+import { MINILM_L6_V2 } from "@/shared/config";
 
 const sha256 = (seed: string) => seed.repeat(64).slice(0, 64);
-const gitOid = (seed: string) => seed.repeat(40).slice(0, 40);
+const buildGitOid = (seed: string) => seed.repeat(40).slice(0, 40);
 
 /** Shaped like the hub's real listing for the default profile's revision. */
 const tree = [
   { type: "directory", path: "onnx", size: 0 },
-  { type: "file", path: "config.json", size: 650, oid: gitOid("1") },
-  { type: "file", path: "tokenizer.json", size: 711_661, oid: gitOid("2") },
-  { type: "file", path: "tokenizer_config.json", size: 366, oid: gitOid("3") },
-  { type: "file", path: "special_tokens_map.json", size: 125, oid: gitOid("4") },
+  { type: "file", path: "config.json", size: 650, oid: buildGitOid("1") },
+  { type: "file", path: "tokenizer.json", size: 711_661, oid: buildGitOid("2") },
+  { type: "file", path: "tokenizer_config.json", size: 366, oid: buildGitOid("3") },
+  { type: "file", path: "special_tokens_map.json", size: 125, oid: buildGitOid("4") },
   {
     type: "file",
     path: "onnx/model_quantized.onnx",
     size: 22_972_370,
-    oid: gitOid("5"),
+    oid: buildGitOid("5"),
     lfs: { oid: sha256("a") },
   },
   {
     type: "file",
     path: "onnx/model.onnx",
     size: 90_387_606,
-    oid: gitOid("6"),
+    oid: buildGitOid("6"),
     lfs: { oid: sha256("b") },
   },
 ];
@@ -70,7 +70,7 @@ describe("buildModelManifest", () => {
     });
     expect(files.find((file) => file.path === "config.json")?.digest).toEqual({
       algorithm: "git-blob-sha1",
-      value: gitOid("1"),
+      value: buildGitOid("1"),
     });
   });
 

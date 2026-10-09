@@ -2,7 +2,7 @@ import type { IDBPDatabase } from "idb";
 
 import type { InferenceDevice } from "@/shared/modelManifest";
 import { MODEL_FILE_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
-import type { EmbeddingRole } from "../../constants";
+import type { EmbeddingRole } from "../../types";
 import type { InferenceWorker } from "../createInferenceWorker";
 
 /** A model loaded in the worker, with a way to use it. */
@@ -65,9 +65,9 @@ export const loadModelIntoWorker = async (
     dimensions: loaded.payload.dimensions,
     loadDurationMs: loaded.payload.loadDurationMs,
     embed: async (texts, role) => {
-      const embedded = await worker.request("infer.embed", { texts: [...texts], role });
+      const embedded = await worker.request("worker.embed", { texts: [...texts], role });
 
-      if (embedded.type !== "infer.embedded") {
+      if (embedded.type !== "worker.embedded") {
         throw new Error(`The worker answered an embedding request with "${embedded.type}".`);
       }
 

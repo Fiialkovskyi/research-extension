@@ -50,7 +50,7 @@ const model: StoredModel = {
   installedAt: 1,
 };
 
-const stubWorker = (overrides: Partial<Record<string, unknown>> = {}): InferenceWorker => {
+const createStubWorker = (overrides: Partial<Record<string, unknown>> = {}): InferenceWorker => {
   return {
     request: vi.fn((type: string) => {
       if (type === "model.load") {
@@ -65,8 +65,8 @@ const stubWorker = (overrides: Partial<Record<string, unknown>> = {}): Inference
       }
 
       return Promise.resolve(
-        (overrides["infer.embed"] as unknown) ??
-          buildRpcMessage("infer.embedded", {
+        (overrides["worker.embed"] as unknown) ??
+          buildRpcMessage("worker.embedded", {
             vectors: [new Float32Array(384)],
             device: "wasm",
             durationMs: 5,
@@ -95,7 +95,7 @@ beforeEach(async () => {
 describe("loadModelIntoWorker", () => {
   it("sends the manifest and every file the manifest lists", async () => {
     await storeFiles(["config.json", "onnx/model_quantized.onnx"]);
-    const worker = stubWorker();
+    const worker = createStubWorker();
 
     await loadModelIntoWorker({ model, database, worker, device: "wasm" });
 
@@ -112,7 +112,7 @@ describe("loadModelIntoWorker", () => {
 
   it("asks for the device it was told to use", async () => {
     await storeFiles(["config.json", "onnx/model_quantized.onnx"]);
-    const worker = stubWorker();
+    const worker = createStubWorker();
 
     await loadModelIntoWorker({ model, database, worker, device: "webgpu" });
 
@@ -124,7 +124,7 @@ describe("loadModelIntoWorker", () => {
 
   it("reports the device the worker actually loaded on, not the one requested", async () => {
     await storeFiles(["config.json", "onnx/model_quantized.onnx"]);
-    const worker = stubWorker({
+    const worker = createStubWorker({
       "model.load": buildRpcMessage("model.loaded", {
         device: "wasm",
         dimensions: 384,
@@ -143,7 +143,7 @@ describe("loadModelIntoWorker", () => {
     const session = await loadModelIntoWorker({
       model,
       database,
-      worker: stubWorker(),
+      worker: createStubWorker(),
       device: "wasm",
     });
 
@@ -152,13 +152,13 @@ describe("loadModelIntoWorker", () => {
 
   it("returns an embed function that goes through the worker", async () => {
     await storeFiles(["config.json", "onnx/model_quantized.onnx"]);
-    const worker = stubWorker();
+    const worker = createStubWorker();
     const session = await loadModelIntoWorker({ model, database, worker, device: "wasm" });
 
     const vectors = await session.embed(["a question"], "query");
 
     expect(vectors).toHaveLength(1);
-    expect(worker.request).toHaveBeenCalledWith("infer.embed", {
+    expect(worker.request).toHaveBeenCalledWith("worker.embed", {
       texts: ["a question"],
       role: "query",
     });
@@ -168,7 +168,7 @@ describe("loadModelIntoWorker", () => {
     await storeFiles(["config.json"]);
 
     await expect(
-      loadModelIntoWorker({ model, database, worker: stubWorker(), device: "wasm" }),
+      loadModelIntoWorker({ model, database, worker: createStubWorker(), device: "wasm" }),
     ).rejects.toThrow(/model_quantized\.onnx" is missing from storage/);
   });
 
@@ -176,13 +176,13 @@ describe("loadModelIntoWorker", () => {
     await storeFiles([]);
 
     await expect(
-      loadModelIntoWorker({ model, database, worker: stubWorker(), device: "wasm" }),
+      loadModelIntoWorker({ model, database, worker: createStubWorker(), device: "wasm" }),
     ).rejects.toThrow(/Reinstalling/);
   });
 
   it("does not send a load request when a file is missing", async () => {
     await storeFiles(["config.json"]);
-    const worker = stubWorker();
+    const worker = createStubWorker();
 
     await expect(
       loadModelIntoWorker({ model, database, worker, device: "wasm" }),
@@ -193,7 +193,7 @@ describe("loadModelIntoWorker", () => {
 
   it("reports a worker that answers a load with something else", async () => {
     await storeFiles(["config.json", "onnx/model_quantized.onnx"]);
-    const worker = stubWorker({
+    const worker = createStubWorker({
       "model.load": buildRpcMessage("worker.pong", {
         availableDevices: ["wasm"],
         crossOriginIsolated: false,
@@ -208,9 +208,9 @@ describe("loadModelIntoWorker", () => {
 
   it("reports a worker that answers an embedding request with something else", async () => {
     await storeFiles(["config.json", "onnx/model_quantized.onnx"]);
-    const worker = stubWorker({
-      "infer.embed": buildRpcMessage("worker.error", {
-        requestType: "infer.embed",
+    const worker = createStubWorker({
+      "worker.embed": buildRpcMessage("worker.error", {
+        requestType: "worker.embed",
         reason: "no model",
       }),
     });
@@ -221,7 +221,7 @@ describe("loadModelIntoWorker", () => {
 
   it("ignores files in storage the manifest does not list", async () => {
     await storeFiles(["config.json", "onnx/model_quantized.onnx", "leftover.bin"]);
-    const worker = stubWorker();
+    const worker = createStubWorker();
 
     await loadModelIntoWorker({ model, database, worker, device: "wasm" });
 

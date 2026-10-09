@@ -1,7 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "wxt";
 
-import { EXTENSION_ID, FIREFOX_MIN_VERSION } from "./src/shared/config/extension";
+import { EXTENSION_ID, FIREFOX_MIN_VERSION } from "./src/shared/config";
 // Imported from the constants file rather than the module barrel: the barrel
 // also exports functions that import through the `@/` alias, which the config
 // loader does not resolve. The manifest only needs the origins anyway.

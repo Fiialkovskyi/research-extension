@@ -5,8 +5,16 @@ export interface BenchmarkReportProps {
   measurement?: ThroughputMeasurement;
   /** Threads the runtime used, which decides how to read the number. */
   threadCount?: number;
-  running?: boolean;
+  isRunning?: boolean;
 }
+
+const getThreadLabel = (threadCount: number | undefined): string | null => {
+  if (threadCount === undefined) {
+    return null;
+  }
+
+  return threadCount === 1 ? ", single-threaded" : `, ${threadCount} threads`;
+};
 
 /**
  * Reports a measurement against the budget it is judged by.
@@ -17,8 +25,8 @@ export interface BenchmarkReportProps {
  * path exists. A report that omitted them would invite exactly the wrong
  * conclusion.
  */
-export function BenchmarkReport({ measurement, threadCount, running }: BenchmarkReportProps) {
-  if (running === true) {
+export function BenchmarkReport({ measurement, threadCount, isRunning }: BenchmarkReportProps) {
+  if (isRunning === true) {
     return (
       <p data-testid="benchmark-running" className="text-sm text-slate-700 dark:text-slate-300">
         Measuring…
@@ -30,6 +38,7 @@ export function BenchmarkReport({ measurement, threadCount, running }: Benchmark
     return null;
   }
 
+  const threadLabel = getThreadLabel(threadCount);
   const verdict = measurement.meetsBudget
     ? { text: "meets the budget", className: "text-emerald-700 dark:text-emerald-400" }
     : { text: "below the budget", className: "text-red-700 dark:text-red-400" };
@@ -49,11 +58,7 @@ export function BenchmarkReport({ measurement, threadCount, running }: Benchmark
       <dt>Device</dt>
       <dd>
         {measurement.device}
-        {threadCount === undefined
-          ? null
-          : threadCount === 1
-            ? ", single-threaded"
-            : `, ${threadCount} threads`}
+        {threadLabel}
       </dd>
       <dt>Batch</dt>
       <dd>

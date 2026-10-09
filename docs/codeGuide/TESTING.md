@@ -178,14 +178,4 @@ run not attempted — say which, in the pull request.
 
 ## 9.11 Known deviations
 
-Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
-
-- **No spec** for `src/features/modelInstall/model/downloadModelFiles/utils/removeStoredFiles/` and
-  `src/features/modelInstall/model/installModel/utils/readRepositoryJson/`.
-- `src/features/inference/model/createExtOrtProvider/index.ts` has no spec and its module comment
-  should say why in one line (it does explain the `utils/` split).
-- `src/features/modelInstall/model/downloadModelFiles/index.spec.ts` imports
-  `../assertFileDigest/utils/getFileDigest` — another entity's private helper.
-- `src/features/modelInstall/model/downloadModelFiles/index.spec.ts` builds its manifest with
-  `as ModelManifest` instead of a typed literal.
-- Spec helpers named as nouns — see [2.13](./NAMING.md#213-known-deviations).
+None found on 2026-10-09.

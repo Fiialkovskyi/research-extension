@@ -12,6 +12,8 @@ export const readMessageField = (candidate: unknown, field: string): string | un
     return undefined;
   }
 
+  // Narrowed above to a non-null object that has the field; the compiler cannot
+  // express "an object with this key" without a cast.
   const value = (candidate as Record<string, unknown>)[field];
 
   return typeof value === "string" ? value : undefined;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { INITIAL_OPTIONS_STATE, type OptionsEvent, reduceOptionsState } from ".";
+import { INITIAL_OPTIONS_STATE } from "./constants";
+import { reduceOptionsState } from ".";
+import type { OptionsEvent } from "./types";
 import type { RuntimeCapabilities } from "@/features/inference";
 import type { InstalledModelSummary } from "@/features/modelRegistry";
 
@@ -28,7 +30,7 @@ describe("reduceOptionsState", () => {
     expect(INITIAL_OPTIONS_STATE).toEqual({
       models: [],
       install: { status: "idle" },
-      busy: false,
+      isBusy: false,
       device: "wasm",
       probes: [],
       blockedOrigins: [],
@@ -57,9 +59,9 @@ describe("reduceOptionsState", () => {
     );
   });
 
-  it("surfaces a request the background refused to trust, and stops being busy", () => {
+  it("surfaces a request the background refused to trust, and stops being isBusy", () => {
     const state = reduceOptionsState(
-      { ...INITIAL_OPTIONS_STATE, busy: true },
+      { ...INITIAL_OPTIONS_STATE, isBusy: true },
       {
         type: "rpc.refused",
         payload: { rejection: "unknown-type", reason: 'Unknown message type "x"' },
@@ -67,17 +69,17 @@ describe("reduceOptionsState", () => {
     );
 
     expect(state.problem).toBe('Unknown message type "x"');
-    expect(state.busy).toBe(false);
+    expect(state.isBusy).toBe(false);
   });
 
-  it("surfaces an unexpected background failure, and stops being busy", () => {
+  it("surfaces an unexpected background failure, and stops being isBusy", () => {
     const state = reduceOptionsState(
-      { ...INITIAL_OPTIONS_STATE, busy: true },
+      { ...INITIAL_OPTIONS_STATE, isBusy: true },
       { type: "rpc.failed", payload: { requestType: "model.list", reason: "database closed" } },
     );
 
     expect(state.problem).toBe("database closed");
-    expect(state.busy).toBe(false);
+    expect(state.isBusy).toBe(false);
   });
 
   it("shows an install as running the moment it is asked for", () => {
@@ -178,15 +180,15 @@ describe("reduceOptionsState", () => {
     expect(INITIAL_OPTIONS_STATE).toEqual(before);
   });
 
-  it("marks the surface busy while an install runs, and free when it ends", () => {
+  it("marks the surface isBusy while an install runs, and free when it ends", () => {
     const running = fold({ type: "install-requested", repository: "owner/model" });
 
-    expect(running.busy).toBe(true);
+    expect(running.isBusy).toBe(true);
     expect(
       reduceOptionsState(running, {
         type: "model.installed",
         payload: { ref: "a@b", diskBytes: 1 },
-      }).busy,
+      }).isBusy,
     ).toBe(false);
   });
 
@@ -196,7 +198,7 @@ describe("reduceOptionsState", () => {
       { type: "model.installFailed", payload: { repository: "owner/model", reason: "digest" } },
     );
 
-    expect(state.busy).toBe(false);
+    expect(state.isBusy).toBe(false);
   });
 
   it("records the probes an activation ran", () => {
@@ -208,7 +210,7 @@ describe("reduceOptionsState", () => {
     );
 
     expect(state.probes).toEqual(probes);
-    expect(state.busy).toBe(false);
+    expect(state.isBusy).toBe(false);
   });
 
   it("reports a refusal even though the request itself succeeded", () => {
@@ -270,7 +272,7 @@ describe("reduceOptionsState", () => {
     );
 
     expect(state.benchmark).toMatchObject({ chunksPerSecond: 20, threadCount: 1 });
-    expect(state.busy).toBe(false);
+    expect(state.isBusy).toBe(false);
   });
 
   it("discards a measurement when the device changes under it", () => {
@@ -304,7 +306,7 @@ describe("reduceOptionsState", () => {
     );
 
     expect(state.problem).toBe("no model loaded");
-    expect(state.busy).toBe(false);
+    expect(state.isBusy).toBe(false);
   });
 
   it("frees the surface when the background refuses outright", () => {
@@ -313,7 +315,7 @@ describe("reduceOptionsState", () => {
       { type: "inference.failed", payload: { reason: "worker crashed" } },
     );
 
-    expect(state.busy).toBe(false);
+    expect(state.isBusy).toBe(false);
   });
 
   it("records what the policy permits and what it refused", () => {

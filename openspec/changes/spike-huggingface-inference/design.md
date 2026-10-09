@@ -129,7 +129,7 @@ Nothing available closes a 4.5× gap:
 
 - **Threads are impossible, not merely absent.** Firefox extension pages cannot be cross-origin
   isolated, so `SharedArrayBuffer` does not exist and the runtime is pinned to one thread. This is
-  platform design, not configuration (§1 of `LLMReserch.md`).
+  platform design, not configuration (§1 of `LLM_RESEARCH.md`).
 - **The accelerated path cannot rescue the baseline even if it worked.** The manifest declares
   Firefox 140 as the minimum, which has no WebGPU on any platform, and the target spec separately
   budgets for a Linux machine without it. A figure from the accelerated path would describe

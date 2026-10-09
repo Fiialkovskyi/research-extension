@@ -1,7 +1,7 @@
 # Research Graph Extension
 
 A local-only browser extension for capturing and synthesising a research session as a graph.
-`Research Graph Extension Spec.md` holds the long-term design; this repository currently contains the
+`RESEARCH_GRAPH_EXTENSION_SPEC.md` holds the long-term design; this repository currently contains the
 project scaffold and the extension's first surface — a toolbar popup.
 
 **Status:** Firefox MV3 build with a toolbar popup that renders "Hello World". Chrome support,

@@ -1,11 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
-import {
-  INFERENCE_RUN_STORE,
-  MAX_INFERENCE_RUNS,
-  type ModelDatabaseSchema,
-  type StoredInferenceRun,
-} from "../constants";
+import { INFERENCE_RUN_STORE, MAXIMUM_INFERENCE_RUNS } from "../constants";
+import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
 
 /**
  * Records one inference run for lineage and for honest throughput claims.
@@ -15,7 +11,7 @@ import {
  * than of this function's discipline: there is no field to put content in, so
  * the log cannot accumulate page text even by mistake.
  *
- * The log is capped at {@link MAX_INFERENCE_RUNS}: once a write pushes it past
+ * The log is capped at {@link MAXIMUM_INFERENCE_RUNS}: once a write pushes it past
  * the cap, the oldest runs are removed in the same transaction.
  */
 export const recordInferenceRun = async (
@@ -26,7 +22,7 @@ export const recordInferenceRun = async (
 
   await transaction.store.put(run);
 
-  let excess = (await transaction.store.count()) - MAX_INFERENCE_RUNS;
+  let excess = (await transaction.store.count()) - MAXIMUM_INFERENCE_RUNS;
 
   if (excess > 0) {
     let cursor = await transaction.store.index("startedAt").openCursor();

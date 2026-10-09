@@ -150,8 +150,5 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
 
 Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
 
-- `src/shared/storage/constants.ts` holds the stored types and the `DBSchema` → `types.ts` (see
-  [1.12](./PROJECT_STRUCTURE.md#112-known-deviations)); `MAX_INFERENCE_RUNS` →
-  `MAXIMUM_INFERENCE_RUNS` (see [2.13](./NAMING.md#213-known-deviations)).
 - `StoredModel.active` → `isActive` needs a migration step that rewrites existing records (see
   [4.10](./REACT_AND_UI.md#410-known-deviations)).

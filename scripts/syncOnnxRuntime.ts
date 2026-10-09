@@ -12,10 +12,7 @@ import { createRequire } from "node:module";
 import { copyFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
-import {
-  ONNX_RUNTIME_DIRECTORY,
-  ONNX_RUNTIME_WASM_VARIANTS,
-} from "../src/shared/config/onnxRuntime";
+import { ONNX_RUNTIME_DIRECTORY, ONNX_RUNTIME_WASM_VARIANTS } from "../src/shared/config";
 
 const require = createRequire(import.meta.url);
 

@@ -1,4 +1,4 @@
-import type { ModelProfile } from "@/shared/config/modelProfiles";
+import type { ModelProfile } from "@/shared/config";
 import type { ModelContract } from "@/shared/modelManifest";
 import type { ModelLimits } from "../readModelLimits";
 

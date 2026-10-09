@@ -9,8 +9,9 @@ import { modelInstallResponseSchemas } from "@/features/modelInstall";
 import { InstallProgress } from "@/features/modelInstall/ui/installProgress";
 import { modelRegistryResponseSchemas } from "@/features/modelRegistry";
 import { ModelList } from "@/features/modelRegistry/ui/modelList";
-import { BUNDLED_MODEL_PROFILES, type ModelProfile } from "@/shared/config/modelProfiles";
+import { BUNDLED_MODEL_PROFILES, type ModelProfile } from "@/shared/config";
 import type { InferenceDevice } from "@/shared/modelManifest";
+import { Button } from "@/shared/ui";
 import {
   buildRpcMessage,
   parseRpcMessage,
@@ -18,11 +19,9 @@ import {
   RpcMessageError,
   rpcResponseSchemas,
 } from "@/shared/rpc";
-import {
-  INITIAL_OPTIONS_STATE,
-  type OptionsEvent,
-  reduceOptionsState,
-} from "./utils/reduceOptionsState";
+import { INITIAL_OPTIONS_STATE } from "./utils/reduceOptionsState/constants";
+import { reduceOptionsState } from "./utils/reduceOptionsState";
+import type { OptionsEvent } from "./utils/reduceOptionsState/types";
 
 /**
  * The surface's end of its connection to the background.
@@ -75,6 +74,8 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
         throw error;
       }
 
+      // `response` was validated against the response schemas above, and every
+      // type those schemas admit is a member of `OptionsEvent` by construction.
       dispatch(response as OptionsEvent);
 
       if (
@@ -117,7 +118,7 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
     client.send(buildRpcMessage("benchmark.run", { ref, device: state.device }));
   };
 
-  const unavailable = (device: InferenceDevice) =>
+  const isDeviceUnavailable = (device: InferenceDevice) =>
     state.capabilities !== undefined && !state.capabilities.availableDevices.includes(device);
 
   return (
@@ -158,7 +159,7 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
                 value={device}
                 data-testid={`device-${device}`}
                 checked={state.device === device}
-                disabled={state.busy || unavailable(device)}
+                disabled={state.isBusy || isDeviceUnavailable(device)}
                 onChange={() => dispatch({ type: "device-selected", device })}
               />
               {device}
@@ -187,24 +188,20 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
             <li key={model.ref} className="flex items-center justify-between gap-4">
               <span className="text-xs text-slate-600 dark:text-slate-400">{model.repository}</span>
               <span className="flex gap-2">
-                <button
-                  type="button"
+                <Button
                   data-testid={`activate-${model.ref}`}
-                  disabled={state.busy}
+                  disabled={state.isBusy}
                   onClick={() => requestActivation(model.ref)}
-                  className="rounded border border-slate-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-slate-600"
                 >
                   Check and activate
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
                   data-testid={`measure-${model.ref}`}
-                  disabled={state.busy}
+                  disabled={state.isBusy}
                   onClick={() => requestBenchmark(model.ref)}
-                  className="rounded border border-slate-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-slate-600"
                 >
                   Measure
-                </button>
+                </Button>
               </span>
             </li>
           ))}
@@ -237,7 +234,7 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
           <BenchmarkReport
             measurement={state.benchmark}
             threadCount={state.benchmark?.threadCount}
-            running={state.busy && state.benchmark === undefined}
+            isRunning={state.isBusy && state.benchmark === undefined}
           />
         </div>
       </section>
@@ -255,15 +252,13 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
           {profiles.map((profile) => (
             <li key={profile.repository} className="flex items-center justify-between gap-4">
               <span className="text-sm">{profile.repository}</span>
-              <button
-                type="button"
+              <Button
                 data-testid={`install-${profile.repository}`}
-                disabled={state.busy}
+                disabled={state.isBusy}
                 onClick={() => requestInstall(profile.repository)}
-                className="rounded border border-slate-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-slate-600"
               >
                 Install
-              </button>
+              </Button>
             </li>
           ))}
         </ul>

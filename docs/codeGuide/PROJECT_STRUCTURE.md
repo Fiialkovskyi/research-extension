@@ -149,8 +149,8 @@ has one, and every e2e fixture has one (at `utils/index.ts`).
  * …
  */
 
-export { modelRegistryRequestSchemas, modelRegistryResponseSchemas } from "./constants";
-export type { ModelRegistryRequestType, ModelRegistryResponseType } from "./constants";
+export { modelRegistryRequestSchemas, modelRegistryResponseSchemas } from "./schemas";
+export type { ModelRegistryRequestType, ModelRegistryResponseType } from "./types";
 export { activateModel } from "./model/activateModel";
 export type { ActivateModelOptions } from "./model/activateModel";
 export { getActiveModel } from "./model/getActiveModel";
@@ -588,57 +588,4 @@ Work down the list and stop at the first match.
 
 ## 1.12 Known deviations
 
-Found mechanically on 2026-10-09. Fix each when the file is next touched; delete the line when you
-do.
-
-**More than two types inline, or types in `constants.ts`** (count of declared types):
-
-- `src/features/inference/constants.ts` — 13, mixed with schemas → `inference/types.ts` and
-  `inference/schemas.ts`
-- `src/shared/modelManifest/constants.ts` — 9
-- `src/shared/storage/constants.ts` — 6
-- `src/app/backgroundApp/index.ts` — 4
-- `src/features/modelRegistry/constants.ts` — 3
-- `src/features/diagnostics/constants.ts` — 3
-- `src/shared/rpc/parseRpcMessage/index.ts` — 3
-- `src/features/inference/model/createInferenceWorker/index.ts` — 3
-- `src/app/optionsApp/utils/reduceOptionsState/index.ts` — 3
-- `src/features/inferenceBenchmark/constants.ts`, `modelConformance/constants.ts`,
-  `modelInstall/constants.ts` — 2 each, but in `constants.ts`, which holds no types
-
-**Schemas outside a `schemas.ts`:**
-
-- In a module's `constants.ts`: `src/features/inference/`, `inferenceBenchmark/`, `diagnostics/`,
-  `modelInstall/`, `modelRegistry/`, and `src/shared/modelManifest/`.
-- Inline in an entity's `index.ts`: `src/shared/rpc/parseRpcMessage/` (`envelopeSchema`),
-  `src/features/modelRegistry/model/resolveModelRevision/` (`revisionResponseSchema`),
-  `src/features/modelRegistry/model/buildModelManifest/utils/parseModelTree/` (`treeEntrySchema`,
-  `treeSchema`), `…/buildModelManifest/utils/readModelLimits/` (`configSchema`,
-  `tokenizerConfigSchema`).
-
-**`shared/config/` not yet one module:** each topic has its own `index.ts` holding the values, there
-is no `shared/config/index.ts`, and 21 imports use `@/shared/config/<topic>`.
-
-**`shared/ui/` has no barrel:** `src/app/popupApp/index.tsx` imports `@/shared/ui/panel`.
-
-**Specs on constants:** `src/shared/config/modelProfiles/index.spec.ts` and
-`src/shared/config/onnxRuntime/index.spec.ts` become `constants.spec.ts`. In the latter, "ships a
-variant for each compute path we measure" re-asserts a literal and goes; the other two are guards.
-
-**Feature barrels without the component note:** `diagnostics`, `inferenceBenchmark`, `modelInstall`
-and `modelRegistry` have components in `ui/` but their barrel comments do not say why the components
-are absent. `src/features/greeting/index.ts` exports `Greeting` from its barrel.
-
-**Imports past a barrel that no exception covers:** `src/entrypoints/inferenceWorker/index.ts`
-imports `features/inference/constants` and `features/inference/model/getRuntimeCapabilities` by
-path. Only `createExtOrtProvider` is covered by the barrel's comment.
-
-**e2e fixtures not in the `utils/` layout:** all three — `e2e/fixtures/firefoxExtension/`,
-`firefoxToolbar/`, `optionsSurface/` — keep their helpers and barrel at the fixture root, and
-`firefoxToolbar` nests private helpers in `<helper>/utils/` (`readPopup`, `clickToolbarAction`,
-`getPopupPanelState`, `placeToolbarAction`, `setSystemColourScheme`), as does
-`firefoxExtension/selectFirefoxPackage/utils/`.
-
-**Markdown not in `UPPER_SNAKE_CASE.md`:** `Research Graph Extension Spec.md` →
-`RESEARCH_GRAPH_EXTENSION_SPEC.md`, `LLMReserch.md` → `LLM_RESEARCH.md` (also fixing the spelling).
-Both are referenced from `AGENTS.md` and `README.md`, which change in the same commit.
+None found on 2026-10-09.

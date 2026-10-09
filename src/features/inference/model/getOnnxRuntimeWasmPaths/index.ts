@@ -2,7 +2,7 @@ import {
   ONNX_RUNTIME_DIRECTORY,
   ONNX_RUNTIME_WASM_VARIANTS,
   type OnnxRuntimeVariant,
-} from "@/shared/config/onnxRuntime";
+} from "@/shared/config";
 
 /** Where the runtime should load its loader module and binary from. */
 export interface OnnxRuntimeWasmPaths {

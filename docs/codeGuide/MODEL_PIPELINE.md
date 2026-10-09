@@ -162,8 +162,4 @@ every revision is a commit, every repository is `owner/name`, every profile decl
 
 ## 7.11 Known deviations
 
-Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
-
-- The feature barrels number the steps differently from `AGENTS.md`: `modelInstall` calls itself
-  the "second step", `modelRegistry` the "third step and the last", `inference` the "fourth step".
-  The barrels should name the steps from [7.1](#71-the-path), or not number them.
+None found on 2026-10-09.

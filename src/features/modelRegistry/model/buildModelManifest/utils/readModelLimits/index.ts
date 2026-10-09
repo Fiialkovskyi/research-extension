@@ -1,22 +1,13 @@
 import * as v from "valibot";
 
+import { configSchema, tokenizerConfigSchema } from "./schemas";
+
 /**
  * A length a real model could have. Some repositories record a sentinel in
  * `model_max_length` — values around 1e30 appear in the wild — which is not a
  * limit but the absence of one, and must not become a declared contract value.
  */
 const PLAUSIBLE_TOKEN_LIMIT = 1_000_000;
-
-const positiveInteger = v.pipe(v.number(), v.integer(), v.minValue(1));
-
-const configSchema = v.looseObject({
-  hidden_size: v.optional(positiveInteger),
-  max_position_embeddings: v.optional(positiveInteger),
-});
-
-const tokenizerConfigSchema = v.looseObject({
-  model_max_length: v.optional(v.pipe(v.number(), v.minValue(1))),
-});
 
 /** What a repository declares about its own shape, where it declares it. */
 export interface ModelLimits {

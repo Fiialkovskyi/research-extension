@@ -109,6 +109,15 @@ describe("createInferenceWorker", () => {
     await expect(pending).resolves.toMatchObject({ type: "worker.pong", payload: pong });
   });
 
+  it("refuses a payload that does not match its request type, without posting it", async () => {
+    const channel = createChannel();
+
+    await expect(channel.request("worker.embed", { texts: "not an array" })).rejects.toThrow(
+      /Could not send "worker\.embed" to the inference worker/,
+    );
+    expect(worker.sent).toEqual([]);
+  });
+
   it("routes out-of-order responses to the right callers", async () => {
     const channel = createChannel();
 

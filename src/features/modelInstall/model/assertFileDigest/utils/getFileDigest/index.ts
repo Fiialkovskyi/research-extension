@@ -4,7 +4,7 @@ const HEX_BY_BYTE = Array.from({ length: 256 }, (_unused, byte) =>
   byte.toString(16).padStart(2, "0"),
 );
 
-const toHex = (digest: ArrayBuffer): string => {
+const getHexString = (digest: ArrayBuffer): string => {
   let hex = "";
 
   for (const byte of new Uint8Array(digest)) {
@@ -31,7 +31,7 @@ export const getFileDigest = async (
     // Digested through a view rather than the buffer itself: a buffer created
     // in another realm fails the platform's instance check, and a view is
     // accepted everywhere a buffer is.
-    return toHex(await crypto.subtle.digest("SHA-256", new Uint8Array(contents)));
+    return getHexString(await crypto.subtle.digest("SHA-256", new Uint8Array(contents)));
   }
 
   const header = new TextEncoder().encode(`blob ${contents.byteLength}\0`);
@@ -40,5 +40,5 @@ export const getFileDigest = async (
   framed.set(header, 0);
   framed.set(new Uint8Array(contents), header.byteLength);
 
-  return toHex(await crypto.subtle.digest("SHA-1", framed));
+  return getHexString(await crypto.subtle.digest("SHA-1", framed));
 };

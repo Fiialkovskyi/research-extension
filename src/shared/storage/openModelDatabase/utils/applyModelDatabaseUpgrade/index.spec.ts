@@ -4,17 +4,13 @@ import { openDB } from "idb";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UPGRADE_STEPS, applyModelDatabaseUpgrade } from ".";
-import {
-  INFERENCE_RUN_STORE,
-  MODEL_FILE_STORE,
-  MODEL_STORE,
-  type ModelDatabaseSchema,
-} from "../../../constants";
+import { INFERENCE_RUN_STORE, MODEL_FILE_STORE, MODEL_STORE } from "../../../constants";
+import { type ModelDatabaseSchema } from "../../../types";
 
 let databaseCount = 0;
 
 /** A fresh database name per test, so cases cannot see each other's schema. */
-const nextDatabaseName = () => `upgrade-test-${(databaseCount += 1)}`;
+const getNextDatabaseName = () => `upgrade-test-${(databaseCount += 1)}`;
 
 const openAt = (
   name: string,
@@ -34,7 +30,7 @@ afterEach(() => {
 
 describe("applyModelDatabaseUpgrade", () => {
   it("creates every store a fresh profile needs", async () => {
-    const database = await openAt(nextDatabaseName(), 1);
+    const database = await openAt(getNextDatabaseName(), 1);
 
     expect([...database.objectStoreNames].toSorted()).toEqual(
       [MODEL_STORE, MODEL_FILE_STORE, INFERENCE_RUN_STORE].toSorted(),
@@ -44,7 +40,7 @@ describe("applyModelDatabaseUpgrade", () => {
   });
 
   it("indexes models by family and files by their model", async () => {
-    const database = await openAt(nextDatabaseName(), 2);
+    const database = await openAt(getNextDatabaseName(), 2);
 
     expect([...database.transaction(MODEL_STORE).store.indexNames]).toContain("family");
     expect([...database.transaction(MODEL_FILE_STORE).store.indexNames]).toContain("ref");
@@ -55,7 +51,7 @@ describe("applyModelDatabaseUpgrade", () => {
   });
 
   it("keys model files by model and path together, so one model holds many files", async () => {
-    const database = await openAt(nextDatabaseName(), 1);
+    const database = await openAt(getNextDatabaseName(), 1);
 
     expect(database.transaction(MODEL_FILE_STORE).store.keyPath).toEqual(["ref", "path"]);
 
@@ -63,7 +59,7 @@ describe("applyModelDatabaseUpgrade", () => {
   });
 
   it("does not re-run a step when a profile reopens at the same version", async () => {
-    const name = nextDatabaseName();
+    const name = getNextDatabaseName();
     const step = vi.fn(UPGRADE_STEPS[1]);
 
     const first = await openAt(name, 1, { 1: step });
@@ -123,7 +119,7 @@ describe("applyModelDatabaseUpgrade", () => {
   });
 
   it("leaves the previous version intact when an upgrade aborts", async () => {
-    const name = nextDatabaseName();
+    const name = getNextDatabaseName();
 
     const first = await openAt(name, 1);
     first.close();

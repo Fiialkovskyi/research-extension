@@ -147,9 +147,4 @@ not come.
 
 ## 8.8 Known deviations
 
-Found on 2026-10-09. Fix each when the file is next touched; delete the line when you do.
-
-- `e2e/fixtures/firefoxToolbar/…/parsePopupSnapshot` and `parsePanelState` cast `JSON.parse` instead
-  of validating (see [3.11](./TYPESCRIPT_AND_FUNCTIONS.md#311-known-deviations)).
-- `src/shared/rpc/parseRpcMessage/index.ts` messages are fragments without a full stop
-  (`Message is not an RPC envelope`); the `#root` errors in both `main.tsx` files likewise.
+None found on 2026-10-09.

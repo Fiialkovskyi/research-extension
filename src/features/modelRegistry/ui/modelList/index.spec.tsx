@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ModelList } from ".";
-import type { InstalledModelSummary } from "../../constants";
+import type { InstalledModelSummary } from "../../types";
 
 const model = (overrides: Partial<InstalledModelSummary> = {}): InstalledModelSummary => ({
   ref: "Xenova/all-MiniLM-L6-v2@751bff37182d3f1213fa05d7196b954e230abad9",

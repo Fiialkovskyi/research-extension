@@ -11,13 +11,17 @@
  * what the background was refused.
  */
 
+// `ui/` is deliberately absent from this barrel: its components stay out of it so that
+// the background, which imports feature barrels and has no use for React, never pulls React in.
+// The surface that renders a component imports it from `ui/` by path.
+
 export {
   blockedRequestSchema,
   diagnosticsRequestSchemas,
   diagnosticsResponseSchemas,
-} from "./constants";
+} from "./schemas";
 export type {
   BlockedRequestReport,
   DiagnosticsRequestType,
   DiagnosticsResponseType,
-} from "./constants";
+} from "./types";

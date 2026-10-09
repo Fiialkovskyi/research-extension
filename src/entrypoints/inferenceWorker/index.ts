@@ -1,7 +1,10 @@
 import { defineUnlistedScript } from "wxt/utils/define-unlisted-script";
 
-import { type LoadedModel, workerRequestSchemas } from "@/features/inference/constants";
-import { getRuntimeCapabilities } from "@/features/inference/model/getRuntimeCapabilities";
+import {
+  getRuntimeCapabilities,
+  type LoadedModel,
+  workerRequestSchemas,
+} from "@/features/inference";
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import { buildRpcMessage, parseRpcMessage, readMessageField } from "@/shared/rpc";
 
@@ -89,7 +92,7 @@ export default defineUnlistedScript(() => {
             return;
           }
 
-          case "infer.embed": {
+          case "worker.embed": {
             if (loaded === undefined) {
               throw new Error("No model is loaded.");
             }
@@ -101,7 +104,7 @@ export default defineUnlistedScript(() => {
             const startedAt = performance.now();
             const result = await loaded.embed(request.payload);
 
-            reply(messageId, "infer.embedded", {
+            reply(messageId, "worker.embedded", {
               vectors: result.vectors,
               device: result.device,
               durationMs: performance.now() - startedAt,

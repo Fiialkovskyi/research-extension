@@ -174,7 +174,7 @@ file would read as the fixture itself. The same rules on `constants.ts` and on k
 logic thin, above, apply here too.
 Build output lands in `.output/`, WXT's generated types in `.wxt/`; both are ignored by git.
 
-`Research Graph Extension Spec.md` is the long-term target design, not the current state. Planning
+`RESEARCH_GRAPH_EXTENSION_SPEC.md` is the long-term target design, not the current state. Planning
 artifacts for in-flight work live in `openspec/changes/<change>/`.
 
 ## Build, Test, and Development Commands

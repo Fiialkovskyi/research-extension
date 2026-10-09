@@ -1,10 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
-import {
-  INFERENCE_RUN_STORE,
-  type ModelDatabaseSchema,
-  type StoredInferenceRun,
-} from "../constants";
+import { INFERENCE_RUN_STORE } from "../constants";
+import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
 
 /**
  * Reads the recorded runs, newest first, optionally narrowed to one model and

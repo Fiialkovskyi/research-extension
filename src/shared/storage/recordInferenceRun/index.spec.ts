@@ -4,12 +4,8 @@ import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { recordInferenceRun } from ".";
-import {
-  INFERENCE_RUN_STORE,
-  MAX_INFERENCE_RUNS,
-  type ModelDatabaseSchema,
-  type StoredInferenceRun,
-} from "../constants";
+import { INFERENCE_RUN_STORE, MAXIMUM_INFERENCE_RUNS } from "../constants";
+import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
 import { openModelDatabase } from "../openModelDatabase";
 
 const run: StoredInferenceRun = {
@@ -79,11 +75,11 @@ describe("recordInferenceRun", () => {
   });
 
   it("drops the oldest runs once the log passes its cap", async () => {
-    for (let index = 0; index <= MAX_INFERENCE_RUNS; index += 1) {
+    for (let index = 0; index <= MAXIMUM_INFERENCE_RUNS; index += 1) {
       await recordInferenceRun(database, { ...run, runId: `run-${index}`, startedAt: index });
     }
 
-    expect(await database.count(INFERENCE_RUN_STORE)).toBe(MAX_INFERENCE_RUNS);
+    expect(await database.count(INFERENCE_RUN_STORE)).toBe(MAXIMUM_INFERENCE_RUNS);
     expect(await database.get(INFERENCE_RUN_STORE, "run-0")).toBeUndefined();
     expect(await database.get(INFERENCE_RUN_STORE, "run-1")).toBeDefined();
   });

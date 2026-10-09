@@ -1,11 +1,7 @@
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
-import {
-  INFERENCE_RUN_STORE,
-  MODEL_FILE_STORE,
-  MODEL_STORE,
-  type ModelDatabaseSchema,
-} from "../../../constants";
+import { INFERENCE_RUN_STORE, MODEL_FILE_STORE, MODEL_STORE } from "../../../constants";
+import { type ModelDatabaseSchema } from "../../../types";
 
 /**
  * One forward-only migration step, applied when a profile crosses its version.

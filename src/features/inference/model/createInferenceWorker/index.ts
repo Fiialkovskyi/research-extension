@@ -1,34 +1,11 @@
-import {
-  buildRpcMessage,
-  type ParsedRpcMessage,
-  parseRpcMessage,
-  RpcMessageError,
-} from "@/shared/rpc";
-import {
-  INFERENCE_REQUEST_TIMEOUT_MS,
-  type WorkerRequestType,
-  workerResponseSchemas,
-} from "../../constants";
+import * as v from "valibot";
 
-/** A response the worker may send back, validated before a caller sees it. */
-type WorkerResponse = ParsedRpcMessage<typeof workerResponseSchemas>;
+import { buildRpcMessage, parseRpcMessage, RpcMessageError } from "@/shared/rpc";
+import { INFERENCE_REQUEST_TIMEOUT_MS } from "../../constants";
+import { workerRequestSchemas, workerResponseSchemas } from "../../schemas";
+import type { InferenceWorker, PendingRequest, WorkerResponse } from "./types";
 
-/** A live worker, with requests correlated to their responses. */
-export interface InferenceWorker {
-  /**
-   * Sends a request and resolves with the worker's correlated response.
-   *
-   * @throws when the worker reports an error, dies, or does not answer in time.
-   */
-  request: (type: WorkerRequestType, payload: unknown) => Promise<WorkerResponse>;
-  terminate: () => void;
-}
-
-interface PendingRequest {
-  resolve: (response: WorkerResponse) => void;
-  reject: (reason: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
-}
+export type { InferenceWorker };
 
 /**
  * Spawns the inference worker and wraps it in a request/response channel.
@@ -105,6 +82,19 @@ export const createInferenceWorker = (workerUrl: string): InferenceWorker => {
   return {
     request: (type, payload) =>
       new Promise<WorkerResponse>((resolve, reject) => {
+        // A typo in a payload is caught here, at the call that made it, rather
+        // than as a refusal from the worker some time later.
+        const checked = v.safeParse(workerRequestSchemas[type], payload);
+
+        if (!checked.success) {
+          reject(
+            new Error(
+              `Could not send "${type}" to the inference worker: ${checked.issues[0]?.message ?? "the payload is invalid"}.`,
+            ),
+          );
+          return;
+        }
+
         const message = buildRpcMessage(type, payload);
 
         pending.set(message.id, {

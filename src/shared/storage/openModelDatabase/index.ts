@@ -1,10 +1,7 @@
 import { type IDBPDatabase, openDB } from "idb";
 
-import {
-  MODEL_DATABASE_NAME,
-  MODEL_DATABASE_VERSION,
-  type ModelDatabaseSchema,
-} from "../constants";
+import { MODEL_DATABASE_NAME, MODEL_DATABASE_VERSION } from "../constants";
+import { type ModelDatabaseSchema } from "../types";
 import { applyModelDatabaseUpgrade } from "./utils/applyModelDatabaseUpgrade";
 
 /**

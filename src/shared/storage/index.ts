@@ -25,7 +25,7 @@ export type {
   StoredInferenceRun,
   StoredModel,
   StoredModelFile,
-} from "./constants";
+} from "./types";
 export { openModelDatabase } from "./openModelDatabase";
 export { readInferenceRuns } from "./readInferenceRuns";
 export { recordInferenceRun } from "./recordInferenceRun";
