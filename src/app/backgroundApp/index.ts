@@ -5,6 +5,7 @@ import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
 import { runEmbeddingConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
+import { createTabGroup } from "@/features/tabGroups";
 import { BUNDLED_MODEL_PROFILES } from "@/shared/config";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
 import type { InferenceDevice } from "@/shared/modelManifest";
@@ -225,6 +226,19 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
               ref,
               reason: getErrorMessage(error),
             });
+          }
+        }
+
+        case "tabGroup.create": {
+          try {
+            const created = await createTabGroup({
+              title: request.payload.title,
+              api: dependencies.tabGroups,
+            });
+
+            return buildRpcMessage("tabGroup.created", created);
+          } catch (error) {
+            return buildRpcMessage("tabGroup.failed", { reason: getErrorMessage(error) });
           }
         }
 

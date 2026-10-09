@@ -28,6 +28,14 @@ export default defineBackground(() => {
     policyViolations,
     // Bound so the extension's own fetch is used, under the package's policy.
     fetchResource: (...args) => fetch(...args),
+    tabGroups: {
+      createTab: (properties) => browser.tabs.create(properties),
+      groupTabs: (options) => browser.tabs.group(options),
+      updateGroup: (groupId, properties) => browser.tabGroups.update(groupId, properties),
+      getGroup: (groupId) => browser.tabGroups.get(groupId),
+      activateTab: (tabId) => browser.tabs.update(tabId, { active: true }),
+      removeTab: (tabId) => browser.tabs.remove(tabId),
+    },
   });
 
   browser.runtime.onMessage.addListener((message: unknown) => app.handleMessage(message));

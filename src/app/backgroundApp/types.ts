@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import type { InferenceWorker } from "@/features/inference";
+import type { TabGroupApi } from "@/features/tabGroups";
 import type { PolicyViolationLog } from "@/shared/collectPolicyViolations";
 import type { RpcMessage } from "@/shared/rpc";
 import type { ModelDatabaseSchema } from "@/shared/storage";
@@ -30,6 +31,8 @@ export interface BackgroundDependencies {
    * surface would never see them.
    */
   policyViolations: PolicyViolationLog;
+  /** The browser's tab and tab group calls, used to start a session. */
+  tabGroups: TabGroupApi;
 }
 
 /**

@@ -26,6 +26,8 @@ export { leaveBrowserChrome } from "./leaveBrowserChrome";
 export { placeToolbarAction } from "./placeToolbarAction";
 export { type PopupPanelState, getPopupPanelState } from "./getPopupPanelState";
 export { type PopupSnapshot, readPopup } from "./readPopup";
+export { type TabGroupSnapshot, readTabGroups } from "./readTabGroups";
 export { type SystemColorScheme, setSystemColorScheme } from "./setSystemColorScheme";
 export { getToolbarWidgetId } from "./getToolbarWidgetId";
+export { submitPopupGroupTitle } from "./submitPopupGroupTitle";
 export { waitForPopupPanel } from "./waitForPopupPanel";

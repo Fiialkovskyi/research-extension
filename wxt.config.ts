@@ -36,6 +36,10 @@ export default defineConfig({
     action: {
       default_title: "Research Graph",
     },
+    // A research session is a tab group, and `tabGroups.*` needs this. Nothing
+    // else is requested: `tabs` would only expose tab URLs and titles, which the
+    // extension never reads.
+    permissions: ["tabGroups"],
     // Derived from one list so the policy and the permissions cannot drift
     // apart from each other, nor from the code that builds the request URLs.
     host_permissions: MODEL_HOST_ORIGINS.map((origin) => `${origin}/*`),

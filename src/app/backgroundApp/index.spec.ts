@@ -4,6 +4,7 @@ import "fake-indexeddb/auto";
 
 import { createBackgroundApp, type BackgroundDependencies } from ".";
 import type { InferenceWorker } from "@/features/inference";
+import type { TabGroupApi } from "@/features/tabGroups";
 import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/utils/getFileDigest";
 import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
@@ -19,6 +20,19 @@ const createStubWorker = (overrides: Partial<InferenceWorker> = {}): InferenceWo
   };
 };
 
+/** Tab calls that succeed, as a browser that allows grouping would. */
+const createStubTabGroups = (overrides: Partial<TabGroupApi> = {}): TabGroupApi => {
+  return {
+    createTab: vi.fn().mockResolvedValue({ id: 7 }),
+    groupTabs: vi.fn().mockResolvedValue(42),
+    updateGroup: vi.fn().mockResolvedValue(undefined),
+    getGroup: vi.fn().mockResolvedValue({ color: "blue" }),
+    activateTab: vi.fn().mockResolvedValue(undefined),
+    removeTab: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+};
+
 /** Dependencies with inert defaults, so a test names only what it cares about. */
 const buildDependencies = (
   overrides: Partial<BackgroundDependencies> = {},
@@ -28,6 +42,7 @@ const buildDependencies = (
     openDatabase: () => Promise.reject(new Error("no database in this test")),
     fetchResource: (() => Promise.reject(new Error("no network in this test"))) as typeof fetch,
     policyViolations: { read: () => [] },
+    tabGroups: createStubTabGroups(),
     ...overrides,
   };
 };
@@ -83,6 +98,49 @@ describe("createBackgroundApp", () => {
     const response = await app.handleMessage(buildRpcMessage("inference.probe", {}));
 
     expect(response).toMatchObject({ type: "inference.capabilities", payload: pong });
+  });
+
+  it("starts a session as a titled tab group, answering with the colour Firefox assigned", async () => {
+    const app = createBackgroundApp(buildDependencies());
+
+    const response = await app.handleMessage(
+      buildRpcMessage("tabGroup.create", { title: "  E-bike motors  " }),
+    );
+
+    expect(response).toMatchObject({
+      type: "tabGroup.created",
+      payload: { groupId: 42, tabId: 7, title: "E-bike motors", color: "blue" },
+    });
+  });
+
+  it("answers a tab group the browser refused as a failure, not a protocol error", async () => {
+    const tabGroups = createStubTabGroups({
+      groupTabs: vi.fn().mockRejectedValue(new Error("tabs.group is not allowed")),
+    });
+    const app = createBackgroundApp(buildDependencies({ tabGroups }));
+
+    const response = await app.handleMessage(
+      buildRpcMessage("tabGroup.create", { title: "Motors" }),
+    );
+
+    expect(response).toMatchObject({
+      type: "tabGroup.failed",
+      payload: { reason: "tabs.group is not allowed" },
+    });
+    expect(tabGroups.removeTab).toHaveBeenCalledWith(7);
+  });
+
+  it("refuses a blank session title before any tab is opened", async () => {
+    const tabGroups = createStubTabGroups();
+    const app = createBackgroundApp(buildDependencies({ tabGroups }));
+
+    const response = await app.handleMessage(buildRpcMessage("tabGroup.create", { title: "   " }));
+
+    expect(response).toMatchObject({
+      type: "rpc.refused",
+      payload: { rejection: "invalid-payload" },
+    });
+    expect(tabGroups.createTab).not.toHaveBeenCalled();
   });
 
   it("starts no worker until something is actually asked of it", () => {

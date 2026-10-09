@@ -10,7 +10,7 @@ The amendment rests on a platform API the extension has never touched: `tabs.gro
 
 - The popup gains a **title input**. Submitting it creates a new tab group with that title, holding one new, empty tab (the browser's new-tab page), and moves the focus to that tab.
 - **Firefox assigns the group's colour.** The extension does not choose one. It reads the colour back and reports it, so the spike records what Firefox actually does.
-- The **background** does the work, not the popup. The popup sends one message and may be closed by the time the work finishes. Moving focus to a new tab closes the popup, which would cut short a chain of browser calls run from the popup itself.
+- The **background** does the work, not the popup. The popup sends one message and may be closed by the time the work finishes. The user can dismiss it at any moment, which would cut short a chain of browser calls run from the popup itself.
 - The manifest declares the **`tabGroups` permission**. No other permission and no network behaviour is added.
 - The spike's **findings** are recorded in `design.md`:
   - which permission each call really needs;
@@ -41,7 +41,7 @@ The amendment rests on a platform API the extension has never touched: `tabs.gro
   - `src/app/popupApp` and `src/entrypoints/popup` now render the form and send the message;
   - `wxt.config.ts` declares the permission.
 - **Permissions:** `tabGroups` is added. Firefox may show it as a new prompt at install time. `tabs` is not needed: the extension never reads tab URLs or titles.
-- **One session at a time, until after the MVP.** Later changes plan for exactly one active research session, which means one tracked group. Several concurrent sessions are deferred until after the MVP. This spike creates a group each time the form is submitted, because it observes the API and does not enforce the model. Its findings are written for the single-session case, which needs to know how to recognise *the* session's group again.
+- **One session at a time, until after the MVP.** Later changes plan for exactly one active research session, which means one tracked group. Several concurrent sessions are deferred until after the MVP. This spike creates a group each time the form is submitted, because it observes the API and does not enforce the model. Its findings are written for the single-session case, which needs to know how to recognise _the_ session's group again.
 - **Out of scope:**
   - concurrent sessions, deferred until after the MVP;
   - following the group after it is created, meaning tab membership events, graph nodes and edges, renames and colour changes;
