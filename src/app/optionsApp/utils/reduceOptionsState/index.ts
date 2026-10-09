@@ -6,6 +6,7 @@ import type { InstallState } from "@/features/modelInstall/ui/installProgress";
 import type { InstalledModelSummary } from "@/features/modelRegistry";
 import type { ProbeResult } from "@/features/modelConformance";
 import type { InferenceDevice } from "@/shared/modelManifest";
+import type { RpcRejection } from "@/shared/rpc";
 
 /** A measurement together with what it has to be read alongside. */
 export type BenchmarkResult = ThroughputMeasurement & { threadCount: number };
@@ -63,6 +64,8 @@ export type OptionsEvent =
       payload: { blocked: BlockedRequestReport[]; permittedOrigins: string[] };
     }
   | { type: "inference.failed"; payload: { reason: string } }
+  | { type: "rpc.refused"; payload: { rejection: RpcRejection; reason: string } }
+  | { type: "rpc.failed"; payload: { requestType: string; reason: string } }
   | { type: "model.listed"; payload: { models: InstalledModelSummary[] } }
   | { type: "model.installProgress"; payload: InstallProgress }
   | { type: "model.installed"; payload: { ref: string; diskBytes: number } }
@@ -132,7 +135,9 @@ export const reduceOptionsState = (state: OptionsState, event: OptionsEvent): Op
       };
     }
 
-    case "inference.failed": {
+    case "inference.failed":
+    case "rpc.refused":
+    case "rpc.failed": {
       return { ...state, busy: false, problem: event.payload.reason };
     }
 

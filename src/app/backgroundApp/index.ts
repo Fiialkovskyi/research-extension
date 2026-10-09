@@ -18,7 +18,14 @@ import { BUNDLED_MODEL_PROFILES } from "@/shared/config/modelProfiles";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
 import type { InferenceDevice } from "@/shared/modelManifest";
 import type { PolicyViolationLog } from "@/shared/collectPolicyViolations";
-import { buildRpcMessage, parseRpcMessage, type RpcMessage } from "@/shared/rpc";
+import { getErrorMessage } from "@/shared/getErrorMessage";
+import {
+  buildRpcMessage,
+  parseRpcMessage,
+  readMessageField,
+  type RpcMessage,
+  RpcMessageError,
+} from "@/shared/rpc";
 import { MODEL_STORE, type ModelDatabaseSchema } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
 
@@ -93,9 +100,18 @@ const requestSchemas = {
   ...modelRegistryRequestSchemas,
 } as const;
 
-/** Answers a surface with why its request could not be satisfied. */
-const fail = (reason: string): RpcMessage<string, unknown> => {
-  return buildRpcMessage("inference.failed", { reason });
+/** Answers a request that could not be trusted, saying which check it failed. */
+const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown> => {
+  if (error instanceof RpcMessageError) {
+    return buildRpcMessage("rpc.refused", { rejection: error.rejection, reason: error.message });
+  }
+
+  // The parser raises nothing else, so this is a bug in it rather than a bad
+  // message; it is still answered, or the surface would wait for nothing.
+  return buildRpcMessage("rpc.failed", {
+    requestType: readMessageField(candidate, "type") ?? "unknown",
+    reason: getErrorMessage(error),
+  });
 };
 
 export const createBackgroundApp = (dependencies: BackgroundDependencies): BackgroundApp => {
@@ -158,21 +174,25 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     try {
       request = parseRpcMessage(candidate, requestSchemas);
     } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
+      return refuse(candidate, error);
     }
 
     try {
       switch (request.type) {
         case "inference.probe": {
-          // Already validated by the worker channel, which refuses any
-          // response the protocol does not describe.
-          const response = await getWorker().request("worker.ping", {});
+          try {
+            // Already validated by the worker channel, which refuses any
+            // response the protocol does not describe.
+            const response = await getWorker().request("worker.ping", {});
 
-          if (response.type !== "worker.pong") {
-            return fail(`Worker answered a probe with "${response.type}"`);
+            if (response.type !== "worker.pong") {
+              throw new Error(`The worker answered a probe with "${response.type}".`);
+            }
+
+            return buildRpcMessage("inference.capabilities", response.payload);
+          } catch (error) {
+            return buildRpcMessage("inference.failed", { reason: getErrorMessage(error) });
           }
-
-          return buildRpcMessage("inference.capabilities", response.payload);
         }
 
         case "model.list": {
@@ -224,7 +244,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
             return buildRpcMessage("benchmark.failed", {
               ref,
-              reason: error instanceof Error ? error.message : String(error),
+              reason: getErrorMessage(error),
             });
           }
         }
@@ -280,7 +300,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
             return buildRpcMessage("model.activationFailed", {
               ref,
-              reason: error instanceof Error ? error.message : String(error),
+              reason: getErrorMessage(error),
             });
           }
         }
@@ -316,13 +336,18 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           } catch (error) {
             return buildRpcMessage("model.installFailed", {
               repository,
-              reason: error instanceof Error ? error.message : String(error),
+              reason: getErrorMessage(error),
             });
           }
         }
       }
     } catch (error) {
-      return fail(error instanceof Error ? error.message : String(error));
+      // Each case answers for its own failures; reaching here is a bug, and is
+      // still answered so the surface is never left waiting.
+      return buildRpcMessage("rpc.failed", {
+        requestType: request.type,
+        reason: getErrorMessage(error),
+      });
     }
   };
 

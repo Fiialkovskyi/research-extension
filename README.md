@@ -65,7 +65,7 @@ Three details worth knowing before changing the e2e harness:
    so privileged work uses the classic `executeScript` / `findElement` / `performActions` commands.
 3. The popup renders in a remote XUL `<browser>`: BiDi does not report it as a browsing context and
    its `contentDocument` is null. The fixture reads it through Firefox's own `MarionetteCommands`
-   actor. All of this is isolated in `e2e/fixtures/firefox-toolbar/`.
+   actor. All of this is isolated in `e2e/fixtures/firefoxToolbar/`.
 
 ### Offline by default, network by request
 

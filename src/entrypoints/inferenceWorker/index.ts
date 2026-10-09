@@ -2,6 +2,7 @@ import { defineUnlistedScript } from "wxt/utils/define-unlisted-script";
 
 import { type LoadedModel, workerRequestSchemas } from "@/features/inference/constants";
 import { getRuntimeCapabilities } from "@/features/inference/model/getRuntimeCapabilities";
+import { getErrorMessage } from "@/shared/getErrorMessage";
 import { buildRpcMessage, parseRpcMessage, readMessageField } from "@/shared/rpc";
 
 /**
@@ -111,7 +112,7 @@ export default defineUnlistedScript(() => {
       } catch (error) {
         reply(messageId, "worker.error", {
           requestType: readMessageField(event.data, "type") ?? "unknown",
-          reason: error instanceof Error ? error.message : String(error),
+          reason: getErrorMessage(error),
         });
       }
     })();

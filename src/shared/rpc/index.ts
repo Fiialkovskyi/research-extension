@@ -16,4 +16,5 @@ export type { RpcMessage } from "./buildRpcMessage";
 export { RPC_VERSION } from "./constants";
 export { parseRpcMessage, RpcMessageError } from "./parseRpcMessage";
 export { readMessageField } from "./readMessageField";
+export { rpcResponseSchemas } from "./schemas";
 export type { ParsedRpcMessage, RpcRejection, RpcSchemaMap } from "./parseRpcMessage";

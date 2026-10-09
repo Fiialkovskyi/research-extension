@@ -11,7 +11,13 @@ import { modelRegistryResponseSchemas } from "@/features/modelRegistry";
 import { ModelList } from "@/features/modelRegistry/ui/modelList";
 import { BUNDLED_MODEL_PROFILES, type ModelProfile } from "@/shared/config/modelProfiles";
 import type { InferenceDevice } from "@/shared/modelManifest";
-import { buildRpcMessage, parseRpcMessage, type RpcMessage, RpcMessageError } from "@/shared/rpc";
+import {
+  buildRpcMessage,
+  parseRpcMessage,
+  type RpcMessage,
+  RpcMessageError,
+  rpcResponseSchemas,
+} from "@/shared/rpc";
 import {
   INITIAL_OPTIONS_STATE,
   type OptionsEvent,
@@ -43,6 +49,7 @@ const responseSchemas = {
   ...inferenceResponseSchemas,
   ...modelInstallResponseSchemas,
   ...modelRegistryResponseSchemas,
+  ...rpcResponseSchemas,
 } as const;
 
 /** Compute paths a user may pick between, in the order they are offered. */

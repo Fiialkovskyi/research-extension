@@ -57,6 +57,29 @@ describe("reduceOptionsState", () => {
     );
   });
 
+  it("surfaces a request the background refused to trust, and stops being busy", () => {
+    const state = reduceOptionsState(
+      { ...INITIAL_OPTIONS_STATE, busy: true },
+      {
+        type: "rpc.refused",
+        payload: { rejection: "unknown-type", reason: 'Unknown message type "x"' },
+      },
+    );
+
+    expect(state.problem).toBe('Unknown message type "x"');
+    expect(state.busy).toBe(false);
+  });
+
+  it("surfaces an unexpected background failure, and stops being busy", () => {
+    const state = reduceOptionsState(
+      { ...INITIAL_OPTIONS_STATE, busy: true },
+      { type: "rpc.failed", payload: { requestType: "model.list", reason: "database closed" } },
+    );
+
+    expect(state.problem).toBe("database closed");
+    expect(state.busy).toBe(false);
+  });
+
   it("shows an install as running the moment it is asked for", () => {
     expect(fold({ type: "install-requested", repository: "owner/model" }).install.status).toBe(
       "running",

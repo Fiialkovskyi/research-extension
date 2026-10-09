@@ -1,7 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
 import type { ConformanceOutcome } from "@/features/modelConformance";
-import type { ModelContract } from "@/shared/modelManifest";
 import { MODEL_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
 
 export interface ActivateModelOptions {
@@ -51,26 +50,26 @@ export const activateModel = async (options: ActivateModelOptions): Promise<Stor
     active: outcome.passed,
   };
 
-  await database.put(MODEL_STORE, recorded);
+  // One transaction for the model and its siblings: "this one is active and
+  // the others in its family are not" is a single fact, and two separate
+  // writes could leave a family with two active models if the second failed.
+  const transaction = database.transaction(MODEL_STORE, "readwrite");
+
+  await transaction.store.put(recorded);
 
   if (outcome.passed) {
-    await deactivateOthers(database, recorded.ref, recorded.manifest.contract.family);
+    const siblings = await transaction.store
+      .index("family")
+      .getAll(recorded.manifest.contract.family);
+
+    await Promise.all(
+      siblings
+        .filter((sibling) => sibling.ref !== recorded.ref && sibling.active)
+        .map((sibling) => transaction.store.put({ ...sibling, active: false })),
+    );
   }
 
+  await transaction.done;
+
   return recorded;
-};
-
-/** Leaves exactly one active model per family. */
-const deactivateOthers = async (
-  database: IDBPDatabase<ModelDatabaseSchema>,
-  activeRef: string,
-  family: ModelContract["family"],
-): Promise<void> => {
-  const siblings = await database.getAllFromIndex(MODEL_STORE, "family", family);
-
-  await Promise.all(
-    siblings
-      .filter((sibling) => sibling.ref !== activeRef && sibling.active)
-      .map((sibling) => database.put(MODEL_STORE, { ...sibling, active: false })),
-  );
 };

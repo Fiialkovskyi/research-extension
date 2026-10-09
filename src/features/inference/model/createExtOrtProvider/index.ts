@@ -1,5 +1,6 @@
 import { env, pipeline } from "@huggingface/transformers";
 
+import { getErrorMessage } from "@/shared/getErrorMessage";
 import type { InferenceDevice, ModelManifest } from "@/shared/modelManifest";
 import type { EmbedResult, LoadedModel } from "../../constants";
 import {
@@ -133,7 +134,7 @@ export const createExtOrtProvider = (): InferenceProvider => {
         // it checked last, which is never where the files are. Saying what it
         // asked for beside what we hold turns that into something actionable.
         throw new Error(
-          `${error instanceof Error ? error.message : String(error)}\n` +
+          `${getErrorMessage(error)}\n` +
             `The runtime asked for: ${cache.misses.join(", ") || "nothing"}\n` +
             `This model holds: ${cache.keys.join(", ")}`,
         );

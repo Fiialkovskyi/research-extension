@@ -106,14 +106,42 @@ describe("createBackgroundApp", () => {
 
     const response = await app.handleMessage(buildRpcMessage("session.start", {}));
 
-    expect(response).toMatchObject({ type: "inference.failed" });
-    expect(response.payload).toMatchObject({ reason: expect.stringContaining("session.start") });
+    expect(response).toMatchObject({ type: "rpc.refused" });
+    expect(response.payload).toMatchObject({
+      rejection: "unknown-type",
+      reason: expect.stringContaining("session.start"),
+    });
   });
 
   it("refuses something that is not an envelope at all", async () => {
     const app = createBackgroundApp(deps());
 
-    expect(await app.handleMessage("nonsense")).toMatchObject({ type: "inference.failed" });
+    expect(await app.handleMessage("nonsense")).toMatchObject({
+      type: "rpc.refused",
+      payload: { rejection: "not-an-envelope" },
+    });
+  });
+
+  it("refuses a payload its schema does not admit, saying which check failed", async () => {
+    const app = createBackgroundApp(deps());
+
+    const response = await app.handleMessage(buildRpcMessage("model.activate", { ref: "" }));
+
+    expect(response).toMatchObject({
+      type: "rpc.refused",
+      payload: { rejection: "invalid-payload" },
+    });
+  });
+
+  it("answers an unexpected failure with the request it belonged to", async () => {
+    const app = createBackgroundApp(deps());
+
+    const response = await app.handleMessage(buildRpcMessage("model.list", {}));
+
+    expect(response).toMatchObject({
+      type: "rpc.failed",
+      payload: { requestType: "model.list", reason: "no database in this test" },
+    });
   });
 
   it("reports a worker failure as a reason rather than throwing at the surface", async () => {
@@ -193,7 +221,7 @@ describe("createBackgroundApp", () => {
       send("nonsense");
       await vi.waitFor(() => expect(posted).toHaveLength(1));
 
-      expect(posted[0]).toMatchObject({ type: "inference.failed" });
+      expect(posted[0]).toMatchObject({ type: "rpc.refused" });
     });
 
     it("serves two ports independently", async () => {

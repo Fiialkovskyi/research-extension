@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import type { RpcMessage } from "../buildRpcMessage";
-import { RPC_VERSION } from "../constants";
+import { type RPC_REJECTIONS, RPC_VERSION } from "../constants";
 
 /**
  * Payload schemas keyed by message type.
@@ -18,11 +18,7 @@ export type ParsedRpcMessage<TSchemas extends RpcSchemaMap> = {
 }[keyof TSchemas & string];
 
 /** Why a message was refused. Carried so a receiver can reply usefully. */
-export type RpcRejection =
-  | "not-an-envelope"
-  | "unsupported-version"
-  | "unknown-type"
-  | "invalid-payload";
+export type RpcRejection = (typeof RPC_REJECTIONS)[number];
 
 /** Raised when a candidate message cannot be trusted. */
 export class RpcMessageError extends Error {

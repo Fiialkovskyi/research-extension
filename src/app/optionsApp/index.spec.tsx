@@ -191,6 +191,17 @@ describe("OptionsApp", () => {
     );
   });
 
+  it("surfaces a protocol refusal from the background", async () => {
+    const { client, answer } = stubClient();
+
+    render(<OptionsApp client={client} />);
+    answer("rpc.refused", { rejection: "unknown-type", reason: "Unknown message type" });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("options-problem")).toHaveTextContent("Unknown message type"),
+    );
+  });
+
   it("ignores a message it cannot validate rather than breaking the surface", async () => {
     const { client, answer } = stubClient();
 

@@ -1,3 +1,4 @@
+import { getErrorMessage } from "@/shared/getErrorMessage";
 import type { EmbeddingContract } from "@/shared/modelManifest";
 import { type EmbedForConformance, PARAPHRASE_PROBES } from "../../constants";
 import { buildDeterminismProbe } from "./utils/buildDeterminismProbe";
@@ -35,7 +36,7 @@ export const runEmbeddingConformance = async (
   try {
     return await runProbes(contract, embed);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = getErrorMessage(error);
 
     return {
       passed: false,

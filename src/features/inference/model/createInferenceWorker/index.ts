@@ -3,7 +3,7 @@ import {
   type ParsedRpcMessage,
   parseRpcMessage,
   RpcMessageError,
-} from "../../../../shared/rpc";
+} from "@/shared/rpc";
 import {
   INFERENCE_REQUEST_TIMEOUT_MS,
   type WorkerRequestType,
