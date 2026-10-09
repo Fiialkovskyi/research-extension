@@ -14,8 +14,10 @@
   },
   "include": [
     ".wxt/tsconfig.json",
+    ".wxt/wxt.d.ts",
     "src/**/*",
     "wxt.config.ts",
+    "scripts/**/*",
     "vitest.config.ts",
     "vitest.setup.ts"
   ]

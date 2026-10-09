@@ -30,7 +30,11 @@ export const config: WebdriverIO.Config = {
   reporters: ["spec"],
   mochaOpts: {
     ui: "bdd",
-    timeout: 60_000,
+    // The offline suite is fast and a tight bound catches hangs early. The
+    // opt-in network run fetches tens of megabytes and then embeds on a
+    // single thread, so it needs room without slowing failure detection for
+    // everything else.
+    timeout: process.env["E2E_NETWORK"] === "true" ? 900_000 : 60_000,
   },
 
   /**

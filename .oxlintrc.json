@@ -18,7 +18,7 @@
   },
   "overrides": [
     {
-      "files": ["src/entrypoints/**/main.tsx", "vitest.setup.ts"],
+      "files": ["src/entrypoints/**/main.tsx", "vitest.setup.ts", "**/*.spec.ts", "**/*.spec.tsx"],
       "rules": {
         "import/no-unassigned-import": "off"
       }
@@ -30,9 +30,53 @@
         "vitest.setup.ts",
         "e2e/**/*.ts",
         "**/*.spec.ts",
-        "**/*.spec.tsx"
+        "**/*.spec.tsx",
+        "scripts/**/*.ts"
       ],
-      "env": { "node": true }
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": ["scripts/**/*.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": [
+        "src/entrypoints/inferenceWorker/**/*.ts",
+        "src/features/inference/model/createInferenceWorker/index.ts"
+      ],
+      "rules": {
+        "unicorn/require-post-message-target-origin": "off"
+      }
+    },
+    {
+      "files": ["src/features/modelInstall/model/downloadModelFiles/index.ts"],
+      "rules": {
+        "no-await-in-loop": "off"
+      }
+    },
+    {
+      "files": ["**/*.spec.tsx"],
+      "rules": {
+        "react-perf/jsx-no-new-array-as-prop": "off",
+        "react-perf/jsx-no-new-object-as-prop": "off",
+        "react-perf/jsx-no-new-function-as-prop": "off"
+      }
+    },
+    {
+      "files": ["src/app/optionsApp/index.tsx"],
+      "rules": {
+        "react-perf/jsx-no-new-function-as-prop": "off"
+      }
+    },
+    {
+      "files": ["e2e/specs/**/*.e2e.ts"],
+      "rules": {
+        "no-console": "off"
+      }
     }
   ],
   "ignorePatterns": [".output", ".wxt", "node_modules", "coverage"]

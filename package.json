@@ -6,10 +6,10 @@
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
-    "postinstall": "wxt prepare",
-    "dev": "wxt -b firefox",
-    "build:firefox": "wxt build -b firefox",
-    "zip:firefox": "wxt zip -b firefox",
+    "postinstall": "wxt prepare && npm run sync:ort",
+    "dev": "npm run sync:ort && wxt -b firefox",
+    "build:firefox": "npm run sync:ort && wxt build -b firefox",
+    "zip:firefox": "npm run sync:ort && wxt zip -b firefox",
     "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
@@ -18,11 +18,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run zip:firefox && wdio run e2e/wdio.conf.ts",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run test:e2e"
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run test:e2e",
+    "sync:ort": "tsx scripts/syncOnnxRuntime.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.1",
+    "idb": "^8.0.4",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "valibot": "^1.5.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -37,6 +41,7 @@
     "@wdio/mocha-framework": "^10.0.1",
     "@wdio/spec-reporter": "^10.0.1",
     "@wxt-dev/module-react": "^1.2.2",
+    "fake-indexeddb": "^6.2.5",
     "geckodriver": "^7.0.0",
     "jsdom": "^29.1.1",
     "oxfmt": "^0.72.0",

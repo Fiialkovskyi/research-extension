@@ -6,6 +6,9 @@ node_modules/
 .wxt/
 dist/
 
+# ONNX Runtime binaries, copied out of node_modules by scripts/syncOnnxRuntime.ts
+public/ort/
+
 # test & tooling artifacts
 coverage/
 logs/

@@ -5,16 +5,68 @@
 The extension source lives in `src/`, organised in four layers that may only import downward
 (`entrypoints` → `app` → `features` → `shared`):
 
-- `src/entrypoints/` — browser-facing entry points in WXT's convention. `popup/index.html` plus
-  `popup/main.tsx`, which only mounts the React tree; no logic belongs here.
-- `src/app/` — one composition root per surface (`popupApp/` today).
+- `src/entrypoints/` — browser-facing entry points in WXT's convention: `popup/`, `options/`,
+  `background/` (the MV3 event page) and `inferenceWorker/` (an unlisted script loaded as a
+  dedicated Worker). **Entrypoints are wiring only.** They mount a tree, or register listeners and
+  forward to a composition root; logic belongs in `features/`, where it carries unit tests. Two
+  rules follow from the contexts themselves:
+  - The **background** registers every listener synchronously, before any `await`. Firefox runs an
+    MV3 background as an event page and unloads it freely, so a listener attached later misses the
+    message that woke the page. It is also the only context that writes local storage, so a surface
+    asks it to write rather than writing itself.
+  - The **inference worker** touches no `browser.*` API. Work arrives over `postMessage` and answers
+    leave the same way, which keeps the browser surface in one context and the worker testable by
+    inspection.
+- `src/app/` — one composition root per surface (`popupApp/`, `optionsApp/`, `backgroundApp/`). A
+  root owns dispatch and takes everything the browser provides as a dependency, so the path a
+  message travels is exercised in unit tests without an extension runtime.
 - `src/features/` — user-facing capabilities, each split into `model/` (pure logic) and `ui/`
   (components). A feature's `index.ts` is its only public surface; nothing outside may reach past it.
 - `src/shared/` — reusable primitives: `ui/` components, `config/` constants, `styles/` the single
-  Tailwind entry stylesheet.
+  Tailwind entry stylesheet, `rpc/` the typed message envelope every context speaks, `storage/` the
+  versioned local database and its forward-only migrations, and `modelManifest/` the shape of an
+  installed model. The last two hold types that several features read, which is why they sit here
+  rather than beside any one of them.
 
 Every entity is a directory whose `index.ts` / `index.tsx` is its public surface, with its unit test
 beside it as `index.spec.ts(x)`. Add a capability by adding a directory, not by widening a barrel.
+
+### How a model becomes a vector
+
+The layering above says what may import what; it does not say what happens in which order. This is
+the one path that crosses most of the codebase, so it is worth reading once before changing any part
+of it. Each step names the module that owns it.
+
+1. **A profile says which model.** `shared/config/modelProfiles` — repository, pinned commit, which
+   weight file, and the contract values a repository does not publish about itself (pooling,
+   normalization, role prefixes).
+2. **The reference is pinned.** `modelRegistry/resolveModelRevision` resolves a branch to a
+   40-character commit exactly once. Nothing re-resolves it later: a model must keep meaning the same
+   weights for as long as it is installed.
+3. **The model is described.** `modelRegistry/buildModelManifest` reads the repository's own
+   configuration files for what they publish — dimensionality, token limits — and the hub's file
+   listing for each file's size and digest. The profile supplies only what is published nowhere.
+4. **Files are fetched and verified.** `modelInstall/downloadModelFiles` fetches one at a time with
+   no credentials and checks each digest **before** storing it. Any failure removes everything the
+   attempt wrote. `modelInstall/installModel` orchestrates steps 2–4 and records the model
+   **inactive, conformance pending**.
+5. **The model is loaded.** `inference/loadModelIntoWorker` reads the verified bytes out of storage
+   and sends them to the worker, which hands them to `inference/model/createExtOrtProvider`. The
+   runtime's own cache is replaced by one serving exactly those files, and its remote loading is
+   switched off — so a file the cache does not hold is a failed load, never an unchecked download.
+6. **The model is judged.** `modelConformance` embeds the bundled probe texts through the loaded
+   model and decides whether its output matches the contract it declared.
+7. **Only then may it be used.** `modelRegistry/activateModel` activates it if and only if step 6
+   passed, recording the reason when it did not. Feature code reaches a model through
+   `modelRegistry/getActiveModel`, by family — never by repository.
+
+Two invariants hold across the whole path, and both are easy to break by accident:
+
+- **Nothing reaches the runtime unverified.** Step 4 is what makes that true, and step 5's two
+  settings are what keep it true. A convenience that let the runtime fetch a file itself would
+  quietly undo both.
+- **A model is unusable until it has been judged.** Step 4 records it inactive on purpose. Marking
+  it usable at install time would let a model that cannot honour its contract reach a feature.
 
 **A function's name starts with a verb.** A bare noun reads as a value and hides that calling it
 does work, so `getExtensionUrl`, not `extensionUrl`. Which verb carries meaning of its own:
@@ -58,6 +110,13 @@ firefoxToolbar/             # no logic of its own: index.ts only re-exports
     ├── index.ts
     └── index.spec.ts
 ```
+
+**A module that pulls in a heavy runtime stays out of its feature's barrel.** A feature's `index.ts`
+is its public surface, but a re-export is also a bundling instruction: exporting the inference
+provider from `features/inference/index.ts` pulled the whole model runtime into the background, which
+needs only the protocol types, and took that bundle from 24 kB to 72 MB. Such a module is imported by
+path from the one context that runs it, and the barrel carries a comment saying why it is absent —
+otherwise the next tidy-up of the exports puts it back.
 
 A `utils/` directory appears only to hold helpers private to one function. A group of sibling
 functions is not "utils" — it is the module, and its `index.ts` re-exports them. A helper that a

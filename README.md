@@ -67,6 +67,42 @@ Three details worth knowing before changing the e2e harness:
    its `contentDocument` is null. The fixture reads it through Firefox's own `MarionetteCommands`
    actor. All of this is isolated in `e2e/fixtures/firefox-toolbar/`.
 
+### Offline by default, network by request
+
+`npm run verify` touches no network. That matters because this project's subject is a model download:
+if the main gate depended on Hugging Face being reachable and fast, a bad minute on a CDN would look
+like a broken build.
+
+So the suite is split. The default run installs nothing and asserts only what can be known offline —
+that the surfaces render, that the toolbar opens the popup, and that the add-on reports what the
+runtime can do. One further spec reaches the hub for real and is **skipped unless you ask for it**:
+
+```bash
+E2E_NETWORK=true npm run test:e2e
+```
+
+That run downloads the bundled profiles, verifies every file, runs each model's conformance suite and
+measures throughput, printing the figures. It is the only thing that can answer whether the
+package's declared `connect-src` covers every storage and CDN host a download redirects to — so it
+also prints what the policy refused, which the add-on collects in its background context and shows
+on the options page.
+
+Expect it to take minutes rather than seconds, and expect to be online.
+
+### Forcing the software compute path
+
+The options page lets you choose which compute path a model runs on, and the default is the software
+one. That is deliberate: the manifest declares a minimum Firefox that has no hardware-accelerated
+path on any platform, so a figure from the accelerated path describes a machine the add-on does not
+require. **Judge the budgets by the software number.**
+
+To make the accelerated path unavailable altogether — useful for confirming that a measurement really
+came from the software one — start Firefox with WebGPU off:
+
+```bash
+E2E_HEADED=true npm run test:e2e   # then, in about:config, set dom.webgpu.enabled to false
+```
+
 To watch the e2e run in a visible browser instead of headless:
 
 ```bash
