@@ -8,6 +8,7 @@ import {
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
+  KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -208,6 +209,23 @@ describe("applyDatabaseUpgrade", () => {
     expect(after.version).toBe(7);
     expect(await after.get(NODE_STORE, "node-1")).toEqual(node);
     expect(await after.count(SNAPSHOT_STORE)).toBe(0);
+
+    after.close();
+  });
+
+  it("adds a keys store keyed by id, and keeps a version-7 profile's snapshots", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 7);
+    const snapshot = { id: "snapshot-1", nodeId: "node-1", compressedText: new ArrayBuffer(4) };
+
+    await before.put(SNAPSHOT_STORE, snapshot as never);
+    before.close();
+
+    const after = await openAt(name, 8);
+
+    expect(after.version).toBe(8);
+    expect(after.transaction(KEY_STORE).store.keyPath).toBe("id");
+    expect(await after.get(SNAPSHOT_STORE, "snapshot-1")).toMatchObject({ nodeId: "node-1" });
 
     after.close();
   });

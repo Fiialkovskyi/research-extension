@@ -4,7 +4,9 @@ import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { recordSnapshot } from ".";
+import { readSnapshotText } from "../readSnapshotText";
 import {
+  KEY_STORE,
   NODE_STORE,
   openResearchDatabase,
   type ResearchDatabaseSchema,
@@ -38,28 +40,13 @@ const extract = (nodeId: string, text = "Mid-drive motors sit at the cranks.") =
   capturedAt: 500,
 });
 
-const inflate = async (bytes: ArrayBuffer): Promise<string> => {
-  const reader = new ReadableStream<BufferSource>({
-    start: (controller) => {
-      controller.enqueue(new Uint8Array(bytes));
-      controller.close();
-    },
-  })
-    .pipeThrough(new DecompressionStream("gzip"))
-    .getReader();
-  const decoder = new TextDecoder();
-  let text = "";
-
-  for (let result = await reader.read(); !result.done; result = await reader.read()) {
-    text += decoder.decode(result.value, { stream: true });
-  }
-
-  return text + decoder.decode();
-};
-
 beforeEach(async () => {
   database = await openResearchDatabase();
-  await Promise.all([database.clear(NODE_STORE), database.clear(SNAPSHOT_STORE)]);
+  await Promise.all([
+    database.clear(NODE_STORE),
+    database.clear(SNAPSHOT_STORE),
+    database.clear(KEY_STORE),
+  ]);
   await database.put(NODE_STORE, buildNode("a"));
   await database.put(NODE_STORE, buildNode("b"));
 });
@@ -81,11 +68,26 @@ describe("recordSnapshot", () => {
     expect(node).toMatchObject({ snapshotId: snapshot?.id, contentHash: snapshot?.contentHash });
   });
 
-  it("stores the text compressed, so that it inflates back to what was sent", async () => {
-    const snapshot = await recordSnapshot(database, extract("a"));
+  it("stores the text only encrypted, naming the key and cipher", async () => {
+    const snapshot = await recordSnapshot(
+      database,
+      extract("a", "A mid-drive motor sits at the cranks. ".repeat(20)),
+    );
     const stored = await database.get(SNAPSHOT_STORE, snapshot?.id ?? "");
+    const storedBytes = new TextDecoder("latin1").decode(stored?.encryptedText);
 
-    expect(await inflate(stored?.compressedText ?? new ArrayBuffer(0))).toBe(
+    expect(stored).toMatchObject({ keyId: "data-key-1", cipher: "aes-gcm-256" });
+    expect(stored?.iv).toHaveLength(12);
+    expect(stored).not.toHaveProperty("compressedText");
+    expect(storedBytes).not.toContain("mid-drive");
+    // Repetitive text gzips to a run of repeated bytes; ciphertext has none.
+    expect(storedBytes).not.toMatch(/(.{4})\1{3}/s);
+  });
+
+  it("stores text that reads back as it was sent", async () => {
+    const snapshot = await recordSnapshot(database, extract("a"));
+
+    expect(await readSnapshotText(database, snapshot?.id ?? "")).toBe(
       "Mid-drive motors sit at the cranks.",
     );
   });

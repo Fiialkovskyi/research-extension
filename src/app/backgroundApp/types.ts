@@ -134,7 +134,8 @@ export interface BackgroundApp {
   handleTabGroupChanged: (tab: SessionTab) => Promise<void>;
   /**
    * Checks the recorded session against the browser, as on browser start-up,
-   * then the session's captured tabs against the tabs that came back.
+   * then the session's captured tabs against the tabs that came back. First
+   * encrypts any snapshot an earlier version stored in the clear.
    */
   reconcileSession: () => Promise<void>;
   /** Records a page committed in a session tab. */

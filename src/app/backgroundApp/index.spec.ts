@@ -12,6 +12,7 @@ import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import {
   EDGE_STORE,
+  KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -136,6 +137,7 @@ const createFreshDatabase = async () => {
   await database.clear(NODE_STORE);
   await database.clear(EDGE_STORE);
   await database.clear(SNAPSHOT_STORE);
+  await database.clear(KEY_STORE);
 
   return database;
 };
@@ -1335,6 +1337,32 @@ describe("page signals and reading time through the background", () => {
         url: "https://www.paypal.com/myaccount",
       }),
     ).toMatchObject({ type: "signal.dropped", payload: { stop: true } });
+  });
+
+  it("encrypts on start-up a snapshot an earlier version stored in the clear", async () => {
+    const { app, database } = await createSignalsApp();
+
+    await database.put(SNAPSHOT_STORE, {
+      id: "legacy",
+      sessionId: "session-1",
+      nodeId: "node-1",
+      contentHash: "hash",
+      byteLength: 3,
+      truncated: false,
+      extractorVersion: "readability@0.6.0/1",
+      capturedAt: 1,
+      compressedText: new Uint8Array([
+        31, 139, 8, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+      ]).buffer,
+    } as never);
+
+    await app.reconcileSession();
+
+    expect(await database.get(SNAPSHOT_STORE, "legacy")).toMatchObject({
+      contentHash: "hash",
+      cipher: "aes-gcm-256",
+    });
+    expect(await database.get(SNAPSHOT_STORE, "legacy")).not.toHaveProperty("compressedText");
   });
 
   it("observes the session's open pages once page access is granted", async () => {

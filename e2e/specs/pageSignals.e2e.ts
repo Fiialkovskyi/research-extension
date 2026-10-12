@@ -156,6 +156,9 @@ describe("signals from a session page", () => {
         contentHash: article?.contentHash,
         byteLength: expect.any(Number),
         truncated: false,
+        // Stored only encrypted (REQ-SEC-005).
+        cipher: "aes-gcm-256",
+        hasPlaintext: false,
       },
     ]);
     expect(article?.contentHash).toMatch(/^[0-9a-f]{64}$/);

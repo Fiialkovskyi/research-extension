@@ -25,7 +25,16 @@ const snapshot = {
       contentHash: "ab12",
     },
   ],
-  snapshots: [{ nodeId: "node-a", contentHash: "ab12", byteLength: 3_000, truncated: false }],
+  snapshots: [
+    {
+      nodeId: "node-a",
+      contentHash: "ab12",
+      byteLength: 3_000,
+      truncated: false,
+      cipher: "aes-gcm-256",
+      hasPlaintext: false,
+    },
+  ],
   edges: [{ kind: "opener", from: "node-a", to: "node-b" }],
   groups: [{ id: 1791, title: "Motors" }],
 };

@@ -5,6 +5,7 @@ import type {
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
+  KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -239,7 +240,9 @@ export interface StoredJob {
 /**
  * The readable text of a page, captured once when its node was first deep read.
  *
- * Compressed but not yet encrypted (REQ-SEC-005 is a later change).
+ * The text is stored only encrypted with the data key (REQ-SEC-005), after
+ * compression. What stays in the clear — hash, length, flags, times — says
+ * whether two pages hold the same text, never what it is.
  */
 export interface StoredSnapshot {
   /** A UUID. */
@@ -255,8 +258,25 @@ export interface StoredSnapshot {
   /** Which extractor produced the text, so a later extractor can tell. */
   extractorVersion: string;
   capturedAt: number;
-  /** The text, gzip-compressed. */
-  compressedText: ArrayBuffer;
+  /** The data key that encrypted the text. */
+  keyId: string;
+  /** The cipher and key size, so a later change of either can tell old records. */
+  cipher: "aes-gcm-256";
+  /** The IV the text was encrypted under; random and unique per snapshot. */
+  iv: Uint8Array;
+  /** The text, gzip-compressed, then encrypted. */
+  encryptedText: ArrayBuffer;
+}
+
+/**
+ * The extension's data key. Non-extractable: no script, the extension's own
+ * included, can read its bytes; it can only be used. Kept by structured clone.
+ */
+export interface StoredDataKey {
+  id: string;
+  key: CryptoKey;
+  algorithm: "AES-GCM";
+  createdAt: number;
 }
 
 export interface ResearchDatabaseSchema extends DBSchema {
@@ -298,5 +318,9 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [SNAPSHOT_STORE]: {
     key: string;
     value: StoredSnapshot;
+  };
+  [KEY_STORE]: {
+    key: string;
+    value: StoredDataKey;
   };
 }

@@ -105,14 +105,14 @@ export const readResearchDatabase = async (): Promise<ResearchSnapshot> => {
                         signals: node.signals,
                         contentHash: node.contentHash ?? null,
                       })),
-                      snapshots: snapshots.result.map(
-                        ({ nodeId, contentHash, byteLength, truncated }) => ({
-                          nodeId,
-                          contentHash,
-                          byteLength,
-                          truncated,
-                        }),
-                      ),
+                      snapshots: snapshots.result.map((snapshot) => ({
+                        nodeId: snapshot.nodeId,
+                        contentHash: snapshot.contentHash,
+                        byteLength: snapshot.byteLength,
+                        truncated: snapshot.truncated,
+                        cipher: snapshot.cipher ?? null,
+                        hasPlaintext: "compressedText" in snapshot,
+                      })),
                       edges: edges.result.map(({ kind, from, to }) => ({ kind, from, to })),
                       groups: groups.map(({ id, title }) => ({ id, title: title ?? "" })),
                     }),

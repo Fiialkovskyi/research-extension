@@ -8,6 +8,7 @@ import {
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
+  KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -30,6 +31,7 @@ describe("openResearchDatabase", () => {
         EDGE_STORE,
         JOB_STORE,
         SNAPSHOT_STORE,
+        KEY_STORE,
       ].toSorted(),
     );
 

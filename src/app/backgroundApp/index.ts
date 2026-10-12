@@ -11,7 +11,11 @@ import {
   readSignalTarget,
   recordSignalBatch,
 } from "@/features/pageSignals";
-import { readSnapshotCandidate, recordSnapshot } from "@/features/pageSnapshots";
+import {
+  readSnapshotCandidate,
+  recordSnapshot,
+  sealPlaintextSnapshots,
+} from "@/features/pageSnapshots";
 import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
 import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
@@ -765,6 +769,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         });
       }),
     reconcileSession: async () => {
+      // Snapshots an earlier version stored in the clear are encrypted first.
+      // Reported rather than thrown: a failure must not keep the session from
+      // being reconciled, and the next start tries again.
+      await enqueueCapture(sealPlaintextSnapshots);
       await serializeWork(async () => {
         await reconcileActiveSession({
           database: await getDatabase(),

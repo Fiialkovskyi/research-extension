@@ -4,6 +4,7 @@ import {
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
+  KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -83,6 +84,12 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     // No index: a snapshot is found through the node that carries its id.
     // Session deletion adds the `sessionId` index with the first query on it.
     database.createObjectStore(SNAPSHOT_STORE, { keyPath: "id" });
+  },
+  8: (database) => {
+    // Only the store: encrypting the snapshots already stored needs Web Crypto,
+    // which a version-change transaction cannot wait for. The background seals
+    // them when it next starts (`pageSnapshots/sealPlaintextSnapshots`).
+    database.createObjectStore(KEY_STORE, { keyPath: "id" });
   },
 };
 

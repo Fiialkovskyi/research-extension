@@ -27,13 +27,17 @@ export const researchSnapshotSchema = v.object({
       contentHash: v.nullable(v.string()),
     }),
   ),
-  /** Snapshot records, without their (compressed) text. */
+  /** Snapshot records, without their text. */
   snapshots: v.array(
     v.object({
       nodeId: v.string(),
       contentHash: v.string(),
       byteLength: v.number(),
       truncated: v.boolean(),
+      /** The cipher the text was encrypted with, or null if it is stored in the clear. */
+      cipher: v.nullable(v.string()),
+      /** Whether the record still holds text in the clear, as before encryption. */
+      hasPlaintext: v.boolean(),
     }),
   ),
   edges: v.array(v.object({ kind: v.string(), from: v.string(), to: v.string() })),
