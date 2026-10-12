@@ -1784,4 +1784,37 @@ describe("embedding deep-read pages through the background", () => {
     await vi.waitFor(async () => expect(await database.count(VECTOR_STORE)).toBe(2));
     expect(embedding.mostAtOnce).toBe(1);
   });
+
+  it("clusters again with the new vectors once an embedding job has finished", async () => {
+    const embedding = createEmbeddingStub();
+    const timer = createTimer();
+    const { app, database, clock } = await createSignalsApp({
+      loadEmbeddingSession: embedding.load,
+      setTimer: timer.setTimer,
+      clearTimer: timer.clearTimer,
+    });
+
+    await database.put(MODEL_STORE, EMBEDDING_MODEL as never);
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+    await app.handleContentMessage(extracted("Mid-drive motors sit at the cranks."), FROM_PAGE_A);
+    await vi.waitFor(async () =>
+      expect(await database.getAll(JOB_STORE)).toEqual([
+        expect.objectContaining({ status: "done" }),
+      ]),
+    );
+    await vi.waitFor(() => expect(timer.pending()).toBe(1));
+
+    timer.fire();
+
+    const [space] = await database.getAll(SPACE_STORE);
+
+    await vi.waitFor(async () =>
+      expect(await database.get(CLUSTERING_STORE, "session-1")).toMatchObject({
+        embeddingSpaceId: space?.id,
+      }),
+    );
+  });
 });

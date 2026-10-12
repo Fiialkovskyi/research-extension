@@ -419,6 +419,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
     isRunningJobs = true;
 
+    let hasRunAny = false;
+
     try {
       do {
         isJobRunRequested = false;
@@ -427,12 +429,18 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         while (await runNextEmbeddingJob(openedDatabase, loadEmbeddingSession)) {
           // Each pass claims, runs and settles one job.
+          hasRunAny = true;
         }
       } while (isJobRunRequested);
     } catch (error) {
       dependencies.reportError(error);
     } finally {
       isRunningJobs = false;
+    }
+
+    // New vectors can change the clusters: recompute once things are quiet.
+    if (hasRunAny) {
+      scheduleRecluster();
     }
   };
 

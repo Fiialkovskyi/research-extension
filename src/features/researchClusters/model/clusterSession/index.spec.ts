@@ -1,3 +1,6 @@
+// @vitest-environment node
+// Timed: jsdom's globals slow typed-array arithmetic about fivefold, which says
+// nothing about the browser; nothing here needs a DOM.
 import { describe, expect, it } from "vitest";
 
 import { clusterSession } from ".";
@@ -73,6 +76,15 @@ const twoThreads = () => {
   const edges = [edge("s1", "a"), edge("s1", "b"), edge("s2", "c"), edge("s2", "d")];
 
   return { nodes, edges };
+};
+
+/** A unit vector pointing along axis `axis` of 384. */
+const axisVector = (axis: number) => {
+  const vector = new Float32Array(384);
+
+  vector[axis] = 1;
+
+  return vector;
 };
 
 describe("clusterSession", () => {
@@ -207,5 +219,117 @@ describe("clusterSession", () => {
 
     expect(nodes).toHaveLength(300);
     expect(durations[5]).toBeLessThan(200);
+  });
+
+  describe("with page vectors", () => {
+    it("joins two pages with no recorded relation whose content is similar", () => {
+      const result = clusterSession({
+        sessionId: "session-1",
+        nodes: [page("a"), page("b"), page("other")],
+        edges: [],
+        previous: [],
+        now: 1,
+        createId: ids(),
+        semantic: {
+          spaceId: "space-1",
+          vectors: new Map([
+            ["a", axisVector(0)],
+            ["b", axisVector(0)],
+            ["other", axisVector(5)],
+          ]),
+        },
+      });
+
+      expect(readGroups(result)).toEqual([["a", "b"], ["other"]]);
+      expect(result.embeddingSpaceId).toBe("space-1");
+    });
+
+    it("strengthens a thread with similar content without rewriting the structure", () => {
+      const { nodes, edges } = twoThreads();
+      const vectors = new Map([
+        ["a", axisVector(0)],
+        ["b", axisVector(0)],
+        ["c", axisVector(9)],
+        ["d", axisVector(9)],
+      ]);
+      const result = clusterSession({
+        sessionId: "session-1",
+        nodes,
+        edges,
+        previous: [],
+        now: 1,
+        createId: ids(),
+        semantic: { spaceId: "space-1", vectors },
+      });
+
+      expect(readGroups(result)).toEqual([
+        ["a", "b", "s1"],
+        ["c", "d", "s2"],
+      ]);
+    });
+
+    it("keeps a dead end out of detection, whatever its vector", () => {
+      const result = clusterSession({
+        sessionId: "session-1",
+        nodes: [page("a"), page("b"), page("p", { parentNodeId: "a", signals: GLANCED })],
+        edges: [edge("a", "b")],
+        previous: [],
+        now: 1,
+        createId: ids(),
+        semantic: {
+          spaceId: "space-1",
+          vectors: new Map([
+            ["a", axisVector(1)],
+            ["p", axisVector(1)],
+          ]),
+        },
+      });
+
+      expect(readGroups(result)).toEqual([["a", "b", "p"]]);
+    });
+
+    it("records no space when no page has a vector", () => {
+      const { nodes, edges } = twoThreads();
+      const result = clusterSession({
+        sessionId: "session-1",
+        nodes,
+        edges,
+        previous: [],
+        now: 1,
+        semantic: { spaceId: "space-1", vectors: new Map() },
+      });
+
+      expect(result).not.toHaveProperty("embeddingSpaceId");
+    });
+
+    it("clusters 300 pages with 384-dimension vectors well within 200 ms", () => {
+      const nodes = Array.from({ length: 300 }, (_, index) => page(`p${index}`));
+      const vectors = new Map(
+        nodes.map((node, index) => {
+          const vector = new Float32Array(384);
+
+          vector[index % 12] = 1;
+          vector[(index * 7) % 384] = (vector[(index * 7) % 384] ?? 0) + 0.5;
+
+          return [node.id, vector];
+        }),
+      );
+      const durations = Array.from({ length: 5 }, () => {
+        const started = performance.now();
+
+        clusterSession({
+          sessionId: "session-1",
+          nodes,
+          edges: [],
+          previous: [],
+          now: 1,
+          semantic: { spaceId: "space-1", vectors },
+        });
+
+        return performance.now() - started;
+      }).toSorted((first, second) => first - second);
+
+      expect(durations[2]).toBeLessThan(200);
+    });
   });
 });

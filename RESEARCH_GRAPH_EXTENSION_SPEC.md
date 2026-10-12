@@ -261,7 +261,7 @@ Clusters come from community detection on one weighted graph that fuses structur
 
 **Implemented so far (OpenSpec change `add-structural-clustering`).** Steps 1, 2, 4 and 6 run without any model, as `louvain@1` with `cluster_config@1`. Details:
 
-- **Edges.** Only the recorded edges are used: opener, same-tab, refinement and co-attention. The derived same-domain and same-burst edges are not added yet.
+- **Edges.** The recorded edges are used: opener, same-tab, refinement and co-attention. Since OpenSpec change `add-semantic-cluster-edges`, semantic edges join pages whose normalised mean chunk vectors in the session's embedding space have cosine ≥ 0.55, weighted 1.2 × (sim − τ) / (1 − τ), and the clustering records that space. They connect what structure leaves apart and strengthen clusters; they do not override a strong structural split. The derived same-domain and same-burst edges are not added yet.
 - **Warm start.** graphology's Louvain cannot warm-start from a previous partition, so step 2 runs from scratch with a fixed seed (mulberry32). Step 4 keeps cluster ids by greedy best overlap rather than Hungarian assignment.
 - **Labels.** Step 6 uses the earliest search's query, or else the earliest page's title.
 - **Not yet built:** steps 3 and 5 (constraints and hysteresis), and the stability test (REQ-CLU-005).

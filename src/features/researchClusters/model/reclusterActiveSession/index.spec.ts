@@ -8,6 +8,7 @@ import { readClustering } from "../readClustering";
 import {
   CLUSTERING_STORE,
   EDGE_STORE,
+  VECTOR_STORE,
   NODE_STORE,
   openResearchDatabase,
   type ResearchDatabaseSchema,
@@ -47,6 +48,7 @@ beforeEach(async () => {
     database.clear(NODE_STORE),
     database.clear(EDGE_STORE),
     database.clear(CLUSTERING_STORE),
+    database.clear(VECTOR_STORE),
   ]);
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -103,5 +105,32 @@ describe("reclusterActiveSession", () => {
 
     expect(await reclusterActiveSession(database)).toBeUndefined();
     expect(await database.count(CLUSTERING_STORE)).toBe(0);
+  });
+
+  it("adds semantic edges from the session's space, and records it", async () => {
+    await database.put(NODE_STORE, page("lone", 3));
+    await database.put(SESSION_STORE, {
+      ...(await database.get(SESSION_STORE, "session-1"))!,
+      activeEmbeddingSpaceId: "space-1",
+    });
+    await Promise.all(
+      ["b", "lone"].map((nodeId) =>
+        database.put(VECTOR_STORE, {
+          spaceId: "space-1",
+          chunkId: `${nodeId}:0`,
+          part: 0,
+          nodeId,
+          sessionId: "session-1",
+          vector: new Float32Array([1, 0, 0]),
+        }),
+      ),
+    );
+
+    const clustering = await reclusterActiveSession(database, 70);
+
+    expect(clustering?.embeddingSpaceId).toBe("space-1");
+    expect(clustering?.clusters.map(({ memberIds }) => memberIds.toSorted())).toEqual([
+      ["a", "b", "lone"],
+    ]);
   });
 });

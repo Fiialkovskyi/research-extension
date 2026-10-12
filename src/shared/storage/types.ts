@@ -323,6 +323,8 @@ export interface StoredClustering {
   algorithmVersion: string;
   /** The edge weights and options it used, such as `cluster_config@1`. */
   configVersion: string;
+  /** The embedding space semantic edges came from, when any were used (REQ-CLU-006). */
+  embeddingSpaceId?: string;
   computedAt: number;
   clusters: StoredCluster[];
 }
