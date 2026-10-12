@@ -257,6 +257,11 @@ claim checks passed unless they were run.
 
 ## Commit & Pull Request Guidelines
 
+**Never commit, push, create a branch or archive an OpenSpec change unless the maintainer has
+explicitly asked for that action in the current request.** Finishing a task, passing
+`npm run verify`, or an earlier "yes" to something else is not that request. When work is ready,
+leave it uncommitted in the working tree, say that it is ready, and wait for the command.
+
 No Git history exists yet to establish a convention; use short, imperative subjects (for example,
 `Add popup greeting`). Pull requests should explain the change and its motivation, list the
 validation performed (`npm run verify` output), link related issues, and include screenshots for
