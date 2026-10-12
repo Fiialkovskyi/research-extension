@@ -5,6 +5,7 @@
  * entity, so it has no `index.ts` of its own.
  */
 
+export { ENGAGEMENT_RULES, ENGAGEMENT_STATES } from "./engagementRules/constants";
 export { EXTENSION_ID, FIREFOX_MIN_VERSION, OPTIONS_PATH, POPUP_PATH } from "./extension/constants";
 export {
   BGE_SMALL_EN_V1_5,

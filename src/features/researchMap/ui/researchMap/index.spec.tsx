@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { GraphSnapshot, MapNode } from "../../types";
@@ -68,6 +68,7 @@ const buildNode = (id: string, overrides: Partial<MapNode> = {}): MapNode => ({
   kind: "page",
   tabId: 1,
   tabState: "open",
+  engagement: "skimmed",
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",
@@ -102,6 +103,36 @@ describe("ResearchMap", () => {
     expect(findNode("a")).toHaveTextContent("example.com · closed");
     expect(findNode("a")).toHaveAttribute("data-tab-state", "closed");
     expect(findNode("b")).toHaveAttribute("data-tab-state", "open");
+  });
+
+  it("shows each page's engagement in words and by a marker whose shape differs", () => {
+    render(
+      <ResearchMap
+        snapshot={{
+          ...snapshot,
+          nodes: [
+            buildNode("u", { engagement: "unread" }),
+            buildNode("s", { engagement: "skimmed" }),
+            buildNode("d", { engagement: "deep_read", tabState: "closed" }),
+            buildNode("e", { engagement: "dead_end" }),
+          ],
+          edges: [],
+        }}
+        onFocusTab={() => {}}
+      />,
+    );
+
+    expect(findNode("u")).toHaveTextContent("example.com · unread");
+    expect(findNode("s")).toHaveTextContent("example.com · skimmed");
+    expect(findNode("d")).toHaveTextContent("example.com · closed · deep read");
+    expect(findNode("e")).toHaveTextContent("example.com · dead end");
+    expect(findNode("d")).toHaveAttribute("data-engagement", "deep_read");
+
+    const markers = ["u", "s", "d", "e"].map(
+      (id) => within(findNode(id)).getByTestId("engagement-marker").textContent,
+    );
+
+    expect(new Set(markers).size).toBe(4);
   });
 
   it("says a search is a search and shows its query, open or closed", () => {

@@ -1,11 +1,14 @@
 import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
+import type { ScriptPublicPath } from "wxt/utils/inject-script";
 
 import { createBackgroundApp } from "@/app/backgroundApp";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
 import { MAP_PAGE_PATH, openMapTab, readMapTab } from "@/features/researchMap";
 import { NO_TAB_GROUP } from "@/features/researchSession";
-import { readCaptureTab } from "@/features/tabCapture";
+import { readCaptureTab, readFocusedTab } from "@/features/tabCapture";
+import { ENGAGEMENT_RULES } from "@/shared/config";
+import { buildRpcMessage } from "@/shared/rpc";
 import { collectPolicyViolations } from "@/shared/collectPolicyViolations";
 import { openResearchDatabase } from "@/shared/storage";
 
@@ -34,6 +37,9 @@ interface FirefoxSessions {
 }
 
 const firefoxSessions = browser.sessions as unknown as FirefoxSessions;
+
+/** This add-on's own pages, which speak to the background as surfaces. */
+const EXTENSION_ORIGIN = browser.runtime.getURL("/");
 
 export default defineBackground(() => {
   // Attached before anything can fetch, so the first refusal is not missed.
@@ -90,9 +96,38 @@ export default defineBackground(() => {
       updateGroup: (groupId, properties) => browser.tabGroups.update(groupId, properties),
       getGroup: (groupId) => browser.tabGroups.get(groupId),
     },
+    pageSignals: {
+      // WXT types the path against the files it built; the observer's path is
+      // one of them, which the build checks by emitting it.
+      executeScript: ({ target, files }) =>
+        browser.scripting.executeScript({ target, files: files as ScriptPublicPath[] }),
+      requestPageText: (tabId) =>
+        browser.tabs.sendMessage(tabId, buildRpcMessage("content.extract", {}), { frameId: 0 }),
+    },
+    readFocusedTab: () =>
+      readFocusedTab({
+        getLastFocusedWindow: () => browser.windows.getLastFocused(),
+        queryIdleState: (seconds) => browser.idle.queryState(seconds),
+        queryActiveTab: async (windowId) =>
+          (await browser.tabs.query({ active: true, windowId }))[0],
+      }),
   });
 
-  browser.runtime.onMessage.addListener((message: unknown) => app.handleMessage(message));
+  // A message from a web page's top frame is the page observer's; it may send
+  // only its own messages, and its tab is the browser's word. Everything else
+  // comes from the add-on's own pages.
+  browser.runtime.onMessage.addListener((message: unknown, sender) => {
+    if (
+      sender.tab?.id !== undefined &&
+      sender.frameId === 0 &&
+      sender.url !== undefined &&
+      !sender.url.startsWith(EXTENSION_ORIGIN)
+    ) {
+      return app.handleContentMessage(message, { tabId: sender.tab.id, url: sender.url });
+    }
+
+    return app.handleMessage(message);
+  });
 
   // A port is how a surface receives streamed progress, and keeping one open
   // while the surface is visible is also what this change observes about
@@ -154,5 +189,20 @@ export default defineBackground(() => {
   });
   browser.tabs.onRemoved.addListener((tabId, removeInfo) => {
     void app.handleTabRemoved(tabId, removeInfo);
+  });
+
+  // Reading time: it counts only while Firefox is focused and the user is not
+  // idle, so a change in either is followed like a tab switch.
+  browser.idle.setDetectionInterval(ENGAGEMENT_RULES.idleThresholdSeconds);
+  browser.windows.onFocusChanged.addListener(() => {
+    void app.handleWindowFocusChanged();
+  });
+  browser.idle.onStateChanged.addListener((state) => {
+    void app.handleIdleStateChanged(state);
+  });
+  // Page access granted from the popup: the pages already open are observed
+  // without a reload.
+  browser.permissions.onAdded.addListener(() => {
+    void app.handlePermissionsAdded();
   });
 });

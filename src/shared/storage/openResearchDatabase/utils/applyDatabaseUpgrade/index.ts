@@ -8,6 +8,7 @@ import {
   MODEL_STORE,
   NODE_STORE,
   SESSION_STORE,
+  SNAPSHOT_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
 
@@ -77,6 +78,11 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     };
 
     void rewrite();
+  },
+  7: (database) => {
+    // No index: a snapshot is found through the node that carries its id.
+    // Session deletion adds the `sessionId` index with the first query on it.
+    database.createObjectStore(SNAPSHOT_STORE, { keyPath: "id" });
   },
 };
 

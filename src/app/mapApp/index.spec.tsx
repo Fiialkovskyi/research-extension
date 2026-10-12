@@ -66,6 +66,7 @@ const buildSnapshot = (...titles: string[]): GraphSnapshot => ({
     kind: "page" as const,
     tabId: 7 + index,
     tabState: "open",
+    engagement: "skimmed" as const,
     parentNodeId: null,
     openerNodeId: null,
     transitionType: "link",

@@ -15,8 +15,17 @@ const snapshot = {
       hasOpener: false,
       hasParent: false,
       createdAt: 1,
+      signals: {
+        activeDwellMs: 4_000,
+        maxScroll: 0.9,
+        copyEvents: 1,
+        focusCount: 2,
+        revisitCount: 0,
+      },
+      contentHash: "ab12",
     },
   ],
+  snapshots: [{ nodeId: "node-a", contentHash: "ab12", byteLength: 3_000, truncated: false }],
   edges: [{ kind: "opener", from: "node-a", to: "node-b" }],
   groups: [{ id: 1791, title: "Motors" }],
 };

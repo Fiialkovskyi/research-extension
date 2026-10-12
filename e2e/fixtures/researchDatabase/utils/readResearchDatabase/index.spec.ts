@@ -17,7 +17,7 @@ vi.mock("@wdio/globals", () => ({ browser }));
 
 const { readResearchDatabase } = await import("./index");
 
-const snapshot = { sessions: [], nodes: [], edges: [], groups: [] };
+const snapshot = { sessions: [], nodes: [], snapshots: [], edges: [], groups: [] };
 
 describe("readResearchDatabase", () => {
   beforeEach(() => {

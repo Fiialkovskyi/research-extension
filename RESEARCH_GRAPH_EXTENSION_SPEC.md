@@ -109,7 +109,7 @@ The exact Hugging Face download hosts (LFS and CDN redirects) SHALL be enumerate
 
 - **REQ-RT-001:** The extension SHALL NOT inject content scripts or record telemetry until the user explicitly starts a session. A session is started by naming it in the popup, which creates a Firefox tab group with that title. Until after the MVP, at most one session SHALL be active: starting one while another is active SHALL be refused.
 - **REQ-RT-002:** WHEN the first session is started, the system SHALL request `<all_urls>` host permission from that user gesture; IF denied, the system SHALL run in degraded mode (tab-tree and navigation signals only, no scroll, copy or content).
-- **REQ-RT-003:** Content scripts SHALL be registered with `scripting.registerContentScripts` only while at least one session is active, and unregistered when none is.
+- **REQ-RT-003:** The content script SHALL run only in the top frame of the active session's tabs. It is injected with `scripting.executeScript` into each session tab when capture records its page, when a tab joins the group, at reconciliation and when page access is granted, and stops observing when its tab leaves the session. It is not registered for every page with `scripting.registerContentScripts`: pages outside the session's group are then never observed at all (OpenSpec change `add-engagement-signals`).
 - **REQ-RT-004:** The background SHALL be restart-safe. Every listener is registered synchronously at top level, and in-memory caches are rebuilt lazily from IndexedDB.
 - **REQ-RT-005:** Long work SHALL run as checkpointed, idempotent jobs (section 9). IF the event page unloads mid-job, the job SHALL resume from its last checkpoint on the next wake.
 - **REQ-RT-006:** No remote code. All JavaScript and WASM (including ONNX Runtime binaries) SHALL ship in the package. Models are data files, downloaded and hash-verified.
@@ -152,12 +152,15 @@ The graph is built from browser events (tabs, navigation) plus throttled in-page
 - **REQ-CAP-003:** WHEN a committed URL matches a SERP pattern, the node SHALL have `kind = "serp"` and `query`. The first SERP in a session SHALL become the root; later SERPs SHALL be linked to the root by a `refinement` edge. The root is derived from the graph (the session's earliest SERP), not stored on the session. A later SERP whose query equals the root's, ignoring case and whitespace, is a further page of the same search and gets no refinement edge (OpenSpec change `add-serp-detection`).
 - **REQ-CAP-004:** A tab SHALL belong to the active session if and only if it is in the session's tab group. Tabs that join the group, including those Firefox adds because they were opened from a grouped tab, SHALL be captured from the moment they join. Tabs that leave the group SHALL stop being captured but keep their recorded history. Tabs outside the group SHALL NOT be captured.
 - **REQ-CAP-005:** Content scripts SHALL batch signals and flush them at most every 2 s, on `visibilitychange` to hidden, and on `pagehide`. Added main-thread cost SHALL stay under 1 ms per event, measured at p95.
-- **REQ-CAP-006:** WHEN a page node first reaches deep read (see engagement states), the content script SHALL extract readable text with Mozilla Readability and send it with a SHA-256 `content_hash`. Text over 200 KB SHALL be truncated and flagged.
+- **REQ-CAP-006:** WHEN a page node first reaches deep read (see engagement states) while its page is open, the content script SHALL extract readable text with Mozilla Readability and send it to the background. Text over 200 KB SHALL be truncated and flagged. The background computes the SHA-256 `content_hash`: `crypto.subtle` is missing on plain-`http` pages, and the hash is the background's to vouch for (OpenSpec change `add-engagement-signals`).
 - **REQ-CAP-007:** Co-attention edges SHALL be created WHEN focus alternates between the same two nodes at least 3 times within 5 minutes.
 - **REQ-CAP-008:** Private-browsing windows, `about:` and `moz-extension:` pages, and denylisted domains SHALL never produce nodes.
+- **REQ-CAP-010:** A node's active dwell SHALL count the time its tab is the selected tab of the focused browser window while the user is not idle (60 s without input), measured in the background from `tabs.onActivated`, `windows.onFocusChanged` and `idle.onStateChanged`, so it works without page access. Idle time SHALL end when input stopped, not when idleness was reported. One uninterrupted stretch SHALL count at most 10 minutes, and time SHALL NOT be lost when the event page unloads. A return to a node that already had dwell SHALL count as a revisit once it lasts 20 s (OpenSpec change `add-engagement-signals`).
 - **REQ-CAP-009:** WHEN the session's tab group is removed, by any path, the session SHALL be closed rather than ended, because Firefox reports a deleted, saved or emptied group the same way and restores several of them under the same id. A group coming back under that id, or a session tab restored after its group is gone, SHALL make the session active again. Starting a new session SHALL end a closed one and keep it as saved, not deleted. WHEN the group is renamed, the session's title SHALL follow it. The session SHALL record its group's id, which is stable across a browser restart, and SHALL be reconciled with the browser at start-up.
 
 **Engagement states (rule-based, versioned as `engagement_rules@1`)**
+
+The dead-end clause "a return to the SERP within 10 s" is not yet part of `engagement_rules@1`: it needs the SERP a page was reached from and when focus went back to it. A page is a dead end only once it is no longer focused (OpenSpec change `add-engagement-signals`).
 
 | State       | Rule (all thresholds configurable)                                                                                               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -638,7 +641,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 - [ ] Project scaffold: TypeScript, Vite, `web-ext`, ESLint rules, CI matrix. (RT-006, RT-007)
 - [ ] Session lifecycle, explicit start, permission request, dynamic content-script registration. (RT-001 to RT-003)
-- [ ] Tab, navigation and SERP capture; engagement rules; co-attention edges. (CAP-001 to CAP-008)
+- [ ] Tab, navigation and SERP capture; active dwell; engagement rules; co-attention edges. (CAP-001 to CAP-008, CAP-010)
 - [ ] IndexedDB schema v1, migrations framework, job queue. (STO-001, STO-010)
 - [ ] Sidebar tree with live patches and the unread queue. (UI-001 to UI-003)
 

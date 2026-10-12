@@ -2,7 +2,7 @@ import { MAP_DOCUMENT_KEY, MAP_NODES_CHANGED_KEY } from "../../constants";
 
 /**
  * Builds the script, evaluated in the map page, that reports what it shows: the
- * empty state, the session title, every node with its label, kind, text, state and place,
+ * empty state, the session title, every node with its label, kind, text, state, engagement and place,
  * and every edge with its kind.
  *
  * A node's place is the top-left corner of the box React Flow positions, so a
@@ -47,6 +47,7 @@ export const buildMapReaderScript = (): string => {
           kind: node.dataset.nodeKind,
           text: node.textContent,
           tabState: node.dataset.tabState,
+          engagement: node.dataset.engagement,
           isButton: node.tagName === "BUTTON",
           top: box.top,
           left: box.left,

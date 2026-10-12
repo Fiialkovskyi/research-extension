@@ -12,6 +12,7 @@ const buildNode = (id: string, overrides: Partial<MapNode> = {}): MapNode => ({
   kind: "page",
   tabId: 1,
   tabState: "open",
+  engagement: "skimmed",
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",
@@ -106,6 +107,7 @@ describe("buildMapLayout", () => {
         kind: "page",
         tabId: 9,
         tabState: "closed",
+        engagement: "skimmed",
       },
     });
   });

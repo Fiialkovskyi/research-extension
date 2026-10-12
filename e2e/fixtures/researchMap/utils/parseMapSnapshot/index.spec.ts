@@ -14,6 +14,7 @@ const snapshot = {
       kind: "serp",
       text: "e-bike motorssearch · duckduckgo.com",
       tabState: "open",
+      engagement: "skimmed",
       isButton: true,
       top: 10,
       left: 20,

@@ -23,6 +23,12 @@ import { isCanonicalUuid } from "../isCanonicalUuid";
  *   server does not speak.
  * - `dom.security.https_first` off, for the same reason: HTTPS-First would try
  *   `https` before the plain address.
+ *
+ * And one answers the page-access prompt a session start raises:
+ *
+ * - `extensions.webextOptionalPermissionPrompts` off grants an optional
+ *   permission without asking, as the user clicking "Allow" would. The prompt
+ *   is browser chrome a WebDriver session cannot reach reliably.
  */
 export interface ProfilePreferences {
   "extensions.webextensions.uuids": string;
@@ -30,6 +36,7 @@ export interface ProfilePreferences {
   "network.dns.localDomains": string;
   "network.stricttransportsecurity.preloadlist": boolean;
   "dom.security.https_first": boolean;
+  "extensions.webextOptionalPermissionPrompts": boolean;
 }
 
 /**
@@ -58,5 +65,6 @@ export const buildProfilePreferences = (
     "network.dns.localDomains": SEARCH_HOSTS.join(","),
     "network.stricttransportsecurity.preloadlist": false,
     "dom.security.https_first": false,
+    "extensions.webextOptionalPermissionPrompts": false,
   };
 };

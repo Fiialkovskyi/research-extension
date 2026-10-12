@@ -1,8 +1,8 @@
 /**
- * The add-on's one local database. Today it holds installed models, their
- * files, and a content-free log of every inference run; research data joins it
- * as further stores, each added by a migration step rather than a second
- * database.
+ * The add-on's one local database: installed models, their files and a
+ * content-free log of every inference run, and the research data — sessions,
+ * their graphs, jobs and page snapshots — each store added by a migration step
+ * rather than a second database.
  *
  * The background is the only writer, which is not merely a preference: it
  * avoids cross-context transaction races and keeps every surface a pure view.
@@ -23,6 +23,7 @@ export {
   MODEL_STORE,
   NODE_STORE,
   SESSION_STORE,
+  SNAPSHOT_STORE,
 } from "./constants";
 export type {
   ConformanceStatus,
@@ -40,7 +41,9 @@ export type {
   StoredModelFile,
   StoredNode,
   StoredNodeSignals,
+  StoredFocusVisit,
   StoredSession,
+  StoredSnapshot,
 } from "./types";
 export { openResearchDatabase } from "./openResearchDatabase";
 export { readInferenceRuns } from "./readInferenceRuns";

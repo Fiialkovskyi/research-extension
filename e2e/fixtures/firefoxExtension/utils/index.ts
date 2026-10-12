@@ -17,6 +17,7 @@ export {
   RESTART_PREFERENCES,
   buildFirefoxCapabilities,
 } from "./buildFirefoxCapabilities";
+export { grantPageAccess } from "./grantPageAccess";
 export { isCanonicalUuid } from "./isCanonicalUuid";
 export { getExtensionUrl } from "./getExtensionUrl";
 export { type ProfilePreferences, buildProfilePreferences } from "./buildProfilePreferences";

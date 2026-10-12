@@ -9,6 +9,7 @@ import type {
   MODEL_STORE,
   NODE_STORE,
   SESSION_STORE,
+  SNAPSHOT_STORE,
 } from "./constants";
 
 /** Outcome of the family conformance suite, which gates activation. */
@@ -97,8 +98,29 @@ export interface StoredSession {
    */
   formerGroupIds: number[];
   status: SessionStatus;
+  /**
+   * The visit the user is on now, kept here rather than in memory so an
+   * unloaded event page loses no reading time. Absent until the first focus.
+   */
+  focus?: StoredFocusVisit;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * One visit to a node: from its tab being selected until another node gets
+ * focus. Losing window focus or going idle pauses a visit rather than ending it.
+ */
+export interface StoredFocusVisit {
+  nodeId: string;
+  /** When the running interval of active time began; `null` while paused. */
+  since: number | null;
+  /** Active time this visit has added so far. */
+  visitDwellMs: number;
+  /** The node already had active time when this visit began. */
+  isRevisit: boolean;
+  /** This visit has already been counted as a revisit. */
+  isRevisitCounted: boolean;
 }
 
 /** A search results page, or any other page. */
@@ -156,6 +178,10 @@ export interface StoredNode {
   tabState: NodeTabState;
   createdAt: number;
   lastFocusedAt?: number;
+  /** The page's readable text, once captured when it was first deep read. */
+  snapshotId?: string;
+  /** SHA-256 of that text, so equal pages are recognised without reading it. */
+  contentHash?: string;
 }
 
 /** One relation between two nodes of a session. */
@@ -210,6 +236,29 @@ export interface StoredJob {
   updatedAt: number;
 }
 
+/**
+ * The readable text of a page, captured once when its node was first deep read.
+ *
+ * Compressed but not yet encrypted (REQ-SEC-005 is a later change).
+ */
+export interface StoredSnapshot {
+  /** A UUID. */
+  id: string;
+  sessionId: string;
+  nodeId: string;
+  /** Hex SHA-256 of the stored text, after any truncation. */
+  contentHash: string;
+  /** Length of the stored text in UTF-8 bytes, before compression. */
+  byteLength: number;
+  /** The page's text was longer than the limit and was cut. */
+  truncated: boolean;
+  /** Which extractor produced the text, so a later extractor can tell. */
+  extractorVersion: string;
+  capturedAt: number;
+  /** The text, gzip-compressed. */
+  compressedText: ArrayBuffer;
+}
+
 export interface ResearchDatabaseSchema extends DBSchema {
   [MODEL_STORE]: {
     key: string;
@@ -245,5 +294,9 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: string;
     value: StoredJob;
     indexes: { statusPriority: [JobStatus, number] };
+  };
+  [SNAPSHOT_STORE]: {
+    key: string;
+    value: StoredSnapshot;
   };
 }

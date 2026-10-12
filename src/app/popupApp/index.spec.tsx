@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildRpcMessage, type RpcMessage } from "@/shared/rpc";
-import { PopupApp, type PopupClient } from "./index";
+import { type PageAccess, PopupApp, type PopupClient } from "./index";
 
 interface ClientAnswers {
   /** The active session's title, or `null` for none. */
@@ -45,6 +45,17 @@ const createClient = ({
   }),
 });
 
+/** Page access as the browser reports it; granted unless a test says otherwise. */
+const buildPageAccess = ({
+  isGranted = true,
+  request = () => Promise.resolve(true),
+}: { isGranted?: boolean; request?: () => Promise<boolean> } = {}): PageAccess & {
+  request: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+} => ({
+  isGranted: () => Promise.resolve(isGranted),
+  request: vi.fn(request),
+});
+
 const startSession = async (title: string) => {
   fireEvent.change(await screen.findByLabelText("Session title"), { target: { value: title } });
   fireEvent.click(screen.getByTestId("group-submit"));
@@ -52,7 +63,7 @@ const startSession = async (title: string) => {
 
 describe("PopupApp", () => {
   it("shows the greeting inside the popup panel", () => {
-    render(<PopupApp client={createClient()} />);
+    render(<PopupApp client={createClient()} pageAccess={buildPageAccess()} />);
 
     const panel = screen.getByTestId("popup-panel");
 
@@ -61,27 +72,37 @@ describe("PopupApp", () => {
   });
 
   it("offers the title form when no session is active", async () => {
-    render(<PopupApp client={createClient()} />);
+    render(<PopupApp client={createClient()} pageAccess={buildPageAccess()} />);
 
     expect(await screen.findByLabelText("Session title")).toBeInTheDocument();
     expect(screen.queryByTestId("session-active")).not.toBeInTheDocument();
   });
 
   it("shows the active session instead of the form", async () => {
-    render(<PopupApp client={createClient({ active: "E-bike motors" })} />);
+    render(
+      <PopupApp
+        client={createClient({ active: "E-bike motors" })}
+        pageAccess={buildPageAccess()}
+      />,
+    );
 
     expect(await screen.findByTestId("session-active")).toHaveTextContent("E-bike motors");
     expect(screen.queryByLabelText("Session title")).not.toBeInTheDocument();
   });
 
   it("says how many pages the active session has recorded", async () => {
-    render(<PopupApp client={createClient({ active: "E-bike motors", pageCount: 2 })} />);
+    render(
+      <PopupApp
+        client={createClient({ active: "E-bike motors", pageCount: 2 })}
+        pageAccess={buildPageAccess()}
+      />,
+    );
 
     expect(await screen.findByTestId("session-page-count")).toHaveTextContent("2 pages recorded");
   });
 
   it("offers the map only while a session is active", async () => {
-    render(<PopupApp client={createClient()} />);
+    render(<PopupApp client={createClient()} pageAccess={buildPageAccess()} />);
 
     await screen.findByLabelText("Session title");
 
@@ -90,7 +111,7 @@ describe("PopupApp", () => {
 
   it("asks the background to open the map", async () => {
     const client = createClient({ active: "E-bike motors" });
-    render(<PopupApp client={client} />);
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
 
     fireEvent.click(await screen.findByTestId("open-map"));
 
@@ -104,7 +125,7 @@ describe("PopupApp", () => {
       active: "E-bike motors",
       map: buildRpcMessage("rpc.failed", { requestType: "map.open", reason: "No window." }),
     });
-    render(<PopupApp client={client} />);
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
 
     fireEvent.click(await screen.findByTestId("open-map"));
 
@@ -112,13 +133,23 @@ describe("PopupApp", () => {
   });
 
   it("says a single page in the singular", async () => {
-    render(<PopupApp client={createClient({ active: "E-bike motors", pageCount: 1 })} />);
+    render(
+      <PopupApp
+        client={createClient({ active: "E-bike motors", pageCount: 1 })}
+        pageAccess={buildPageAccess()}
+      />,
+    );
 
     expect(await screen.findByTestId("session-page-count")).toHaveTextContent("1 page recorded");
   });
 
   it("names a closed session beside the form, saying a new start ends it", async () => {
-    render(<PopupApp client={createClient({ closed: "E-bike motors" })} />);
+    render(
+      <PopupApp
+        client={createClient({ closed: "E-bike motors" })}
+        pageAccess={buildPageAccess()}
+      />,
+    );
 
     expect(await screen.findByTestId("session-closed")).toHaveTextContent(
       /“E-bike motors” is closed.*starting a new session ends it/,
@@ -135,7 +166,7 @@ describe("PopupApp", () => {
         color: "blue",
       }),
     });
-    render(<PopupApp client={client} />);
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
 
     await startSession("Motors");
 
@@ -150,6 +181,7 @@ describe("PopupApp", () => {
     render(
       <PopupApp
         client={createClient({ start: buildRpcMessage("tabGroup.failed", { reason: "refused" }) })}
+        pageAccess={buildPageAccess()}
       />,
     );
 
@@ -164,7 +196,7 @@ describe("PopupApp", () => {
       rejection: "invalid-payload",
       reason: "bad title",
     });
-    render(<PopupApp client={createClient({ start })} />);
+    render(<PopupApp client={createClient({ start })} pageAccess={buildPageAccess()} />);
 
     await startSession("Motors");
 
@@ -172,7 +204,12 @@ describe("PopupApp", () => {
   });
 
   it("shows a failure when the background cannot be reached", async () => {
-    render(<PopupApp client={createClient({ start: new Error("no receiver") })} />);
+    render(
+      <PopupApp
+        client={createClient({ start: new Error("no receiver") })}
+        pageAccess={buildPageAccess()}
+      />,
+    );
 
     await startSession("Motors");
 
@@ -180,7 +217,12 @@ describe("PopupApp", () => {
   });
 
   it("shows a reply it cannot understand as a failure", async () => {
-    render(<PopupApp client={createClient({ start: "not an envelope" })} />);
+    render(
+      <PopupApp
+        client={createClient({ start: "not an envelope" })}
+        pageAccess={buildPageAccess()}
+      />,
+    );
 
     await startSession("Motors");
 
@@ -189,9 +231,113 @@ describe("PopupApp", () => {
 
   it("still offers the form when the active session cannot be read", async () => {
     const client: PopupClient = { request: vi.fn().mockRejectedValue(new Error("no receiver")) };
-    render(<PopupApp client={client} />);
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
 
     expect(await screen.findByLabelText("Session title")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("no receiver");
+  });
+
+  describe("page access", () => {
+    it("asks for page access when a session starts, before asking the background", async () => {
+      const calls: string[] = [];
+      const pageAccess = buildPageAccess({ isGranted: false });
+      const client = createClient({
+        start: buildRpcMessage("tabGroup.created", {
+          groupId: 42,
+          tabId: 7,
+          title: "E-bike motors",
+          color: "blue",
+        }),
+      });
+
+      pageAccess.request.mockImplementation(() => {
+        calls.push("permission");
+        return Promise.resolve(true);
+      });
+      vi.mocked(client.request).mockImplementationOnce((message) => {
+        calls.push(message.type);
+        return Promise.resolve(
+          buildRpcMessage("session.active", { session: null, closedSession: null }),
+        );
+      });
+      render(<PopupApp client={client} pageAccess={pageAccess} />);
+      await screen.findByLabelText("Session title");
+      await vi.waitFor(() => expect(calls).toEqual(["session.getActive"]));
+
+      vi.mocked(client.request).mockImplementation((message) => {
+        calls.push(message.type);
+        return Promise.resolve(
+          buildRpcMessage("tabGroup.created", {
+            groupId: 42,
+            tabId: 7,
+            title: "E-bike motors",
+            color: "blue",
+          }),
+        );
+      });
+      await startSession("E-bike motors");
+
+      expect(calls).toEqual(["session.getActive", "permission", "tabGroup.create"]);
+    });
+
+    it("does not ask again when page access is already granted", async () => {
+      const pageAccess = buildPageAccess();
+
+      render(<PopupApp client={createClient()} pageAccess={pageAccess} />);
+      await vi.waitFor(() => expect(screen.getByLabelText("Session title")).toBeInTheDocument());
+      // Let the granted state arrive before the click.
+      await Promise.resolve();
+      await startSession("E-bike motors");
+
+      expect(pageAccess.request).not.toHaveBeenCalled();
+    });
+
+    it("starts the session even when page access is refused", async () => {
+      const pageAccess = buildPageAccess({
+        isGranted: false,
+        request: () => Promise.reject(new Error("Refused")),
+      });
+      const client = createClient();
+
+      render(<PopupApp client={client} pageAccess={pageAccess} />);
+      await startSession("E-bike motors");
+
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "tabGroup.create" }),
+      );
+    });
+
+    it("says what is not recorded during a session without page access, and asks again", async () => {
+      const pageAccess = buildPageAccess({ isGranted: false });
+
+      render(
+        <PopupApp client={createClient({ active: "E-bike motors" })} pageAccess={pageAccess} />,
+      );
+
+      expect(await screen.findByTestId("page-access-missing")).toHaveTextContent(
+        "Reading and scrolling are not being recorded",
+      );
+
+      fireEvent.click(screen.getByTestId("allow-page-access"));
+
+      expect(pageAccess.request).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() =>
+        expect(screen.queryByTestId("page-access-missing")).not.toBeInTheDocument(),
+      );
+    });
+
+    it("shows no notice when page access is granted", async () => {
+      render(
+        <PopupApp
+          client={createClient({ active: "E-bike motors" })}
+          pageAccess={buildPageAccess()}
+        />,
+      );
+
+      await screen.findByTestId("session-active");
+      await Promise.resolve();
+
+      expect(screen.queryByTestId("page-access-missing")).not.toBeInTheDocument();
+    });
   });
 });

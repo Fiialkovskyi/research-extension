@@ -14,6 +14,8 @@ export type { NewEdge, NewNode, SessionGraph, SignalObservation } from "./types"
 export { addNodeSignals } from "./model/addNodeSignals";
 export { closeNode } from "./model/closeNode";
 export { countSessionNodes } from "./model/countSessionNodes";
+export { getNodeEngagement } from "./model/getNodeEngagement";
+export type { EngagementContext, EngagementState } from "./model/getNodeEngagement";
 export { readSessionGraph } from "./model/readSessionGraph";
 export { readSessionRoot } from "./model/readSessionRoot";
 export { readTabNode } from "./model/readTabNode";

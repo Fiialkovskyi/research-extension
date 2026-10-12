@@ -24,8 +24,22 @@ export interface PopupClient {
   request: (message: RpcMessage<string, unknown>) => Promise<unknown>;
 }
 
+/**
+ * Access to page contents, which observing a session page needs. Optional: a
+ * session is recorded without it, only without scroll, copies and page text.
+ */
+export interface PageAccess {
+  isGranted: () => Promise<boolean>;
+  /**
+   * Asks the browser. Firefox honours it only within the user's click, so it
+   * is called before anything is awaited in the handler that needs it.
+   */
+  request: () => Promise<boolean>;
+}
+
 export interface PopupAppProps {
   client: PopupClient;
+  pageAccess: PageAccess;
 }
 
 /** Every answer the background may send this surface. */
@@ -99,9 +113,37 @@ const readFailure = (error: unknown): PopupState => {
 };
 
 /** Composition root of the toolbar popup surface. */
-export function PopupApp({ client }: PopupAppProps) {
+export function PopupApp({ client, pageAccess }: PopupAppProps) {
   const [state, setState] = useState<PopupState>({ status: "loading" });
   const [mapFailure, setMapFailure] = useState<string | undefined>();
+  /** `undefined` until the browser has said. */
+  const [hasPageAccess, setHasPageAccess] = useState<boolean | undefined>();
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    pageAccess.isGranted().then(
+      (isGranted) => {
+        if (isCurrent) {
+          setHasPageAccess(isGranted);
+        }
+      },
+      () => undefined,
+    );
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [pageAccess]);
+
+  /**
+   * Asks for page access, from the click that called it. Opening the browser's
+   * prompt may close the popup; whatever the answer, the background hears of a
+   * grant itself.
+   */
+  const requestPageAccess = useCallback(() => {
+    pageAccess.request().then(setHasPageAccess, () => undefined);
+  }, [pageAccess]);
 
   // Asked on every open rather than remembered: the session lives in the
   // background's database, and its group may have closed since the last look.
@@ -135,6 +177,12 @@ export function PopupApp({ client }: PopupAppProps) {
   // seen.
   const startSession = useCallback(
     (title: string) => {
+      // First, while the click is still the user's: Firefox refuses a
+      // permission request made after anything has been awaited.
+      if (hasPageAccess !== true) {
+        requestPageAccess();
+      }
+
       setState({ status: "ready", pending: true });
 
       // A reply this surface cannot parse is a failure too, so it is caught
@@ -146,7 +194,7 @@ export function PopupApp({ client }: PopupAppProps) {
           setState(readFailure(error));
         });
     },
-    [client],
+    [client, hasPageAccess, requestPageAccess],
   );
 
   // The background finds the map's tab or opens one, outside the session's group.
@@ -191,6 +239,19 @@ export function PopupApp({ client }: PopupAppProps) {
           <Button data-testid="open-map" onClick={openMap}>
             Open map
           </Button>
+        </div>
+      )}
+      {state.status === "active" && hasPageAccess === false && (
+        <div data-testid="page-access-missing" className="mt-3 text-sm">
+          <p>
+            Reading and scrolling are not being recorded: the extension has no access to page
+            contents.
+          </p>
+          <div className="mt-2">
+            <Button data-testid="allow-page-access" onClick={requestPageAccess}>
+              Allow page access
+            </Button>
+          </div>
         </div>
       )}
       {state.status === "active" && mapFailure !== undefined && (

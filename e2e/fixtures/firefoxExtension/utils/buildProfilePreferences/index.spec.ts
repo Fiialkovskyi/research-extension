@@ -30,6 +30,7 @@ describe("buildProfilePreferences", () => {
     expect(prefs["network.dns.localDomains"].split(",")).toEqual([...SEARCH_HOSTS]);
     expect(prefs["network.stricttransportsecurity.preloadlist"]).toBe(false);
     expect(prefs["dom.security.https_first"]).toBe(false);
+    expect(prefs["extensions.webextOptionalPermissionPrompts"]).toBe(false);
   });
 
   it("defaults to this project's add-on id", () => {

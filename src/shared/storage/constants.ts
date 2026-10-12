@@ -13,7 +13,7 @@ export const DATABASE_NAME = "research-graph";
  * rather than editing an existing one, so a profile that has already migrated
  * is never asked to migrate differently.
  */
-export const DATABASE_VERSION = 6;
+export const DATABASE_VERSION = 7;
 
 export const MODEL_STORE = "models";
 export const MODEL_FILE_STORE = "modelFiles";
@@ -22,6 +22,7 @@ export const SESSION_STORE = "sessions";
 export const NODE_STORE = "nodes";
 export const EDGE_STORE = "edges";
 export const JOB_STORE = "jobs";
+export const SNAPSHOT_STORE = "snapshots";
 
 /**
  * How many runs the log keeps. Runs are written on every embedding job and

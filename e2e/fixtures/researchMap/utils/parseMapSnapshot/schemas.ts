@@ -9,6 +9,8 @@ export const mapNodeSnapshotSchema = v.object({
   /** Everything the node says, labels included. */
   text: v.string(),
   tabState: v.picklist(["open", "closed"]),
+  /** The engagement state the node shows, as its `data-engagement`. */
+  engagement: v.picklist(["unread", "skimmed", "deep_read", "dead_end"]),
   /** Whether the node can be activated: an open page is a button. */
   isButton: v.boolean(),
   /** Top-left corner of the node's box, in CSS pixels of the page. */

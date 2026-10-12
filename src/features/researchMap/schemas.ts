@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { ENGAGEMENT_STATES } from "@/shared/config";
+
 /** A page of the graph, reduced to what the map draws. */
 export const mapNodeSchema = v.object({
   id: v.string(),
@@ -11,6 +13,8 @@ export const mapNodeSchema = v.object({
   query: v.optional(v.string()),
   tabId: v.number(),
   tabState: v.picklist(["open", "closed"]),
+  /** Derived from the node's signals by `engagement_rules@1`; never stored. */
+  engagement: v.picklist(ENGAGEMENT_STATES),
   parentNodeId: v.nullable(v.string()),
   openerNodeId: v.nullable(v.string()),
   transitionType: v.string(),

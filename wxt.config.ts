@@ -40,9 +40,14 @@ export default defineConfig({
     // each tab's URL and title (`tabs`) and how each page was reached
     // (`webNavigation`). `sessions` gives each session tab a per-tab value that
     // survives the tab being closed and restored, which is how a tab restored
-    // after its group is gone is brought back into the session. Nothing else is
-    // requested.
-    permissions: ["tabGroups", "tabs", "webNavigation", "sessions"],
+    // after its group is gone is brought back into the session. `idle` tells
+    // reading time from a user who has walked away, and `scripting` injects the
+    // page observer into session tabs. Nothing else is requested.
+    permissions: ["tabGroups", "tabs", "webNavigation", "sessions", "scripting", "idle"],
+    // Reading a session page's scroll, copies and text needs access to page
+    // contents. Optional, so it is never granted at install: the popup asks for
+    // it when a session starts, and capture carries on without it if refused.
+    optional_host_permissions: ["<all_urls>"],
     // Derived from one list so the policy and the permissions cannot drift
     // apart from each other, nor from the code that builds the request URLs.
     host_permissions: MODEL_HOST_ORIGINS.map((origin) => `${origin}/*`),

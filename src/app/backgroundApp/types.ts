@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import type { InferenceWorker } from "@/features/inference";
+import type { PageSender, PageSignalsApi } from "@/features/pageSignals";
 import type { SessionTab, SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, CommittedNavigation, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
@@ -54,7 +55,21 @@ export interface BackgroundDependencies {
   focusTab: (tabId: number) => Promise<void>;
   /** Selects the map's tab, opening one outside any tab group if none is open. */
   openMap: () => Promise<void>;
+  /** Injects the page observer and asks it for a page's text. */
+  pageSignals: PageSignalsApi;
+  /**
+   * The tab the user is reading now: the selected tab of the focused window,
+   * while the user is not idle. `undefined` when Firefox is not focused or the
+   * user is idle. Asked afresh each time, so nothing about focus lives only in
+   * the memory of an event page that may be unloaded.
+   */
+  readFocusedTab: () => Promise<number | undefined>;
+  /** The current time. Injected so reading time is exercised without waiting. */
+  now?: () => number;
 }
+
+/** What the browser reports about the user's activity. */
+export type IdleState = "active" | "idle" | "locked";
 
 /** The changes of a tab update that capture follows. */
 export interface TabChanges {
@@ -133,6 +148,22 @@ export interface BackgroundApp {
    * to start-up reconciliation: session restore may bring it back.
    */
   handleTabRemoved: (tabId: number, removeInfo: { isWindowClosing: boolean }) => Promise<void>;
+  /**
+   * Validates a message from a session page's observer and answers it.
+   *
+   * Apart from `handleMessage`: a page may send only its own messages, and the
+   * tab it came from is the browser's word, never the message's.
+   */
+  handleContentMessage: (
+    candidate: unknown,
+    sender: PageSender,
+  ) => Promise<RpcMessage<string, unknown>>;
+  /** Follows focus moving to another window, or away from Firefox. */
+  handleWindowFocusChanged: () => Promise<void>;
+  /** Follows the user going idle or coming back, for reading time. */
+  handleIdleStateChanged: (state: IdleState) => Promise<void>;
+  /** Starts observing the session's open pages once page access is granted. */
+  handlePermissionsAdded: () => Promise<void>;
   /** Releases the worker, if one was ever started. */
   shutdown: () => void;
 }

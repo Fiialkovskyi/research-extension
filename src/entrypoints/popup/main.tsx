@@ -2,7 +2,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { browser } from "wxt/browser";
 
-import { PopupApp, type PopupClient } from "@/app/popupApp";
+import { type PageAccess, PopupApp, type PopupClient } from "@/app/popupApp";
+import { PAGE_ACCESS_ORIGINS } from "@/features/pageSignals";
 import "@/shared/styles/tailwind.css";
 
 const container = document.getElementById("root");
@@ -15,8 +16,13 @@ const client: PopupClient = {
   request: (message) => browser.runtime.sendMessage(message),
 };
 
+const pageAccess: PageAccess = {
+  isGranted: () => browser.permissions.contains({ origins: PAGE_ACCESS_ORIGINS }),
+  request: () => browser.permissions.request({ origins: PAGE_ACCESS_ORIGINS }),
+};
+
 createRoot(container).render(
   <StrictMode>
-    <PopupApp client={client} />
+    <PopupApp client={client} pageAccess={pageAccess} />
   </StrictMode>,
 );

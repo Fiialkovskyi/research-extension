@@ -16,6 +16,24 @@ export const researchSnapshotSchema = v.object({
       hasParent: v.boolean(),
       /** When the background recorded the node, in epoch milliseconds. */
       createdAt: v.number(),
+      signals: v.object({
+        activeDwellMs: v.number(),
+        maxScroll: v.number(),
+        copyEvents: v.number(),
+        focusCount: v.number(),
+        revisitCount: v.number(),
+      }),
+      /** The hash of the page's snapshot, once it has one. */
+      contentHash: v.nullable(v.string()),
+    }),
+  ),
+  /** Snapshot records, without their (compressed) text. */
+  snapshots: v.array(
+    v.object({
+      nodeId: v.string(),
+      contentHash: v.string(),
+      byteLength: v.number(),
+      truncated: v.boolean(),
     }),
   ),
   edges: v.array(v.object({ kind: v.string(), from: v.string(), to: v.string() })),

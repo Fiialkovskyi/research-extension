@@ -17,6 +17,7 @@ import {
   NODE_STORE,
   openResearchDatabase,
   SESSION_STORE,
+  SNAPSHOT_STORE,
   type StoredSession,
 } from "@/shared/storage";
 
@@ -103,6 +104,11 @@ const buildDependencies = (
     reportError: () => {},
     focusTab: () => Promise.resolve(),
     openMap: () => Promise.resolve(),
+    pageSignals: {
+      executeScript: () => Promise.resolve([]),
+      requestPageText: () => Promise.resolve(undefined),
+    },
+    readFocusedTab: () => Promise.resolve(undefined),
     ...overrides,
   };
 };
@@ -129,6 +135,7 @@ const createFreshDatabase = async () => {
   await database.clear(SESSION_STORE);
   await database.clear(NODE_STORE);
   await database.clear(EDGE_STORE);
+  await database.clear(SNAPSHOT_STORE);
 
   return database;
 };
@@ -1259,5 +1266,225 @@ describe("the research map through the background", () => {
 
     expect(response).toMatchObject({ type: "map.opened" });
     expect(openMap).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A batch as a session page's observer sends it. */
+const batch = (maxScroll: number, copyEvents = 0) =>
+  buildRpcMessage("signal.batch", { maxScroll, copyEvents });
+
+const FROM_PAGE_A = { tabId: 7, url: "https://example.org/a" };
+
+/**
+ * A background with an active session, a clock the test moves, and focus the
+ * test decides, recording which tabs it injected and asked for text.
+ */
+const createSignalsApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
+  const clock = { now: 1_000, focusedTabId: undefined as number | undefined };
+  const executeScript = vi.fn((_injection: unknown) => Promise.resolve([]));
+  const requestPageText = vi.fn((_tabId: number) => Promise.resolve(undefined));
+  const { app, database } = await createSessionApp({
+    tabCapture: createTabCapture(sessionTab(), sessionTab({ id: 8, url: "https://example.org/c" })),
+    pageSignals: { executeScript, requestPageText },
+    readFocusedTab: () => Promise.resolve(clock.focusedTabId),
+    now: () => clock.now,
+    ...overrides,
+  });
+
+  await database.put(SESSION_STORE, activeSession);
+
+  return { app, database, clock, executeScript, requestPageText };
+};
+
+const readNodeByUrl = async (
+  database: Awaited<ReturnType<typeof createFreshDatabase>>,
+  url: string,
+) => (await database.getAll(NODE_STORE)).find((node) => node.url === url);
+
+describe("page signals and reading time through the background", () => {
+  it("observes a page committed in a session tab, and none outside the group", async () => {
+    const { app, executeScript } = await createSignalsApp({
+      tabCapture: createTabCapture(sessionTab(), sessionTab({ id: 9, groupId: 5 })),
+    });
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/a"), tabId: 9 });
+
+    expect(executeScript).toHaveBeenCalledTimes(1);
+    expect(executeScript).toHaveBeenCalledWith({
+      target: { tabId: 7, frameIds: [0] },
+      files: ["/content-scripts/pageObserver.js"],
+    });
+  });
+
+  it("observes the session's open pages once page access is granted", async () => {
+    const { app, executeScript } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    executeScript.mockClear();
+    await app.handlePermissionsAdded();
+
+    await vi.waitFor(() => expect(executeScript).toHaveBeenCalledTimes(1));
+  });
+
+  it("adds a batch to the page that sent it", async () => {
+    const { app, database } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+    expect(await app.handleContentMessage(batch(0.6, 1), FROM_PAGE_A)).toMatchObject({
+      type: "signal.recorded",
+    });
+    expect((await readNodeByUrl(database, "https://example.org/a"))?.signals).toMatchObject({
+      maxScroll: 0.6,
+      copyEvents: 1,
+    });
+  });
+
+  it("tells a page whose tab is not a session tab to stop", async () => {
+    const { app } = await createSignalsApp();
+
+    expect(
+      await app.handleContentMessage(batch(0.6), { tabId: 99, url: "https://example.org/z" }),
+    ).toMatchObject({ type: "signal.dropped", payload: { stop: true } });
+  });
+
+  it("refuses from a page anything but a page's own messages, and those from a surface", async () => {
+    const { app } = await createSignalsApp();
+
+    expect(
+      await app.handleContentMessage(buildRpcMessage("session.getActive", {}), FROM_PAGE_A),
+    ).toMatchObject({ type: "rpc.refused", payload: { rejection: "unknown-type" } });
+    expect(await app.handleMessage(batch(0.6))).toMatchObject({
+      type: "rpc.refused",
+      payload: { rejection: "unknown-type" },
+    });
+  });
+
+  it("records reading time on a page when the user switches away from it", async () => {
+    const { app, database, clock } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    clock.now += 30_000;
+    clock.focusedTabId = 8;
+    await app.handleTabActivated(8);
+
+    expect((await readNodeByUrl(database, "https://example.org/a"))?.signals).toMatchObject({
+      activeDwellMs: 30_000,
+      focusCount: 1,
+    });
+  });
+
+  it("stops counting when Firefox loses focus, and from when input stopped when idle", async () => {
+    const { app, database, clock } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    clock.now += 10_000;
+    clock.focusedTabId = undefined;
+    await app.handleWindowFocusChanged();
+    clock.now += 120_000;
+    clock.focusedTabId = 7;
+    await app.handleWindowFocusChanged();
+    clock.now += 90_000;
+    clock.focusedTabId = undefined;
+    await app.handleIdleStateChanged("idle");
+
+    // 10 s, then 30 s of the 90 s before idleness was reported 60 s late.
+    expect((await readNodeByUrl(database, "https://example.org/a"))?.signals.activeDwellMs).toBe(
+      40_000,
+    );
+  });
+
+  it("asks a page for its text once a copy makes it deep read, and stores what it sends", async () => {
+    const { app, database, clock, requestPageText } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.3), FROM_PAGE_A);
+
+    expect(requestPageText).not.toHaveBeenCalled();
+
+    await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+
+    expect(requestPageText).toHaveBeenCalledWith(7);
+
+    expect(
+      await app.handleContentMessage(
+        buildRpcMessage("content.extracted", {
+          text: "Mid-drive motors sit at the cranks.",
+          truncated: false,
+          extractorVersion: "readability@0.6.0/1",
+        }),
+        FROM_PAGE_A,
+      ),
+    ).toMatchObject({ type: "content.stored" });
+
+    const node = await readNodeByUrl(database, "https://example.org/a");
+
+    expect(await database.getAll(SNAPSHOT_STORE)).toEqual([
+      expect.objectContaining({ nodeId: node?.id, contentHash: node?.contentHash }),
+    ]);
+
+    requestPageText.mockClear();
+    await app.handleContentMessage(batch(0.5, 1), FROM_PAGE_A);
+
+    expect(requestPageText).not.toHaveBeenCalled();
+  });
+
+  it("asks for a page's text when reading time alone makes it deep read", async () => {
+    const { app, clock, requestPageText } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.5), FROM_PAGE_A);
+    clock.now += 50_000;
+    clock.focusedTabId = 8;
+    await app.handleTabActivated(8);
+
+    expect(requestPageText).toHaveBeenCalledWith(7);
+  });
+
+  it("stores no text sent by a page its tab has left", async () => {
+    const { app, database } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted(commit("https://example.org/b"));
+
+    expect(
+      await app.handleContentMessage(
+        buildRpcMessage("content.extracted", {
+          text: "Old page",
+          truncated: false,
+          extractorVersion: "readability@0.6.0/1",
+        }),
+        FROM_PAGE_A,
+      ),
+    ).toMatchObject({ type: "signal.dropped", payload: { stop: false } });
+    expect(await database.count(SNAPSHOT_STORE)).toBe(0);
+  });
+
+  it("pushes the map a page's engagement as it changes", async () => {
+    const { app, map } = await createSubscribedApp({
+      tabCapture: createTabCapture(sessionTab()),
+      readFocusedTab: () => Promise.resolve(7),
+    });
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.2, 1), FROM_PAGE_A);
+
+    await vi.waitFor(() =>
+      expect(readSnapshots(map.posted).at(-1)?.payload.nodes).toEqual([
+        expect.objectContaining({ engagement: "deep_read" }),
+      ]),
+    );
   });
 });

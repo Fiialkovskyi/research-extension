@@ -71,10 +71,16 @@ export const readResearchDatabase = async (): Promise<ResearchSnapshot> => {
 
           request.addEventListener("error", () => resolve(`ERROR ${String(request.error)}`));
           request.addEventListener("success", () => {
-            const transaction = request.result.transaction(["sessions", "nodes", "edges"]);
+            const transaction = request.result.transaction([
+              "sessions",
+              "nodes",
+              "edges",
+              "snapshots",
+            ]);
             const sessions = transaction.objectStore("sessions").getAll();
             const nodes = transaction.objectStore("nodes").getAll();
             const edges = transaction.objectStore("edges").getAll();
+            const snapshots = transaction.objectStore("snapshots").getAll();
 
             transaction.addEventListener("complete", () => {
               void extension.tabGroups.query({}).then(
@@ -96,7 +102,17 @@ export const readResearchDatabase = async (): Promise<ResearchSnapshot> => {
                         hasOpener: node.openerNodeId !== null,
                         hasParent: node.parentNodeId !== null,
                         createdAt: node.createdAt,
+                        signals: node.signals,
+                        contentHash: node.contentHash ?? null,
                       })),
+                      snapshots: snapshots.result.map(
+                        ({ nodeId, contentHash, byteLength, truncated }) => ({
+                          nodeId,
+                          contentHash,
+                          byteLength,
+                          truncated,
+                        }),
+                      ),
                       edges: edges.result.map(({ kind, from, to }) => ({ kind, from, to })),
                       groups: groups.map(({ id, title }) => ({ id, title: title ?? "" })),
                     }),

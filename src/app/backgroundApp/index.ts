@@ -4,6 +4,14 @@ import { type InferenceWorker, loadModelIntoWorker } from "@/features/inference"
 import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
 import { runEmbeddingConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
+import {
+  injectPageObserver,
+  injectSessionTabs,
+  pageContentRequestSchemas,
+  readSignalTarget,
+  recordSignalBatch,
+} from "@/features/pageSignals";
+import { readSnapshotCandidate, recordSnapshot } from "@/features/pageSnapshots";
 import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
 import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
@@ -26,9 +34,10 @@ import {
   reconcileSessionTabs,
   recordNavigation,
   recordTabFocus,
+  trackActiveDwell,
   updateTabTitle,
 } from "@/features/tabCapture";
-import { BUNDLED_MODEL_PROFILES } from "@/shared/config";
+import { BUNDLED_MODEL_PROFILES, ENGAGEMENT_RULES } from "@/shared/config";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
 import type { InferenceDevice } from "@/shared/modelManifest";
 import { getErrorMessage } from "@/shared/getErrorMessage";
@@ -42,13 +51,15 @@ import {
 import { MODEL_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
 import { requestSchemas } from "./schemas";
-import type { BackgroundApp, BackgroundDependencies, Emit } from "./types";
+import type { PageSender } from "@/features/pageSignals";
+import type { BackgroundApp, BackgroundDependencies, Emit, IdleState } from "./types";
 
 export type {
   BackgroundApp,
   BackgroundDependencies,
   BackgroundPort,
   GroupEventDetails,
+  IdleState,
   TabChanges,
 } from "./types";
 
@@ -233,11 +244,141 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     return captured;
   };
 
-  /** Brings the session's captured tabs in line with the tabs of its group. */
+  const getNow = dependencies.now ?? Date.now;
+
+  /**
+   * Starts observing a tab's page. Not awaited: an injection waits for the page
+   * to finish loading, and capture must not wait with it.
+   */
+  const observeTab = (tabId: number): void => {
+    void injectPageObserver(dependencies.pageSignals, tabId);
+  };
+
+  /** Starts observing a tab's page if capture follows the tab. */
+  const observeIfCaptured = async (
+    openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+    tabId: number,
+  ): Promise<void> => {
+    const session = await getActiveSession(openedDatabase);
+
+    if (session !== undefined && (await readTabNode(openedDatabase, session.id, tabId))) {
+      observeTab(tabId);
+    }
+  };
+
+  /**
+   * Asks a page for its text when its node has just become deep read. The text
+   * comes back as a message of its own, on this same queue, so it is not
+   * awaited here.
+   */
+  const requestSnapshotIfDue = async (
+    openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+    nodeId: string,
+  ): Promise<void> => {
+    const candidate = await readSnapshotCandidate(openedDatabase, nodeId);
+
+    if (candidate !== undefined) {
+      dependencies.pageSignals.requestPageText(candidate.tabId).catch(() => undefined);
+    }
+  };
+
+  /**
+   * Brings reading time up to date and follows focus to the tab the user is
+   * reading now, asked of the browser rather than remembered.
+   */
+  const followFocus = async (
+    openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+    { now = getNow(), discardOpen = false }: { now?: number; discardOpen?: boolean } = {},
+  ): Promise<void> => {
+    const { dwelledNodeId } = await trackActiveDwell({
+      database: openedDatabase,
+      focusedTabId: await dependencies.readFocusedTab(),
+      now,
+      discardOpen,
+    });
+
+    if (dwelledNodeId !== undefined) {
+      await requestSnapshotIfDue(openedDatabase, dwelledNodeId);
+    }
+  };
+
+  /**
+   * Brings the session's captured tabs in line with the tabs of its group, and
+   * observes their pages. Reading time left running by an earlier run is
+   * dropped: how long the browser was away says nothing about reading.
+   */
   const reconcileTabs = (): Promise<void> =>
-    captureAndPush((openedDatabase) =>
-      reconcileSessionTabs({ database: openedDatabase, api: dependencies.tabCapture }),
+    captureAndPush(async (openedDatabase) => {
+      await reconcileSessionTabs({ database: openedDatabase, api: dependencies.tabCapture });
+      void injectSessionTabs(openedDatabase, dependencies.pageSignals);
+      await followFocus(openedDatabase, { discardOpen: true });
+    });
+
+  /** Answers a session page's observer. Runs on the capture queue. */
+  const handleContentMessage = async (
+    candidate: unknown,
+    sender: PageSender,
+  ): Promise<RpcMessage<string, unknown>> => {
+    let request;
+
+    try {
+      request = parseRpcMessage(candidate, pageContentRequestSchemas);
+    } catch (error) {
+      return refuse(candidate, error);
+    }
+
+    let answer: RpcMessage<string, unknown> | undefined;
+
+    await captureAndPush(async (openedDatabase) => {
+      switch (request.type) {
+        case "signal.batch": {
+          const target = await recordSignalBatch(openedDatabase, sender, request.payload);
+
+          if (target.node === undefined) {
+            answer = buildRpcMessage("signal.dropped", { stop: target.stop });
+            return;
+          }
+
+          await followFocus(openedDatabase);
+
+          if (target.isCurrent) {
+            await requestSnapshotIfDue(openedDatabase, target.node.id);
+          }
+
+          answer = buildRpcMessage("signal.recorded", {});
+          return;
+        }
+
+        case "content.extracted": {
+          const target = await readSignalTarget(openedDatabase, sender);
+
+          // Text from a page the tab has already left is not its node's any more.
+          if (target.node === undefined || !target.isCurrent) {
+            answer = buildRpcMessage("signal.dropped", {
+              stop: target.node === undefined && target.stop,
+            });
+            return;
+          }
+
+          await recordSnapshot(openedDatabase, {
+            nodeId: target.node.id,
+            ...request.payload,
+            capturedAt: getNow(),
+          });
+          answer = buildRpcMessage("content.stored", {});
+          return;
+        }
+      }
+    });
+
+    return (
+      answer ??
+      buildRpcMessage("rpc.failed", {
+        requestType: request.type,
+        reason: "The page's message could not be recorded.",
+      })
     );
+  };
 
   // The switch below is exhaustive over the parsed message union, and the
   // compiler knows it: adding a message type without a case makes this
@@ -580,7 +721,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     },
     handleGroupRemoved: async (group) => {
       await serializeWork(async () => {
-        await closeSessionForGroup(await getDatabase(), group.id);
+        const openedDatabase = await getDatabase();
+
+        // Reading time up to now is counted before the session closes, when
+        // it could no longer be.
+        await trackActiveDwell({
+          database: openedDatabase,
+          focusedTabId: undefined,
+          now: getNow(),
+        });
+        await closeSessionForGroup(openedDatabase, group.id);
       });
       pushGraphSnapshot();
     },
@@ -602,6 +752,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             database: openedDatabase,
             tab: await dependencies.tabCapture.getTab(tab.id),
           });
+          await observeIfCaptured(openedDatabase, tab.id);
         });
       }
     },
@@ -623,13 +774,26 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       await reconcileTabs();
     },
     handleNavigationCommitted: (navigation) =>
-      captureAndPush((openedDatabase) =>
-        recordNavigation({ database: openedDatabase, api: dependencies.tabCapture, navigation }),
-      ),
+      captureAndPush(async (openedDatabase) => {
+        const node = await recordNavigation({
+          database: openedDatabase,
+          api: dependencies.tabCapture,
+          navigation,
+        });
+
+        if (node !== undefined) {
+          observeTab(node.tabId);
+        }
+
+        // The tab being read may now show another node.
+        await followFocus(openedDatabase);
+      }),
     handleTabUpdated: (tab, changes) =>
       captureAndPush(async (openedDatabase) => {
         if (changes.groupId !== undefined) {
           await followTabMembership({ database: openedDatabase, tab });
+          await observeIfCaptured(openedDatabase, tab.id);
+          await followFocus(openedDatabase);
         }
 
         if (changes.title !== undefined) {
@@ -637,12 +801,33 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
       }),
     handleTabActivated: (tabId) =>
-      captureAndPush((openedDatabase) => recordTabFocus(openedDatabase, tabId)),
+      captureAndPush(async (openedDatabase) => {
+        await recordTabFocus(openedDatabase, tabId);
+        await followFocus(openedDatabase);
+      }),
     handleTabRemoved: async (tabId, { isWindowClosing }) => {
       if (!isWindowClosing) {
-        await captureAndPush((openedDatabase) => closeTabNode(openedDatabase, tabId));
+        await captureAndPush(async (openedDatabase) => {
+          await closeTabNode(openedDatabase, tabId);
+          await followFocus(openedDatabase);
+        });
       }
     },
+    handleContentMessage,
+    handleWindowFocusChanged: () => captureAndPush((openedDatabase) => followFocus(openedDatabase)),
+    handleIdleStateChanged: (state: IdleState) =>
+      captureAndPush((openedDatabase) =>
+        followFocus(openedDatabase, {
+          // Idleness is reported a threshold after input stopped; reading
+          // stopped with the input.
+          now:
+            state === "active" ? getNow() : getNow() - ENGAGEMENT_RULES.idleThresholdSeconds * 1000,
+        }),
+      ),
+    handlePermissionsAdded: () =>
+      enqueueCapture(async (openedDatabase) => {
+        void injectSessionTabs(openedDatabase, dependencies.pageSignals);
+      }),
     shutdown: () => {
       discardWorker();
       database = undefined;

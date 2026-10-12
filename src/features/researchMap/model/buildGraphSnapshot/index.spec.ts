@@ -56,6 +56,7 @@ describe("buildGraphSnapshot", () => {
           kind: "page",
           tabId: 7,
           tabState: "closed",
+          engagement: "deep_read",
           parentNodeId: null,
           openerNodeId: null,
           transitionType: "typed",
@@ -73,6 +74,42 @@ describe("buildGraphSnapshot", () => {
       kind: "serp",
       query: "e-bike motors",
     });
+  });
+
+  it("derives each page's engagement, and does not call the focused page a dead end", () => {
+    const glance: StoredNode = {
+      ...node,
+      tabState: "open",
+      signals: {
+        activeDwellMs: 3_000,
+        maxScroll: 0,
+        copyEvents: 0,
+        focusCount: 1,
+        revisitCount: 0,
+      },
+    };
+    const unread: StoredNode = {
+      ...glance,
+      id: "node-b",
+      signals: { ...glance.signals, focusCount: 0 },
+    };
+    const focused = {
+      ...session,
+      focus: {
+        nodeId: "node-a",
+        since: 20,
+        visitDwellMs: 3_000,
+        isRevisit: false,
+        isRevisitCounted: false,
+      },
+    };
+    const engagements = (current: StoredSession) =>
+      buildGraphSnapshot(current, { nodes: [glance, unread], edges: [] }).nodes.map(
+        ({ engagement }) => engagement,
+      );
+
+    expect(engagements(focused)).toEqual(["skimmed", "unread"]);
+    expect(engagements(session)).toEqual(["dead_end", "unread"]);
   });
 
   it("draws nothing without an active session", () => {

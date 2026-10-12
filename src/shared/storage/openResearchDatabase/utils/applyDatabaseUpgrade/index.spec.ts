@@ -12,6 +12,7 @@ import {
   MODEL_STORE,
   NODE_STORE,
   SESSION_STORE,
+  SNAPSHOT_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
 
@@ -180,6 +181,33 @@ describe("applyDatabaseUpgrade", () => {
       createdAt: 1,
       updatedAt: 1,
     });
+
+    after.close();
+  });
+
+  it("adds a snapshots store keyed by id, with no index", async () => {
+    const database = await openAt(getNextDatabaseName(), 7);
+    const snapshots = database.transaction(SNAPSHOT_STORE).store;
+
+    expect(snapshots.keyPath).toBe("id");
+    expect([...snapshots.indexNames]).toEqual([]);
+
+    database.close();
+  });
+
+  it("keeps a version-6 profile's nodes unchanged when it gains snapshots", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 6);
+    const node = { id: "node-1", sessionId: "session-1", tabId: 7, tabState: "open" };
+
+    await before.put(NODE_STORE, node as never);
+    before.close();
+
+    const after = await openAt(name, 7);
+
+    expect(after.version).toBe(7);
+    expect(await after.get(NODE_STORE, "node-1")).toEqual(node);
+    expect(await after.count(SNAPSHOT_STORE)).toBe(0);
 
     after.close();
   });

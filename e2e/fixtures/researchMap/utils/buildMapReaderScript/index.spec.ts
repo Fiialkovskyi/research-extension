@@ -24,10 +24,10 @@ describe("buildMapReaderScript", () => {
     document.body.innerHTML = `
       <span data-testid="map-session-title">Motors</span>
       <div class="react-flow__node">
-        <div data-testid="map-node" data-node-id="a" data-tab-state="closed" title="Page A"></div>
+        <div data-testid="map-node" data-node-id="a" data-tab-state="closed" data-engagement="dead_end" title="Page A"></div>
       </div>
       <div class="react-flow__node">
-        <button data-testid="map-node" data-node-id="b" data-tab-state="open" title="Page B"></button>
+        <button data-testid="map-node" data-node-id="b" data-tab-state="open" data-engagement="deep_read" title="Page B"></button>
       </div>
       <svg><g class="react-flow__edge edge-sameTab" data-id="a|b|sameTab"></g>
         <g class="react-flow__edge edge-opener" data-id="a|c|opener"></g></svg>`;
@@ -36,8 +36,8 @@ describe("buildMapReaderScript", () => {
       empty: false,
       sessionTitle: "Motors",
       nodes: [
-        { id: "a", label: "Page A", tabState: "closed", isButton: false },
-        { id: "b", label: "Page B", tabState: "open", isButton: true },
+        { id: "a", label: "Page A", tabState: "closed", engagement: "dead_end", isButton: false },
+        { id: "b", label: "Page B", tabState: "open", engagement: "deep_read", isButton: true },
       ],
       edges: [
         { id: "a|b|sameTab", kind: "sameTab" },

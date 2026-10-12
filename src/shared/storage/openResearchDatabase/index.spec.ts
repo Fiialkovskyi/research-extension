@@ -12,6 +12,7 @@ import {
   MODEL_STORE,
   NODE_STORE,
   SESSION_STORE,
+  SNAPSHOT_STORE,
 } from "../constants";
 
 describe("openResearchDatabase", () => {
@@ -28,6 +29,7 @@ describe("openResearchDatabase", () => {
         NODE_STORE,
         EDGE_STORE,
         JOB_STORE,
+        SNAPSHOT_STORE,
       ].toSorted(),
     );
 

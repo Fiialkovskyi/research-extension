@@ -17,6 +17,7 @@ export interface MapNodeData extends Record<string, unknown> {
   kind: "serp" | "page";
   tabId: number;
   tabState: "open" | "closed";
+  engagement: MapNode["engagement"];
 }
 
 /** The snapshot as React Flow draws it: positioned nodes and styled edges. */
@@ -87,6 +88,7 @@ export const buildMapLayout = (snapshot: GraphSnapshot): MapLayout => {
           kind: node.kind,
           tabId: node.tabId,
           tabState: node.tabState,
+          engagement: node.engagement,
         },
       };
     }),
