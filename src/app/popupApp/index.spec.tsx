@@ -9,6 +9,8 @@ interface ClientAnswers {
   active?: string | null;
   /** Pages the active session has recorded. */
   pageCount?: number;
+  /** The closed session's title, or `null` for none. */
+  closed?: string | null;
   /** The answer to a start; a rejection when it is an `Error`. */
   start?: unknown;
   /** The answer to opening the map. */
@@ -19,6 +21,7 @@ interface ClientAnswers {
 const createClient = ({
   active = null,
   pageCount = 0,
+  closed = null,
   start,
   map = buildRpcMessage("map.opened", {}),
 }: ClientAnswers = {}): PopupClient => ({
@@ -32,6 +35,8 @@ const createClient = ({
         buildRpcMessage("session.active", {
           session:
             active === null ? null : { id: "session-1", title: active, groupId: 42, pageCount },
+          closedSession:
+            closed === null ? null : { id: "session-0", title: closed, groupId: 41, pageCount: 0 },
         }),
       );
     }
@@ -110,6 +115,15 @@ describe("PopupApp", () => {
     render(<PopupApp client={createClient({ active: "E-bike motors", pageCount: 1 })} />);
 
     expect(await screen.findByTestId("session-page-count")).toHaveTextContent("1 page recorded");
+  });
+
+  it("names a closed session beside the form, saying a new start ends it", async () => {
+    render(<PopupApp client={createClient({ closed: "E-bike motors" })} />);
+
+    expect(await screen.findByTestId("session-closed")).toHaveTextContent(
+      /“E-bike motors” is closed.*starting a new session ends it/,
+    );
+    expect(screen.getByLabelText("Session title")).toBeInTheDocument();
   });
 
   it("asks the background to start a session, then shows it as active", async () => {

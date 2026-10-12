@@ -38,8 +38,11 @@ export default defineConfig({
     },
     // A research session is a tab group (`tabGroups`). Capturing its pages needs
     // each tab's URL and title (`tabs`) and how each page was reached
-    // (`webNavigation`). Nothing else is requested.
-    permissions: ["tabGroups", "tabs", "webNavigation"],
+    // (`webNavigation`). `sessions` gives each session tab a per-tab value that
+    // survives the tab being closed and restored, which is how a tab restored
+    // after its group is gone is brought back into the session. Nothing else is
+    // requested.
+    permissions: ["tabGroups", "tabs", "webNavigation", "sessions"],
     // Derived from one list so the policy and the permissions cannot drift
     // apart from each other, nor from the code that builds the request URLs.
     host_permissions: MODEL_HOST_ORIGINS.map((origin) => `${origin}/*`),

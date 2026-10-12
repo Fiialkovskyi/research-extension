@@ -30,6 +30,7 @@ beforeEach(async () => {
     id: "session-1",
     title: "E-bike motors",
     groupId: GROUP_ID,
+    formerGroupIds: [],
     status: "active",
     createdAt: 1,
     updatedAt: 1,

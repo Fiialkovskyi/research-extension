@@ -155,7 +155,7 @@ The graph is built from browser events (tabs, navigation) plus throttled in-page
 - **REQ-CAP-006:** WHEN a page node first reaches deep read (see engagement states), the content script SHALL extract readable text with Mozilla Readability and send it with a SHA-256 `content_hash`. Text over 200 KB SHALL be truncated and flagged.
 - **REQ-CAP-007:** Co-attention edges SHALL be created WHEN focus alternates between the same two nodes at least 3 times within 5 minutes.
 - **REQ-CAP-008:** Private-browsing windows, `about:` and `moz-extension:` pages, and denylisted domains SHALL never produce nodes.
-- **REQ-CAP-009:** WHEN the session's tab group is removed other than by its window closing, the session SHALL end and be kept as saved, not deleted. WHEN the group is renamed, the session's title SHALL follow it. The session SHALL record its group's id, which is stable across a browser restart, and SHALL be reconciled with the browser at start-up.
+- **REQ-CAP-009:** WHEN the session's tab group is removed, by any path, the session SHALL be closed rather than ended, because Firefox reports a deleted, saved or emptied group the same way and restores several of them under the same id. A group coming back under that id, or a session tab restored after its group is gone, SHALL make the session active again. Starting a new session SHALL end a closed one and keep it as saved, not deleted. WHEN the group is renamed, the session's title SHALL follow it. The session SHALL record its group's id, which is stable across a browser restart, and SHALL be reconciled with the browser at start-up.
 
 **Engagement states (rule-based, versioned as `engagement_rules@1`)**
 

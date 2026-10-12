@@ -25,6 +25,7 @@ const SNAPSHOT = JSON.stringify({
   backgroundColor: "rgb(255, 255, 255)",
   textColor: "rgb(15, 23, 42)",
   activeSession: null,
+  closedSession: null,
   hasSessionForm: true,
   hasOpenMap: false,
   pageCount: null,

@@ -28,8 +28,9 @@ describe("a session whose group is saved and closed", () => {
     await leaveBrowserChrome();
   });
 
-  it("ends, and its group comes back from the saved list under the same id", async () => {
+  it("closes, and reopens when its group comes back from the saved list under the same id", async () => {
     const title = `Saved ${Date.now()}`;
+    const pageUrl = `${process.env[PAGE_ORIGIN_VARIABLE]}/a.html`;
 
     await clickToolbarAction();
     await waitForPopupPanel();
@@ -43,7 +44,7 @@ describe("a session whose group is saved and closed", () => {
 
     // A group of only a new-tab page is not worth saving to Firefox; a web
     // page makes it a group a user would save.
-    await loadUrlInSelectedTab(`${process.env[PAGE_ORIGIN_VARIABLE]}/a.html`);
+    await loadUrlInSelectedTab(pageUrl);
     await browser.waitUntil(async () => (await readResearchDatabase()).nodes.length === 1, {
       timeout: UI_TIMEOUT_MS,
       timeoutMsg: "The session's page was never recorded.",
@@ -51,29 +52,42 @@ describe("a session whose group is saved and closed", () => {
 
     const savedId = await saveAndCloseTabGroup(title);
 
-    const ended = await browser.waitUntil(
+    // Closed rather than ended: Firefox reports a saved group like a deleted one.
+    const closed = await browser.waitUntil(
       async () => {
         const snapshot = await readResearchDatabase();
-        return snapshot.sessions[0]?.status === "saved" ? snapshot : false;
+        return snapshot.sessions[0]?.status === "closed" ? snapshot : false;
       },
-      { timeout: UI_TIMEOUT_MS, timeoutMsg: "The session did not end when its group was saved." },
+      { timeout: UI_TIMEOUT_MS, timeoutMsg: "The session did not close when its group was saved." },
     );
-    const groupId = ended.sessions[0]?.groupId;
+    const groupId = closed.sessions[0]?.groupId;
 
     expect(await reopenSavedTabGroup(savedId)).toBe(savedId);
 
     const reopened = await browser.waitUntil(
       async () => {
         const snapshot = await readResearchDatabase();
-        return snapshot.groups.some((group) => group.title === title) ? snapshot : false;
+        const isBack =
+          snapshot.groups.some((group) => group.title === title) &&
+          snapshot.sessions[0]?.status === "active" &&
+          snapshot.nodes.some((node) => node.tabState === "open");
+
+        return isBack ? snapshot : false;
       },
-      { timeout: UI_TIMEOUT_MS, timeoutMsg: "The reopened group never reached the extension." },
+      {
+        timeout: UI_TIMEOUT_MS,
+        timeoutMsg: "The reopened group never made the session active with its page open.",
+      },
     );
 
-    // The finding the session's design rests on: the extension sees the
-    // reopened group under the id it recorded, so the group can be recognised.
+    // The extension sees the reopened group under the id it recorded, which is
+    // what lets the session recognise it.
     expect(reopened.groups.find((group) => group.title === title)?.id).toBe(groupId);
-    // Reattaching is not implemented: a reopened group resumes nothing yet.
-    expect(reopened.sessions.map((session) => session.status)).toEqual(["saved"]);
+    expect(reopened.sessions.map((session) => session.status)).toEqual(["active"]);
+    // The page's tab came back under a new id: its old node is closed, and the
+    // restored tab has the one open node.
+    expect(
+      reopened.nodes.filter((node) => node.url === pageUrl && node.tabState === "open"),
+    ).toHaveLength(1);
   });
 });

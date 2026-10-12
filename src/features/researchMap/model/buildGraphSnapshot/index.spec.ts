@@ -10,6 +10,7 @@ const session: StoredSession = {
   id: "session-1",
   title: "E-bike motors",
   groupId: 42,
+  formerGroupIds: [],
   status: "active",
   createdAt: 1,
   updatedAt: 2,

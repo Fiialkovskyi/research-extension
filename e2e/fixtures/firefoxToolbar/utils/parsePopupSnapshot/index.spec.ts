@@ -10,6 +10,7 @@ const SNAPSHOT = JSON.stringify({
   backgroundColor: "rgb(255, 255, 255)",
   textColor: "rgb(15, 23, 42)",
   activeSession: null,
+  closedSession: null,
   hasSessionForm: true,
   hasOpenMap: false,
   pageCount: null,
@@ -25,6 +26,7 @@ describe("parsePopupSnapshot", () => {
       backgroundColor: "rgb(255, 255, 255)",
       textColor: "rgb(15, 23, 42)",
       activeSession: null,
+      closedSession: null,
       hasSessionForm: true,
       hasOpenMap: false,
       pageCount: null,
@@ -47,6 +49,18 @@ describe("parsePopupSnapshot", () => {
     expect(parsePopupSnapshot(raw)).toMatchObject({
       activeSession: "Session “Motors” is active.",
       hasSessionForm: false,
+    });
+  });
+
+  it("reads the closed session the popup names beside the form", () => {
+    const raw = JSON.stringify({
+      ...JSON.parse(SNAPSHOT),
+      closedSession: "Session “Motors” is closed.",
+    });
+
+    expect(parsePopupSnapshot(raw)).toMatchObject({
+      closedSession: "Session “Motors” is closed.",
+      hasSessionForm: true,
     });
   });
 

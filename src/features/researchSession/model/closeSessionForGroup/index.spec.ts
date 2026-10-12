@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { endSessionForGroup } from ".";
+import { closeSessionForGroup } from ".";
 import {
   openResearchDatabase,
   type ResearchDatabaseSchema,
@@ -22,31 +22,31 @@ const active: StoredSession = {
   id: "session-1",
   title: "E-bike motors",
   groupId: 42,
+  formerGroupIds: [],
   status: "active",
   createdAt: 1,
   updatedAt: 1,
 };
 
-describe("endSessionForGroup", () => {
-  it("keeps the session as saved when its group is gone", async () => {
+describe("closeSessionForGroup", () => {
+  it("closes the active session when its group is removed, keeping the group id", async () => {
     await database.put(SESSION_STORE, active);
 
-    const ended = await endSessionForGroup(database, 42);
-
-    expect(ended).toMatchObject({ id: "session-1", status: "saved" });
-    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "saved" });
-    expect(ended?.updatedAt).toBeGreaterThan(1);
+    expect(await closeSessionForGroup(database, 42)).toMatchObject({
+      status: "closed",
+      groupId: 42,
+    });
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "closed" });
   });
 
   it("ignores a group that is not the session's", async () => {
     await database.put(SESSION_STORE, active);
 
-    expect(await endSessionForGroup(database, 7)).toBeUndefined();
+    expect(await closeSessionForGroup(database, 7)).toBeUndefined();
     expect(await database.get(SESSION_STORE, "session-1")).toEqual(active);
   });
 
   it("does nothing when no session is active", async () => {
-    expect(await endSessionForGroup(database, 42)).toBeUndefined();
-    expect(await database.count(SESSION_STORE)).toBe(0);
+    expect(await closeSessionForGroup(database, 42)).toBeUndefined();
   });
 });

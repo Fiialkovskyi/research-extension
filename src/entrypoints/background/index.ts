@@ -4,6 +4,7 @@ import { defineBackground } from "wxt/utils/define-background";
 import { createBackgroundApp } from "@/app/backgroundApp";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
 import { MAP_PAGE_PATH, openMapTab, readMapTab } from "@/features/researchMap";
+import { NO_TAB_GROUP } from "@/features/researchSession";
 import { readCaptureTab } from "@/features/tabCapture";
 import { collectPolicyViolations } from "@/shared/collectPolicyViolations";
 import { openResearchDatabase } from "@/shared/storage";
@@ -24,6 +25,15 @@ const focusBrowserTab = async (tabId: number, windowId: number): Promise<void> =
   await browser.tabs.update(tabId, { active: true });
   await browser.windows.update(windowId, { focused: true });
 };
+
+/** `browser.sessions` as Firefox implements it, with the per-tab values. */
+interface FirefoxSessions {
+  getTabValue: (tabId: number, key: string) => Promise<unknown>;
+  setTabValue: (tabId: number, key: string, value: unknown) => Promise<void>;
+  removeTabValue: (tabId: number, key: string) => Promise<void>;
+}
+
+const firefoxSessions = browser.sessions as unknown as FirefoxSessions;
 
 export default defineBackground(() => {
   // Attached before anything can fetch, so the first refusal is not missed.
@@ -70,6 +80,16 @@ export default defineBackground(() => {
         },
         browser.runtime.getURL(MAP_PAGE_PATH),
       ),
+    sessionTabs: {
+      // Firefox's per-tab session values, which the shared (Chrome) typings do
+      // not declare. They need the `sessions` permission.
+      getTabValue: (tabId, key) => firefoxSessions.getTabValue(tabId, key),
+      setTabValue: (tabId, key, value) => firefoxSessions.setTabValue(tabId, key, value),
+      removeTabValue: (tabId, key) => firefoxSessions.removeTabValue(tabId, key),
+      groupTabs: (options) => browser.tabs.group(options),
+      updateGroup: (groupId, properties) => browser.tabGroups.update(groupId, properties),
+      getGroup: (groupId) => browser.tabGroups.get(groupId),
+    },
   });
 
   browser.runtime.onMessage.addListener((message: unknown) => app.handleMessage(message));
@@ -86,12 +106,20 @@ export default defineBackground(() => {
   browser.tabGroups.onUpdated.addListener((group) => {
     void app.handleGroupUpdated(group);
   });
-  // Firefox passes `removeInfo` as a second argument, which the shared typings
-  // (written for Chrome) do not declare; it is optional here for that reason.
-  browser.tabGroups.onRemoved.addListener((group, removeInfo?: { isWindowClosing?: boolean }) => {
-    void app.handleGroupRemoved(group, {
-      isWindowClosing: removeInfo?.isWindowClosing ?? false,
-    });
+  // Every removal closes the session, whatever its cause, so Firefox's
+  // `removeInfo` is not read.
+  browser.tabGroups.onRemoved.addListener((group) => {
+    void app.handleGroupRemoved(group);
+  });
+  // A restored group comes back under its own id; this is what reopens it.
+  browser.tabGroups.onCreated.addListener((group) => {
+    void app.handleGroupCreated(group);
+  });
+  // A restored tab: back inside its group, or on its own when the group is gone.
+  browser.tabs.onCreated.addListener((tab) => {
+    if (tab.id !== undefined) {
+      void app.handleTabCreated({ id: tab.id, groupId: tab.groupId ?? NO_TAB_GROUP });
+    }
   });
   // After a restart the group may not have come back; the record is checked
   // against what session restore actually restored. The same holds after an
@@ -108,7 +136,12 @@ export default defineBackground(() => {
   browser.webNavigation.onCommitted.addListener((details) => {
     void app.handleNavigationCommitted(details);
   });
-  browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // A tab's session mark follows its group, so a restored tab is recognised.
+    if (changeInfo.groupId !== undefined) {
+      void app.handleTabGroupChanged({ id: tabId, groupId: changeInfo.groupId });
+    }
+
     if (changeInfo.groupId !== undefined || changeInfo.title !== undefined) {
       void app.handleTabUpdated(readCaptureTab(tab), {
         ...(changeInfo.groupId === undefined ? {} : { groupId: changeInfo.groupId }),

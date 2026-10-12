@@ -59,10 +59,18 @@ export interface StoredInferenceRun {
 }
 
 /**
- * Whether a session is the one being recorded. `saved` sessions are kept, not
- * deleted, so their research stays available once the group is gone.
+ * Where a session is in its life.
+ *
+ * - `active`: its group is open and the session is being recorded.
+ * - `closed`: its group was removed, and may come back. Firefox removes a group
+ *   the same way whether the user deleted it, saved it or closed its last tab,
+ *   and several of those paths restore it under the same id, so a removal
+ *   suspends the session rather than ending it.
+ * - `saved`: ended. Kept, not deleted, so its research stays available.
+ *
+ * Until after the MVP at most one session is `active` or `closed`.
  */
-export type SessionStatus = "active" | "saved";
+export type SessionStatus = "active" | "closed" | "saved";
 
 /**
  * One research session: a Firefox tab group the extension follows.
@@ -81,6 +89,13 @@ export interface StoredSession {
    * window id is deliberately not kept: it is not stable across restarts.
    */
   groupId: number;
+  /**
+   * Groups the session followed before `groupId`, oldest first. A session tab
+   * restored after its group was gone for good gets a new group, under a new
+   * id; if the old group is restored later after all, its tabs are recognised
+   * by this list and moved into the session's current group.
+   */
+  formerGroupIds: number[];
   status: SessionStatus;
   createdAt: number;
   updatedAt: number;

@@ -49,4 +49,15 @@ describe("createSession", () => {
       createSession({ database, title: "Batteries", groupId: 43 }),
     ).resolves.toMatchObject({ title: "Batteries", status: "active" });
   });
+
+  it("ends a closed session in the same start, keeping it as saved", async () => {
+    const first = await createSession({ database, title: "E-bike motors", groupId: 42 });
+    await database.put(SESSION_STORE, { ...first, status: "closed" });
+
+    const second = await createSession({ database, title: "Batteries", groupId: 43 });
+
+    expect(second).toMatchObject({ status: "active", formerGroupIds: [] });
+    expect(await database.get(SESSION_STORE, first.id)).toMatchObject({ status: "saved" });
+    expect(await database.countFromIndex(SESSION_STORE, "status", "closed")).toBe(0);
+  });
 });

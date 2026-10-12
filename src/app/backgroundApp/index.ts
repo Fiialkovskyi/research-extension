@@ -9,11 +9,16 @@ import { activateModel, listInstalledModels } from "@/features/modelRegistry";
 import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
 import {
   buildSessionSummary,
-  endSessionForGroup,
+  closeSessionForGroup,
   getActiveSession,
+  getLiveSession,
   reconcileActiveSession,
   renameSessionForGroup,
+  reopenSessionForGroup,
+  restoreSessionTab,
+  SESSION_TAB_VALUE_KEY,
   startSession,
+  trackSessionTabMembership,
 } from "@/features/researchSession";
 import {
   closeTabNode,
@@ -136,28 +141,39 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
    */
   let graphPushQueuedAt: number | undefined;
 
-  /** The tail of the capture queue; each capture event runs after the one before. */
-  let captureQueue: Promise<void> = Promise.resolve();
+  /** The tail of the work queue. Never rejects, so one failure does not stall the rest. */
+  let workQueue: Promise<unknown> = Promise.resolve();
 
   /**
-   * Runs capture work in the order its events arrived.
+   * Runs session and capture work one piece at a time, in the order its events
+   * arrived.
    *
-   * The browser reports a commit, the page's title and a focus change within
-   * milliseconds, and each handler awaits the database; run side by side, a
-   * title could be written before the node it belongs to exists. A failure is
-   * reported and does not stop the work queued behind it.
+   * Browser events come in bursts, and each handler reads the database, may ask
+   * the browser, then writes. The browser reports a commit, the page's title and
+   * a focus change within milliseconds; run side by side, a title could be
+   * written before the node it belongs to exists. A restored group announces
+   * itself, then each of its tabs; run side by side, two restored tabs of a gone
+   * group would both find no group and create two. One queue for both kinds
+   * also keeps a page's capture behind the session change that admitted it.
+   */
+  const serializeWork = <T>(work: () => Promise<T>): Promise<T> => {
+    const result = workQueue.then(work);
+
+    workQueue = result.catch(() => undefined);
+
+    return result;
+  };
+
+  /**
+   * Runs capture work on the queue. A failure is reported rather than
+   * returned: nobody waits on a capture event.
    */
   const enqueueCapture = (
     work: (openedDatabase: IDBPDatabase<ResearchDatabaseSchema>) => Promise<unknown>,
-  ) => {
-    captureQueue = captureQueue
-      .then(async () => {
-        await work(await getDatabase());
-      })
-      .catch(dependencies.reportError);
-
-    return captureQueue;
-  };
+  ): Promise<void> =>
+    serializeWork(async () => {
+      await work(await getDatabase());
+    }).catch(dependencies.reportError);
 
   /** Queues a push behind every write queued so far. */
   const queueGraphPush = (): void => {
@@ -216,6 +232,12 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
     return captured;
   };
+
+  /** Brings the session's captured tabs in line with the tabs of its group. */
+  const reconcileTabs = (): Promise<void> =>
+    captureAndPush((openedDatabase) =>
+      reconcileSessionTabs({ database: openedDatabase, api: dependencies.tabCapture }),
+    );
 
   // The switch below is exhaustive over the parsed message union, and the
   // compiler knows it: adding a message type without a case makes this
@@ -362,11 +384,21 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         case "tabGroup.create": {
           try {
-            const { group } = await startSession({
-              database: await getDatabase(),
-              title: request.payload.title,
-              api: dependencies.tabGroups,
-            });
+            const { session, group } = await serializeWork(async () =>
+              startSession({
+                database: await getDatabase(),
+                title: request.payload.title,
+                api: dependencies.tabGroups,
+              }),
+            );
+
+            // The group's first tab joined before the session was recorded, so
+            // the membership event that would have marked it found no session.
+            // A tab that cannot be marked is still the session's while it is
+            // open; it is only not recognised if restored after its group is gone.
+            dependencies.sessionTabs
+              .setTabValue(group.tabId, SESSION_TAB_VALUE_KEY, session.id)
+              .catch(() => undefined);
 
             // Not awaited into the answer: the browser may decline, or take its
             // time asking, and neither outcome changes that the session started.
@@ -380,17 +412,27 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "session.getActive": {
-          const openedDatabase = await getDatabase();
-          const session = await reconcileActiveSession({
-            database: openedDatabase,
-            getGroup: dependencies.tabGroups.getGroup,
-          });
+          return await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const session = await reconcileActiveSession({
+              database: openedDatabase,
+              getGroup: dependencies.tabGroups.getGroup,
+            });
+            const live = session ?? (await getLiveSession(openedDatabase));
 
-          return buildRpcMessage("session.active", {
-            session:
-              session === undefined
-                ? null
-                : buildSessionSummary(session, await countSessionNodes(openedDatabase, session.id)),
+            return buildRpcMessage("session.active", {
+              session:
+                session === undefined
+                  ? null
+                  : buildSessionSummary(
+                      session,
+                      await countSessionNodes(openedDatabase, session.id),
+                    ),
+              closedSession:
+                live?.status === "closed"
+                  ? buildSessionSummary(live, await countSessionNodes(openedDatabase, live.id))
+                  : null,
+            });
           });
         }
 
@@ -518,25 +560,67 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       });
     },
     handleGroupUpdated: async (group) => {
-      if (group.title !== undefined) {
-        await renameSessionForGroup(await getDatabase(), group.id, group.title);
-        pushGraphSnapshot();
-      }
-    },
-    handleGroupRemoved: async (group, { isWindowClosing }) => {
-      if (!isWindowClosing) {
-        await endSessionForGroup(await getDatabase(), group.id);
-        pushGraphSnapshot();
-      }
-    },
-    reconcileSession: async () => {
-      await reconcileActiveSession({
-        database: await getDatabase(),
-        getGroup: dependencies.tabGroups.getGroup,
+      await serializeWork(async () => {
+        if (group.title !== undefined) {
+          await renameSessionForGroup(await getDatabase(), group.id, group.title);
+        }
       });
-      await captureAndPush((openedDatabase) =>
-        reconcileSessionTabs({ database: openedDatabase, api: dependencies.tabCapture }),
+      pushGraphSnapshot();
+    },
+    handleGroupCreated: async (group) => {
+      const reopened = await serializeWork(async () =>
+        reopenSessionForGroup(await getDatabase(), group.id),
       );
+
+      // The group's tabs come back under new ids, so the nodes still open for
+      // the old ones are closed; the tabs are recorded as each one arrives.
+      if (reopened !== undefined) {
+        await reconcileTabs();
+      }
+    },
+    handleGroupRemoved: async (group) => {
+      await serializeWork(async () => {
+        await closeSessionForGroup(await getDatabase(), group.id);
+      });
+      pushGraphSnapshot();
+    },
+    handleTabCreated: async (tab) => {
+      const outcome = await serializeWork(async () =>
+        restoreSessionTab({
+          database: await getDatabase(),
+          api: dependencies.sessionTabs,
+          tab,
+        }),
+      );
+
+      // A session tab that came back is recorded from the page it shows: most
+      // restored tabs are discarded and commit no navigation until shown. A
+      // tab newly opened in the group (`member`) is left to its first commit.
+      if (outcome !== "ignored" && outcome !== "member") {
+        await captureAndPush(async (openedDatabase) => {
+          await followTabMembership({
+            database: openedDatabase,
+            tab: await dependencies.tabCapture.getTab(tab.id),
+          });
+        });
+      }
+    },
+    handleTabGroupChanged: (tab) =>
+      serializeWork(async () => {
+        await trackSessionTabMembership({
+          database: await getDatabase(),
+          api: dependencies.sessionTabs,
+          tab,
+        });
+      }),
+    reconcileSession: async () => {
+      await serializeWork(async () => {
+        await reconcileActiveSession({
+          database: await getDatabase(),
+          getGroup: dependencies.tabGroups.getGroup,
+        });
+      });
+      await reconcileTabs();
     },
     handleNavigationCommitted: (navigation) =>
       captureAndPush((openedDatabase) =>

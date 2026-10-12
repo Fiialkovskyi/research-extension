@@ -137,3 +137,19 @@ WHEN the browser starts, or the extension is installed or updated, with a sessio
 - **GIVEN** a session tab showing `https://example.org/a` with an open node
 - **WHEN** Firefox restarts and restores the group
 - **THEN** the session has exactly one open node for `https://example.org/a`
+
+### Requirement: Capture follows a restored session
+
+A closed session SHALL record nothing. WHEN the session's group comes back under its id, nodes whose tab is no longer in the group showing the same page SHALL be marked closed. WHEN a tab that carries the session's id comes back into the session — inside its group, added to it, or followed in a new group — it SHALL be recorded from the page it shows, without waiting for a navigation. A tab newly opened in the session's group SHALL be recorded by its first navigation, not on creation.
+
+#### Scenario: Group deleted and restored
+
+- **GIVEN** a session tab showing `https://example.org/a` with an open node
+- **WHEN** the user deletes the session's group and restores it with Ctrl+Shift+T
+- **THEN** the session has exactly one open node for `https://example.org/a`
+
+#### Scenario: Tab restored after its group is gone
+
+- **GIVEN** the session's group was removed by closing its tabs one by one
+- **WHEN** the user restores the tab that showed `https://example.org/a`
+- **THEN** the session is active and has an open node for `https://example.org/a`
