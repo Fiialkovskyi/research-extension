@@ -9,13 +9,18 @@ export const sessionSummarySchema = v.object({
 
 /** Messages about the session. Starting one is still `tabGroup.create`. */
 export const researchSessionRequestSchemas = {
-  /** Which session is active, after checking that its group still exists. */
+  /** Which session is active or closed, after checking the browser's groups. */
   "session.getActive": v.object({}),
 } as const;
 
 export const researchSessionResponseSchemas = {
-  /** `null` when no session is active, so a surface offers to start one. */
+  /**
+   * `session` is `null` when no session is active, so a surface offers to start
+   * one. `closedSession` is the session whose group was removed and may still
+   * come back, or `null`; starting a new session ends it.
+   */
   "session.active": v.object({
     session: v.nullable(sessionSummarySchema),
+    closedSession: v.nullable(sessionSummarySchema),
   }),
 } as const;

@@ -4,6 +4,7 @@ import "fake-indexeddb/auto";
 
 import { createBackgroundApp, type BackgroundDependencies } from ".";
 import type { InferenceWorker } from "@/features/inference";
+import { SESSION_TAB_VALUE_KEY, type SessionTabApi } from "@/features/researchSession";
 import type { TabGroupApi } from "@/features/tabGroups";
 import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/utils/getFileDigest";
 import { MINILM_L6_V2 } from "@/shared/config";
@@ -39,6 +40,47 @@ const createStubTabGroups = (overrides: Partial<TabGroupApi> = {}): TabGroupApi 
   };
 };
 
+/**
+ * Per-tab values held in memory, as Firefox's session store holds them, with
+ * grouping calls that succeed. `groups` lists the ids that exist.
+ */
+const createStubSessionTabs = (
+  groups: number[] = [42],
+  overrides: Partial<SessionTabApi> = {},
+): SessionTabApi & { values: Map<string, string> } => {
+  const values = new Map<string, string>();
+  let nextGroupId = 100;
+
+  return {
+    values,
+    getTabValue: vi.fn(async (tabId: number, key: string) => values.get(`${tabId}:${key}`)),
+    setTabValue: vi.fn(async (tabId: number, key: string, value: string) => {
+      values.set(`${tabId}:${key}`, value);
+    }),
+    removeTabValue: vi.fn(async (tabId: number, key: string) => {
+      values.delete(`${tabId}:${key}`);
+    }),
+    groupTabs: vi.fn(async ({ groupId }: { groupId?: number }) => {
+      if (groupId !== undefined) {
+        return groupId;
+      }
+
+      nextGroupId += 1;
+      groups.push(nextGroupId);
+      return nextGroupId;
+    }),
+    updateGroup: vi.fn().mockResolvedValue(undefined),
+    getGroup: vi.fn(async (groupId: number) => {
+      if (!groups.includes(groupId)) {
+        throw new Error(`No group with id: ${groupId}`);
+      }
+
+      return { id: groupId };
+    }),
+    ...overrides,
+  };
+};
+
 /** Dependencies with inert defaults, so a test names only what it cares about. */
 const buildDependencies = (
   overrides: Partial<BackgroundDependencies> = {},
@@ -49,6 +91,7 @@ const buildDependencies = (
     fetchResource: (() => Promise.reject(new Error("no network in this test"))) as typeof fetch,
     policyViolations: { read: () => [] },
     tabGroups: createStubTabGroups(),
+    sessionTabs: createStubSessionTabs(),
     persistStorage: () => Promise.resolve(true),
     ...overrides,
   };
@@ -551,6 +594,7 @@ const activeSession: StoredSession = {
   id: "session-1",
   title: "E-bike motors",
   groupId: 42,
+  formerGroupIds: [],
   status: "active",
   createdAt: 1,
   updatedAt: 1,
@@ -581,6 +625,7 @@ describe("a research session through the background", () => {
     expect(await database.getFromIndex(SESSION_STORE, "status", "active")).toMatchObject({
       title: "E-bike motors",
       groupId: 42,
+      formerGroupIds: [],
     });
   });
 
@@ -669,26 +714,96 @@ describe("a research session through the background", () => {
     });
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
       type: "session.active",
-      payload: { session: null },
+      payload: { session: null, closedSession: { id: "session-1" } },
     });
   });
 
-  it("ends the session when the user removes its group", async () => {
+  it("closes, rather than ends, the session when its group is removed", async () => {
     const { app, database } = await createSessionApp();
     await database.put(SESSION_STORE, activeSession);
 
-    await app.handleGroupRemoved({ id: 42 }, { isWindowClosing: false });
+    await app.handleGroupRemoved({ id: 42 });
 
-    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "saved" });
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      status: "closed",
+      groupId: 42,
+    });
   });
 
-  it("keeps the session when its group goes because the window is closing", async () => {
+  it("reopens a closed session when its group is restored under the same id", async () => {
     const { app, database } = await createSessionApp();
-    await database.put(SESSION_STORE, activeSession);
+    await database.put(SESSION_STORE, { ...activeSession, status: "closed" });
 
-    await app.handleGroupRemoved({ id: 42 }, { isWindowClosing: true });
+    await app.handleGroupCreated({ id: 42, title: "E-bike motors" });
 
     expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "active" });
+  });
+
+  it("marks the first tab of a session it starts", async () => {
+    const sessionTabs = createStubSessionTabs();
+    const { app, database } = await createSessionApp({ sessionTabs });
+
+    await app.handleMessage(buildRpcMessage("tabGroup.create", { title: "E-bike motors" }));
+
+    const session = await database.getFromIndex(SESSION_STORE, "status", "active");
+    await vi.waitFor(() => {
+      expect(sessionTabs.values.get(`7:${SESSION_TAB_VALUE_KEY}`)).toBe(session?.id);
+    });
+  });
+
+  it("marks tabs that join the group, and unmarks tabs that leave it", async () => {
+    const sessionTabs = createStubSessionTabs();
+    const { app, database } = await createSessionApp({ sessionTabs });
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.handleTabCreated({ id: 8, groupId: 42 });
+    await app.handleTabGroupChanged({ id: 9, groupId: 42 });
+    expect(sessionTabs.values.get(`8:${SESSION_TAB_VALUE_KEY}`)).toBe("session-1");
+    expect(sessionTabs.values.get(`9:${SESSION_TAB_VALUE_KEY}`)).toBe("session-1");
+
+    await app.handleTabGroupChanged({ id: 9, groupId: -1 });
+    expect(sessionTabs.values.has(`9:${SESSION_TAB_VALUE_KEY}`)).toBe(false);
+  });
+
+  it("brings session tabs restored after the group is gone into one new group, titled after the session", async () => {
+    const sessionTabs = createStubSessionTabs([]);
+    const { app, database } = await createSessionApp({ sessionTabs });
+    await database.put(SESSION_STORE, { ...activeSession, status: "closed" });
+    sessionTabs.values.set(`8:${SESSION_TAB_VALUE_KEY}`, "session-1");
+    sessionTabs.values.set(`9:${SESSION_TAB_VALUE_KEY}`, "session-1");
+
+    // Restored together, as "reopen all closed tabs" would: unordered they
+    // would each find no group and create one.
+    await Promise.all([
+      app.handleTabCreated({ id: 8, groupId: -1 }),
+      app.handleTabCreated({ id: 9, groupId: -1 }),
+    ]);
+
+    expect(sessionTabs.groupTabs).toHaveBeenNthCalledWith(1, { tabIds: [8] });
+    expect(sessionTabs.groupTabs).toHaveBeenNthCalledWith(2, { tabIds: [9], groupId: 101 });
+    expect(sessionTabs.updateGroup).toHaveBeenCalledWith(101, { title: "E-bike motors" });
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      status: "active",
+      groupId: 101,
+      formerGroupIds: [42],
+    });
+  });
+
+  it("reports a closed session beside no active one", async () => {
+    const { app, database } = await createSessionApp({
+      tabGroups: createStubTabGroups({
+        getGroup: vi.fn().mockRejectedValue(new Error("No group with id: 42")),
+      }),
+    });
+    await database.put(SESSION_STORE, { ...activeSession, status: "closed" });
+
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      type: "session.active",
+      payload: {
+        session: null,
+        closedSession: { id: "session-1", title: "E-bike motors", groupId: 42 },
+      },
+    });
   });
 
   it("renames the session with its group", async () => {
@@ -702,7 +817,7 @@ describe("a research session through the background", () => {
     });
   });
 
-  it("ends a session whose group did not come back after a restart", async () => {
+  it("closes a session whose group did not come back after a restart", async () => {
     const { app, database } = await createSessionApp({
       tabGroups: createStubTabGroups({
         getGroup: vi.fn().mockRejectedValue(new Error("No group with id: 42")),
@@ -712,6 +827,6 @@ describe("a research session through the background", () => {
 
     await app.reconcileSession();
 
-    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "saved" });
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "closed" });
   });
 });

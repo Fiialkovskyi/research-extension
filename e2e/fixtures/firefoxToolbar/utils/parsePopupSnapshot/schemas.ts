@@ -16,6 +16,8 @@ export const popupSnapshotSchema = v.object({
   textColor: v.string(),
   /** Text announcing the active session, or null when the popup shows none. */
   activeSession: v.nullable(v.string()),
+  /** Text naming the closed session a new start would end, or null when there is none. */
+  closedSession: v.nullable(v.string()),
   /** Whether the popup offers the form that starts a session. */
   hasSessionForm: v.boolean(),
 });

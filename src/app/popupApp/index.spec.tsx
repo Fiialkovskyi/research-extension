@@ -7,17 +7,24 @@ import { PopupApp, type PopupClient } from "./index";
 interface ClientAnswers {
   /** The active session's title, or `null` for none. */
   active?: string | null;
+  /** The closed session's title, or `null` for none. */
+  closed?: string | null;
   /** The answer to a start; a rejection when it is an `Error`. */
   start?: unknown;
 }
 
 /** A background that reports `active` when asked, and answers a start with `start`. */
-const createClient = ({ active = null, start }: ClientAnswers = {}): PopupClient => ({
+const createClient = ({
+  active = null,
+  closed = null,
+  start,
+}: ClientAnswers = {}): PopupClient => ({
   request: vi.fn((message: RpcMessage<string, unknown>) => {
     if (message.type === "session.getActive") {
       return Promise.resolve(
         buildRpcMessage("session.active", {
           session: active === null ? null : { id: "session-1", title: active, groupId: 42 },
+          closedSession: closed === null ? null : { id: "session-0", title: closed, groupId: 41 },
         }),
       );
     }
@@ -53,6 +60,15 @@ describe("PopupApp", () => {
 
     expect(await screen.findByTestId("session-active")).toHaveTextContent("E-bike motors");
     expect(screen.queryByLabelText("Session title")).not.toBeInTheDocument();
+  });
+
+  it("names a closed session beside the form, saying a new start ends it", async () => {
+    render(<PopupApp client={createClient({ closed: "E-bike motors" })} />);
+
+    expect(await screen.findByTestId("session-closed")).toHaveTextContent(
+      /“E-bike motors” is closed.*starting a new session ends it/,
+    );
+    expect(screen.getByLabelText("Session title")).toBeInTheDocument();
   });
 
   it("asks the background to start a session, then shows it as active", async () => {

@@ -105,6 +105,7 @@ describe("applyDatabaseUpgrade", () => {
     const name = getNextDatabaseName();
     const before = await openAt(name, 3);
 
+    // Written as version 3 wrote it, before sessions had former groups.
     await before.put(SESSION_STORE, {
       id: "session-1",
       title: "E-bike motors",
@@ -112,7 +113,7 @@ describe("applyDatabaseUpgrade", () => {
       status: "active",
       createdAt: 1,
       updatedAt: 1,
-    });
+    } as never);
     before.close();
 
     const after = await openAt(name, 4);
@@ -148,6 +149,37 @@ describe("applyDatabaseUpgrade", () => {
     expect(await after.count(NODE_STORE)).toBe(1);
     expect(await after.count(EDGE_STORE)).toBe(1);
     expect(await after.count(JOB_STORE)).toBe(0);
+
+    after.close();
+  });
+
+  it("gives a version-5 profile's sessions an empty list of former groups", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 5);
+
+    // Written as version 5 wrote it, before sessions had former groups.
+    await before.put(SESSION_STORE, {
+      id: "session-1",
+      title: "E-bike motors",
+      groupId: 42,
+      status: "saved",
+      createdAt: 1,
+      updatedAt: 1,
+    } as never);
+    before.close();
+
+    const after = await openAt(name, 6);
+
+    expect(after.version).toBe(6);
+    expect(await after.get(SESSION_STORE, "session-1")).toEqual({
+      id: "session-1",
+      title: "E-bike motors",
+      groupId: 42,
+      formerGroupIds: [],
+      status: "saved",
+      createdAt: 1,
+      updatedAt: 1,
+    });
 
     after.close();
   });

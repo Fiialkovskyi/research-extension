@@ -37,6 +37,7 @@ const recorded = (overrides: Partial<StoredSession> = {}): StoredSession => ({
   id: "earlier",
   title: "E-bike motors",
   groupId: 9,
+  formerGroupIds: [],
   status: "active",
   createdAt: 1,
   updatedAt: 1,
@@ -63,6 +64,19 @@ describe("startSession", () => {
     await expect(startSession({ database, title: "Batteries", api })).rejects.toThrow(
       'A session is already active: "E-bike motors".',
     );
+    expect(api.createTab).not.toHaveBeenCalled();
+  });
+
+  it("refuses while a closed session's group is back, reopening that session", async () => {
+    await database.put(SESSION_STORE, recorded({ status: "closed" }));
+    const api = createApi({
+      getGroup: vi.fn().mockResolvedValue({ color: "blue", title: "E-bike motors" }),
+    });
+
+    await expect(startSession({ database, title: "Batteries", api })).rejects.toThrow(
+      'A session is already active: "E-bike motors".',
+    );
+    expect(await database.get(SESSION_STORE, "earlier")).toMatchObject({ status: "active" });
     expect(api.createTab).not.toHaveBeenCalled();
   });
 

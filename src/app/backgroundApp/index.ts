@@ -7,10 +7,15 @@ import { installModel } from "@/features/modelInstall";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
 import {
   buildSessionSummary,
-  endSessionForGroup,
+  closeSessionForGroup,
+  getLiveSession,
   reconcileActiveSession,
   renameSessionForGroup,
+  reopenSessionForGroup,
+  restoreSessionTab,
+  SESSION_TAB_VALUE_KEY,
   startSession,
+  trackSessionTabMembership,
 } from "@/features/researchSession";
 import { BUNDLED_MODEL_PROFILES } from "@/shared/config";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
@@ -95,6 +100,26 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   const getDatabase = async (): Promise<IDBPDatabase<ResearchDatabaseSchema>> => {
     database ??= await dependencies.openDatabase();
     return database;
+  };
+
+  /** The tail of the session work queue. Never rejects, so one failure does not stall the rest. */
+  let sessionWork: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Runs session work one piece at a time, in the order it arrived.
+   *
+   * Browser events about one session come in bursts — a restored group
+   * announces itself, then each of its tabs — and each handler reads the
+   * session, asks the browser, then writes. Run side by side, two restored tabs
+   * of a gone group would both find no group and create two; in order, the
+   * second finds the group the first created.
+   */
+  const serializeSessionWork = <T>(work: () => Promise<T>): Promise<T> => {
+    const result = sessionWork.then(work);
+
+    sessionWork = result.catch(() => undefined);
+
+    return result;
   };
 
   // The switch below is exhaustive over the parsed message union, and the
@@ -242,11 +267,21 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         case "tabGroup.create": {
           try {
-            const { group } = await startSession({
-              database: await getDatabase(),
-              title: request.payload.title,
-              api: dependencies.tabGroups,
-            });
+            const { session, group } = await serializeSessionWork(async () =>
+              startSession({
+                database: await getDatabase(),
+                title: request.payload.title,
+                api: dependencies.tabGroups,
+              }),
+            );
+
+            // The group's first tab joined before the session was recorded, so
+            // the membership event that would have marked it found no session.
+            // A tab that cannot be marked is still the session's while it is
+            // open; it is only not recognised if restored after its group is gone.
+            dependencies.sessionTabs
+              .setTabValue(group.tabId, SESSION_TAB_VALUE_KEY, session.id)
+              .catch(() => undefined);
 
             // Not awaited into the answer: the browser may decline, or take its
             // time asking, and neither outcome changes that the session started.
@@ -259,13 +294,18 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "session.getActive": {
-          const session = await reconcileActiveSession({
-            database: await getDatabase(),
-            getGroup: dependencies.tabGroups.getGroup,
-          });
+          return await serializeSessionWork(async () => {
+            const openedDatabase = await getDatabase();
+            const session = await reconcileActiveSession({
+              database: openedDatabase,
+              getGroup: dependencies.tabGroups.getGroup,
+            });
+            const live = session ?? (await getLiveSession(openedDatabase));
 
-          return buildRpcMessage("session.active", {
-            session: session === undefined ? null : buildSessionSummary(session),
+            return buildRpcMessage("session.active", {
+              session: session === undefined ? null : buildSessionSummary(session),
+              closedSession: live?.status === "closed" ? buildSessionSummary(live) : null,
+            });
           });
         }
 
@@ -329,22 +369,43 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         });
       });
     },
-    handleGroupUpdated: async (group) => {
-      if (group.title !== undefined) {
-        await renameSessionForGroup(await getDatabase(), group.id, group.title);
-      }
-    },
-    handleGroupRemoved: async (group, { isWindowClosing }) => {
-      if (!isWindowClosing) {
-        await endSessionForGroup(await getDatabase(), group.id);
-      }
-    },
-    reconcileSession: async () => {
-      await reconcileActiveSession({
-        database: await getDatabase(),
-        getGroup: dependencies.tabGroups.getGroup,
-      });
-    },
+    handleGroupUpdated: (group) =>
+      serializeSessionWork(async () => {
+        if (group.title !== undefined) {
+          await renameSessionForGroup(await getDatabase(), group.id, group.title);
+        }
+      }),
+    handleGroupCreated: (group) =>
+      serializeSessionWork(async () => {
+        await reopenSessionForGroup(await getDatabase(), group.id);
+      }),
+    handleGroupRemoved: (group) =>
+      serializeSessionWork(async () => {
+        await closeSessionForGroup(await getDatabase(), group.id);
+      }),
+    handleTabCreated: (tab) =>
+      serializeSessionWork(async () => {
+        await restoreSessionTab({
+          database: await getDatabase(),
+          api: dependencies.sessionTabs,
+          tab,
+        });
+      }),
+    handleTabGroupChanged: (tab) =>
+      serializeSessionWork(async () => {
+        await trackSessionTabMembership({
+          database: await getDatabase(),
+          api: dependencies.sessionTabs,
+          tab,
+        });
+      }),
+    reconcileSession: () =>
+      serializeSessionWork(async () => {
+        await reconcileActiveSession({
+          database: await getDatabase(),
+          getGroup: dependencies.tabGroups.getGroup,
+        });
+      }),
     shutdown: () => {
       discardWorker();
       database = undefined;

@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import type { InferenceWorker } from "@/features/inference";
+import type { SessionTab, SessionTabApi } from "@/features/researchSession";
 import type { TabGroupApi } from "@/features/tabGroups";
 import type { PolicyViolationLog } from "@/shared/collectPolicyViolations";
 import type { RpcMessage } from "@/shared/rpc";
@@ -33,6 +34,8 @@ export interface BackgroundDependencies {
   policyViolations: PolicyViolationLog;
   /** The browser's tab and tab group calls, used to start and follow a session. */
   tabGroups: TabGroupApi;
+  /** Per-tab session values and grouping, used to bring restored session tabs back. */
+  sessionTabs: SessionTabApi;
   /**
    * Asks the browser not to evict the database under storage pressure
    * (REQ-STO-009). The browser may decline; a session starts either way.
@@ -79,17 +82,20 @@ export interface BackgroundApp {
   attachPort: (port: BackgroundPort) => void;
   /** Follows a group's rename onto the session, when it is the session's group. */
   handleGroupUpdated: (group: GroupEventDetails) => Promise<void>;
+  /** Reopens the closed session when its group is restored under the same id. */
+  handleGroupCreated: (group: GroupEventDetails) => Promise<void>;
   /**
-   * Ends the session when its group is removed by the user.
+   * Closes the session when its group is removed, by any path.
    *
-   * A removal because the window is closing is ignored: the user did not end
-   * the research, and session restore may bring the group back. Reconciling
-   * decides later whether it did.
+   * Not ended: Firefox removes a group the same way whether the user deleted
+   * it, saved it, closed its window or closed its last tab, and several of
+   * those paths restore it later under the same id.
    */
-  handleGroupRemoved: (
-    group: GroupEventDetails,
-    removeInfo: { isWindowClosing: boolean },
-  ) => Promise<void>;
+  handleGroupRemoved: (group: GroupEventDetails) => Promise<void>;
+  /** Marks a tab created in the session's group, or brings a restored session tab back. */
+  handleTabCreated: (tab: SessionTab) => Promise<void>;
+  /** Keeps a tab's session mark in step with the group it moved to. */
+  handleTabGroupChanged: (tab: SessionTab) => Promise<void>;
   /** Checks the recorded session against the browser, as on browser start-up. */
   reconcileSession: () => Promise<void>;
   /** Releases the worker, if one was ever started. */

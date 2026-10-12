@@ -11,6 +11,7 @@ export const POPUP_SNAPSHOT_SCRIPT = `
     const greeting = document.querySelector('[data-testid="greeting"]');
     const rect = greeting?.getBoundingClientRect();
     const session = document.querySelector('[data-testid="session-active"]');
+    const closedSession = document.querySelector('[data-testid="session-closed"]');
     return JSON.stringify({
       uri: document.documentURI,
       greeting: greeting?.textContent ?? null,
@@ -19,6 +20,7 @@ export const POPUP_SNAPSHOT_SCRIPT = `
       backgroundColor: panel ? getComputedStyle(panel).backgroundColor : "",
       textColor: greeting ? getComputedStyle(greeting).color : "",
       activeSession: session?.textContent ?? null,
+      closedSession: closedSession?.textContent ?? null,
       hasSessionForm: !!document.querySelector('[data-testid="group-form"]'),
     });
   `;

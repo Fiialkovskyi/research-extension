@@ -36,11 +36,12 @@ const responseSchemas = {
 
 /**
  * What the popup shows: nothing yet, the form to start a session (with the
- * last failure, if any), or the session that is active.
+ * last failure, if any, and the closed session a start would end), or the
+ * session that is active.
  */
 type PopupState =
   | { status: "loading" }
-  | { status: "ready"; pending: boolean; failure?: string }
+  | { status: "ready"; pending: boolean; failure?: string; closedTitle?: string }
   | { status: "active"; title: string };
 
 /** Turns the background's answer into what the popup shows. */
@@ -49,9 +50,13 @@ const readAnswer = (answer: unknown): PopupState => {
 
   switch (response.type) {
     case "session.active":
-      return response.payload.session === null
+      if (response.payload.session !== null) {
+        return { status: "active", title: response.payload.session.title };
+      }
+
+      return response.payload.closedSession === null
         ? { status: "ready", pending: false }
-        : { status: "active", title: response.payload.session.title };
+        : { status: "ready", pending: false, closedTitle: response.payload.closedSession.title };
     case "tabGroup.created":
       return { status: "active", title: response.payload.title };
     case "tabGroup.failed":
@@ -119,6 +124,12 @@ export function PopupApp({ client }: PopupAppProps) {
   return (
     <Panel>
       <Greeting />
+      {state.status === "ready" && state.closedTitle !== undefined && (
+        <p data-testid="session-closed" className="mt-2 text-sm">
+          Session “{state.closedTitle}” is closed. Restore its group or one of its tabs to go on
+          with it; starting a new session ends it.
+        </p>
+      )}
       {state.status === "ready" && <GroupForm pending={state.pending} onSubmit={startSession} />}
       {state.status === "ready" && state.failure !== undefined && (
         <p

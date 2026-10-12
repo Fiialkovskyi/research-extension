@@ -58,6 +58,26 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     const jobs = database.createObjectStore(JOB_STORE, { keyPath: "id" });
     jobs.createIndex("statusPriority", ["status", "priority"]);
   },
+  6: (_database, transaction) => {
+    // Sessions written before a session could follow more than one group carry
+    // no list of former groups; an empty one says exactly that. The rewrite
+    // runs inside the version-change transaction, which stays open while it
+    // has requests pending, so the profile reaches version 6 only once done.
+    const sessions = transaction.objectStore(SESSION_STORE);
+    const rewrite = async (): Promise<void> => {
+      let cursor = await sessions.openCursor();
+
+      while (cursor !== null) {
+        if (cursor.value.formerGroupIds === undefined) {
+          await cursor.update({ ...cursor.value, formerGroupIds: [] });
+        }
+
+        cursor = await cursor.continue();
+      }
+    };
+
+    void rewrite();
+  },
 };
 
 /**
