@@ -3,9 +3,9 @@ import "fake-indexeddb/auto";
 import { openDB } from "idb";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { UPGRADE_STEPS, applyModelDatabaseUpgrade } from ".";
+import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
 import { INFERENCE_RUN_STORE, MODEL_FILE_STORE, MODEL_STORE } from "../../../constants";
-import { type ModelDatabaseSchema } from "../../../types";
+import { type ResearchDatabaseSchema } from "../../../types";
 
 let databaseCount = 0;
 
@@ -15,11 +15,11 @@ const getNextDatabaseName = () => `upgrade-test-${(databaseCount += 1)}`;
 const openAt = (
   name: string,
   version: number,
-  steps?: Parameters<typeof applyModelDatabaseUpgrade>[4],
+  steps?: Parameters<typeof applyDatabaseUpgrade>[4],
 ) => {
-  return openDB<ModelDatabaseSchema>(name, version, {
+  return openDB<ResearchDatabaseSchema>(name, version, {
     upgrade: (database, oldVersion, newVersion, transaction) => {
-      applyModelDatabaseUpgrade(database, oldVersion, newVersion ?? version, transaction, steps);
+      applyDatabaseUpgrade(database, oldVersion, newVersion ?? version, transaction, steps);
     },
   });
 };
@@ -28,7 +28,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("applyModelDatabaseUpgrade", () => {
+describe("applyDatabaseUpgrade", () => {
   it("creates every store a fresh profile needs", async () => {
     const database = await openAt(getNextDatabaseName(), 1);
 
@@ -79,7 +79,7 @@ describe("applyModelDatabaseUpgrade", () => {
       3: () => applied.push(3),
     };
 
-    applyModelDatabaseUpgrade(
+    applyDatabaseUpgrade(
       // The steps under test never touch these, so stand-ins keep the test
       // focused on sequencing rather than on IndexedDB behaviour.
       {} as never,
@@ -95,15 +95,15 @@ describe("applyModelDatabaseUpgrade", () => {
   it("applies nothing when the profile is already current", () => {
     const step = vi.fn();
 
-    applyModelDatabaseUpgrade({} as never, 1, 1, {} as never, { 1: step });
+    applyDatabaseUpgrade({} as never, 1, 1, {} as never, { 1: step });
 
     expect(step).not.toHaveBeenCalled();
   });
 
   it("refuses a gap in the sequence rather than skipping it", () => {
-    expect(() =>
-      applyModelDatabaseUpgrade({} as never, 0, 2, {} as never, { 1: () => {} }),
-    ).toThrow(/version 2/);
+    expect(() => applyDatabaseUpgrade({} as never, 0, 2, {} as never, { 1: () => {} })).toThrow(
+      /version 2/,
+    );
   });
 
   it("propagates a failing step rather than swallowing it", () => {
@@ -113,7 +113,7 @@ describe("applyModelDatabaseUpgrade", () => {
       },
     };
 
-    expect(() => applyModelDatabaseUpgrade({} as never, 0, 1, {} as never, steps)).toThrow(
+    expect(() => applyDatabaseUpgrade({} as never, 0, 1, {} as never, steps)).toThrow(
       /migration step failed/,
     );
   });
@@ -133,7 +133,7 @@ describe("applyModelDatabaseUpgrade", () => {
 
       request.addEventListener("upgradeneeded", () => {
         try {
-          applyModelDatabaseUpgrade(request.result as never, 1, 2, request.transaction as never, {
+          applyDatabaseUpgrade(request.result as never, 1, 2, request.transaction as never, {
             2: () => {
               throw new Error("migration step failed");
             },

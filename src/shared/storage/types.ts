@@ -50,7 +50,7 @@ export interface StoredInferenceRun {
   startedAt: number;
 }
 
-export interface ModelDatabaseSchema extends DBSchema {
+export interface ResearchDatabaseSchema extends DBSchema {
   [MODEL_STORE]: {
     key: string;
     value: StoredModel;

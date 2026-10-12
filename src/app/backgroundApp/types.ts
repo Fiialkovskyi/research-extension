@@ -4,7 +4,7 @@ import type { InferenceWorker } from "@/features/inference";
 import type { TabGroupApi } from "@/features/tabGroups";
 import type { PolicyViolationLog } from "@/shared/collectPolicyViolations";
 import type { RpcMessage } from "@/shared/rpc";
-import type { ModelDatabaseSchema } from "@/shared/storage";
+import type { ResearchDatabaseSchema } from "@/shared/storage";
 
 /**
  * Composition root for the background context.
@@ -21,7 +21,7 @@ export interface BackgroundDependencies {
   /** Spawns the inference worker. Called at most once, on first need. */
   createInferenceWorker: () => InferenceWorker;
   /** Opens the add-on's database. Called at most once, on first need. */
-  openDatabase: () => Promise<IDBPDatabase<ModelDatabaseSchema>>;
+  openDatabase: () => Promise<IDBPDatabase<ResearchDatabaseSchema>>;
   fetchResource: typeof fetch;
   /**
    * What the content security policy has refused.

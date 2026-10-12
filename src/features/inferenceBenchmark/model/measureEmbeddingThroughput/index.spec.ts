@@ -7,8 +7,8 @@ import { measureEmbeddingThroughput } from ".";
 import type { WorkerModelSession } from "@/features/inference";
 import {
   INFERENCE_RUN_STORE,
-  type ModelDatabaseSchema,
-  openModelDatabase,
+  type ResearchDatabaseSchema,
+  openResearchDatabase,
   readInferenceRuns,
 } from "@/shared/storage";
 import { MINIMUM_CHUNKS_PER_SECOND } from "../../constants";
@@ -39,10 +39,10 @@ const createStubSession = (overrides: Partial<WorkerModelSession> = {}): WorkerM
   };
 };
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(INFERENCE_RUN_STORE);
 });
 

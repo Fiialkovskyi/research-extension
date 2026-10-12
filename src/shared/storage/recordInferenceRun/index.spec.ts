@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { recordInferenceRun } from ".";
 import { INFERENCE_RUN_STORE, MAXIMUM_INFERENCE_RUNS } from "../constants";
-import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
-import { openModelDatabase } from "../openModelDatabase";
+import { type ResearchDatabaseSchema, type StoredInferenceRun } from "../types";
+import { openResearchDatabase } from "../openResearchDatabase";
 
 const run: StoredInferenceRun = {
   runId: "11111111-1111-4111-8111-111111111111",
@@ -18,10 +18,10 @@ const run: StoredInferenceRun = {
   startedAt: 1_760_000_000_000,
 };
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(INFERENCE_RUN_STORE);
 });
 

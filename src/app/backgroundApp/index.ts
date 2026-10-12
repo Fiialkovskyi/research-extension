@@ -17,7 +17,7 @@ import {
   type RpcMessage,
   RpcMessageError,
 } from "@/shared/rpc";
-import { MODEL_STORE, type ModelDatabaseSchema } from "@/shared/storage";
+import { MODEL_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
 import { requestSchemas } from "./schemas";
 import type { BackgroundApp, BackgroundDependencies, Emit } from "./types";
@@ -40,7 +40,7 @@ const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown>
 
 export const createBackgroundApp = (dependencies: BackgroundDependencies): BackgroundApp => {
   let worker: InferenceWorker | undefined;
-  let database: IDBPDatabase<ModelDatabaseSchema> | undefined;
+  let database: IDBPDatabase<ResearchDatabaseSchema> | undefined;
   /** Compute path the live worker has already initialised its runtime for. */
   let workerDevice: InferenceDevice | undefined;
 
@@ -81,7 +81,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     workerDevice = undefined;
   };
 
-  const getDatabase = async (): Promise<IDBPDatabase<ModelDatabaseSchema>> => {
+  const getDatabase = async (): Promise<IDBPDatabase<ResearchDatabaseSchema>> => {
     database ??= await dependencies.openDatabase();
     return database;
   };

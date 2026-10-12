@@ -2,19 +2,14 @@ import "fake-indexeddb/auto";
 
 import { describe, expect, it } from "vitest";
 
-import { openModelDatabase } from ".";
-import {
-  INFERENCE_RUN_STORE,
-  MODEL_DATABASE_VERSION,
-  MODEL_FILE_STORE,
-  MODEL_STORE,
-} from "../constants";
+import { openResearchDatabase } from ".";
+import { INFERENCE_RUN_STORE, DATABASE_VERSION, MODEL_FILE_STORE, MODEL_STORE } from "../constants";
 
-describe("openModelDatabase", () => {
+describe("openResearchDatabase", () => {
   it("opens at the current schema version with every store present", async () => {
-    const database = await openModelDatabase();
+    const database = await openResearchDatabase();
 
-    expect(database.version).toBe(MODEL_DATABASE_VERSION);
+    expect(database.version).toBe(DATABASE_VERSION);
     expect([...database.objectStoreNames].toSorted()).toEqual(
       [MODEL_STORE, MODEL_FILE_STORE, INFERENCE_RUN_STORE].toSorted(),
     );
@@ -23,12 +18,12 @@ describe("openModelDatabase", () => {
   });
 
   it("can be opened again, so a woken background rebuilds its handle", async () => {
-    const first = await openModelDatabase();
+    const first = await openResearchDatabase();
     first.close();
 
-    const second = await openModelDatabase();
+    const second = await openResearchDatabase();
 
-    expect(second.version).toBe(MODEL_DATABASE_VERSION);
+    expect(second.version).toBe(DATABASE_VERSION);
 
     second.close();
   });

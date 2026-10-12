@@ -129,10 +129,10 @@ const buildModel = (overrides: Partial<InstalledModelSummary> = {}): InstalledMo
 ## 9.7 Storage in tests
 
 - Specs that touch IndexedDB import `fake-indexeddb/auto` first and open the real database through
-  `openModelDatabase` — the same schema and migrations as production.
+  `openResearchDatabase` — the same schema and migrations as production.
 - **Each test starts clean**: clear the stores it uses in `beforeEach`, or open a uniquely named
   database for migration specs.
-- **Migration steps** are tested through `applyModelDatabaseUpgrade`: from a fresh profile and from
+- **Migration steps** are tested through `applyDatabaseUpgrade`: from a fresh profile and from
   each earlier version, with records present.
 
 ## 9.8 End-to-end

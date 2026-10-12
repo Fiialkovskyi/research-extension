@@ -89,7 +89,7 @@ does, pick a precise plain verb (table B) rather than stretching one from table 
 | `set`      | Replaces one value or setting outright.                                                                      | `setSystemColourScheme`                                                |
 | `remove`   | Deletes something that exists.                                                                               | `removeStoredFiles`                                                    |
 | `record`   | Appends an entry to a log; never changes earlier entries.                                                    | `recordInferenceRun`                                                   |
-| `open`     | Acquires a handle or surface that is then used and released.                                                 | `openModelDatabase`, `openOptionsSurface`                              |
+| `open`     | Acquires a handle or surface that is then used and released.                                                 | `openResearchDatabase`, `openOptionsSurface`                           |
 | `reduce`   | A reducer: `(state, event) => state`. Pure.                                                                  | `reduceOptionsState`                                                   |
 
 ### B. Plain verbs for actions

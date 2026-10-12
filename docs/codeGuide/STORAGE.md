@@ -15,7 +15,7 @@ section covers who may write it, how its shape is declared and how that shape ch
 
 ## 6.1 One database, one writer
 
-- **One database**, `research-graph` (`MODEL_DATABASE_NAME`), opened only by `openModelDatabase`.
+- **One database**, `research-graph` (`DATABASE_NAME`), opened only by `openResearchDatabase`.
 - **Only the background writes.** A surface that needs something stored sends a message; the
   background writes and answers. This is not a preference: it rules out transaction races between
   contexts, and it keeps every surface a pure view of what the background reports.
@@ -25,7 +25,7 @@ section covers who may write it, how its shape is declared and how that shape ch
   place to look, one migration story, one thing to clear.
 
 Functions that read or write take the opened database as a parameter
-(`database: IDBPDatabase<ModelDatabaseSchema>`); they never open it themselves. The background app
+(`database: IDBPDatabase<ResearchDatabaseSchema>`); they never open it themselves. The background app
 opens it once, on first need, and passes it down. That is also what makes them testable against
 `fake-indexeddb`.
 
@@ -37,17 +37,17 @@ Everything about the database's shape lives in `src/shared/storage/`:
 shared/storage/
 ├── index.ts                    # barrel
 ├── constants.ts                # name, version, store names, limits
-├── types.ts                    # StoredModel, StoredModelFile, StoredInferenceRun, ModelDatabaseSchema …
-├── openModelDatabase/
+├── types.ts                    # StoredModel, StoredModelFile, StoredInferenceRun, ResearchDatabaseSchema …
+├── openResearchDatabase/
 │   └── utils/
-│       └── applyModelDatabaseUpgrade/   # UPGRADE_STEPS and the runner
+│       └── applyDatabaseUpgrade/   # UPGRADE_STEPS and the runner
 ├── readInferenceRuns/
 └── recordInferenceRun/
 ```
 
 - **Store names are constants** (`MODEL_STORE`, `MODEL_FILE_STORE`, `INFERENCE_RUN_STORE`), used
   everywhere a store is named — never a string literal at a call site.
-- **`ModelDatabaseSchema`** (an `idb` `DBSchema`) declares each store's key, value and indexes. It is
+- **`ResearchDatabaseSchema`** (an `idb` `DBSchema`) declares each store's key, value and indexes. It is
   what types every `get`, `put` and index query; a store or index that is not in it does not
   compile.
 - **Stored types are prefixed `Stored…`** ([2.8](./NAMING.md#28-types)) and are the shape exactly as
@@ -98,7 +98,7 @@ shared/storage/
 
 ## 6.6 Migrations
 
-`MODEL_DATABASE_VERSION` is the schema version. A profile below it is upgraded on open by running
+`DATABASE_VERSION` is the schema version. A profile below it is upgraded on open by running
 each step in `UPGRADE_STEPS` from its version up to the current one:
 
 ```ts
@@ -123,7 +123,7 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
 - **A shape change rewrites existing records** in its step (open a cursor on the store, transform,
   `update`), so code that reads after the upgrade sees only current-shape records and needs no
   "old format" branch.
-- **Steps are tested** through `applyModelDatabaseUpgrade` against `fake-indexeddb`: a fresh profile
+- **Steps are tested** through `applyDatabaseUpgrade` against `fake-indexeddb`: a fresh profile
   reaches the current version, and a profile at each earlier version reaches it too.
 
 ## 6.7 What is never stored
@@ -138,8 +138,8 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
 
 ## 6.8 Changing a stored shape: checklist
 
-1. Change the `Stored…` type and `ModelDatabaseSchema` in `shared/storage`.
-2. Raise `MODEL_DATABASE_VERSION` by one.
+1. Change the `Stored…` type and `ResearchDatabaseSchema` in `shared/storage`.
+2. Raise `DATABASE_VERSION` by one.
 3. Add the step for the new version to `UPGRADE_STEPS`: create stores or indexes, and rewrite
    existing records to the new shape.
 4. Add specs for the step: from a fresh profile and from the previous version, with records present.

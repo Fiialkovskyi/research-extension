@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import type { InferenceDevice } from "@/shared/modelManifest";
-import { MODEL_FILE_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
+import { MODEL_FILE_STORE, type ResearchDatabaseSchema, type StoredModel } from "@/shared/storage";
 import type { EmbeddingRole } from "../../types";
 import type { InferenceWorker } from "../createInferenceWorker";
 
@@ -18,7 +18,7 @@ export interface WorkerModelSession {
 
 export interface LoadModelIntoWorkerOptions {
   model: StoredModel;
-  database: IDBPDatabase<ModelDatabaseSchema>;
+  database: IDBPDatabase<ResearchDatabaseSchema>;
   worker: InferenceWorker;
   device: InferenceDevice;
 }

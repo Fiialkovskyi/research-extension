@@ -1,6 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
-import { MODEL_FILE_STORE, type ModelDatabaseSchema } from "@/shared/storage";
+import { MODEL_FILE_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 
 /**
  * Removes every file stored for one model.
@@ -10,7 +10,7 @@ import { MODEL_FILE_STORE, type ModelDatabaseSchema } from "@/shared/storage";
  * it, and the failure would surface far from its cause.
  */
 export const removeStoredFiles = async (
-  database: IDBPDatabase<ModelDatabaseSchema>,
+  database: IDBPDatabase<ResearchDatabaseSchema>,
   ref: string,
 ): Promise<void> => {
   const keys = await database.getAllKeysFromIndex(MODEL_FILE_STORE, "ref", ref);

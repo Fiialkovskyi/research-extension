@@ -1,7 +1,7 @@
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { INFERENCE_RUN_STORE, MODEL_FILE_STORE, MODEL_STORE } from "../../../constants";
-import { type ModelDatabaseSchema } from "../../../types";
+import { type ResearchDatabaseSchema } from "../../../types";
 
 /**
  * One forward-only migration step, applied when a profile crosses its version.
@@ -11,10 +11,10 @@ import { type ModelDatabaseSchema } from "../../../types";
  * schemas and the same version number.
  */
 type UpgradeStep = (
-  database: IDBPDatabase<ModelDatabaseSchema>,
+  database: IDBPDatabase<ResearchDatabaseSchema>,
   transaction: IDBPTransaction<
-    ModelDatabaseSchema,
-    StoreNames<ModelDatabaseSchema>[],
+    ResearchDatabaseSchema,
+    StoreNames<ResearchDatabaseSchema>[],
     "versionchange"
   >,
 ) => void;
@@ -43,13 +43,13 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
  * provides, so a step that throws aborts the whole upgrade and the profile is
  * left at the version it had. That is what makes the migration safe to retry.
  */
-export const applyModelDatabaseUpgrade = (
-  database: IDBPDatabase<ModelDatabaseSchema>,
+export const applyDatabaseUpgrade = (
+  database: IDBPDatabase<ResearchDatabaseSchema>,
   oldVersion: number,
   targetVersion: number,
   transaction: IDBPTransaction<
-    ModelDatabaseSchema,
-    StoreNames<ModelDatabaseSchema>[],
+    ResearchDatabaseSchema,
+    StoreNames<ResearchDatabaseSchema>[],
     "versionchange"
   >,
   steps: Readonly<Record<number, UpgradeStep>> = UPGRADE_STEPS,

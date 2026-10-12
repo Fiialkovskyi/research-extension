@@ -7,8 +7,8 @@ import { listInstalledModels } from ".";
 import type { ModelManifest } from "@/shared/modelManifest";
 import {
   MODEL_STORE,
-  type ModelDatabaseSchema,
-  openModelDatabase,
+  type ResearchDatabaseSchema,
+  openResearchDatabase,
   type StoredModel,
 } from "@/shared/storage";
 
@@ -40,10 +40,10 @@ const model = (overrides: Partial<StoredModel> & { ref: string }): StoredModel =
   ...overrides,
 });
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(MODEL_STORE);
 });
 

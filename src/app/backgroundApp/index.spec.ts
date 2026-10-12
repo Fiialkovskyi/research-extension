@@ -8,7 +8,7 @@ import type { TabGroupApi } from "@/features/tabGroups";
 import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/utils/getFileDigest";
 import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
-import { MODEL_FILE_STORE, MODEL_STORE, openModelDatabase } from "@/shared/storage";
+import { MODEL_FILE_STORE, MODEL_STORE, openResearchDatabase } from "@/shared/storage";
 
 const pong = { availableDevices: ["wasm"] as const, crossOriginIsolated: false, threadCount: 1 };
 
@@ -62,7 +62,7 @@ const createFailingWorker = () => {
 
 /** An empty database, so one test's installs cannot be seen by the next. */
 const createFreshDatabase = async () => {
-  const database = await openModelDatabase();
+  const database = await openResearchDatabase();
 
   await database.clear(MODEL_STORE);
   await database.clear(MODEL_FILE_STORE);

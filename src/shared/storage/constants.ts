@@ -6,14 +6,14 @@
  */
 
 /** Database name. One database per add-on origin. */
-export const MODEL_DATABASE_NAME = "research-graph";
+export const DATABASE_NAME = "research-graph";
 
 /**
  * Current schema version. Migrations are forward-only: raising this adds a step
  * rather than editing an existing one, so a profile that has already migrated
  * is never asked to migrate differently.
  */
-export const MODEL_DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 2;
 
 export const MODEL_STORE = "models";
 export const MODEL_FILE_STORE = "modelFiles";

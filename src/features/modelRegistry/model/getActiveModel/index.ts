@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import type { ModelFamily } from "@/shared/modelManifest";
-import { MODEL_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
+import { MODEL_STORE, type ResearchDatabaseSchema, type StoredModel } from "@/shared/storage";
 
 /**
  * The only way feature code reaches a model.
@@ -16,7 +16,7 @@ import { MODEL_STORE, type ModelDatabaseSchema, type StoredModel } from "@/share
  * @returns the active model, or nothing when none is available for that family.
  */
 export const getActiveModel = async (
-  database: IDBPDatabase<ModelDatabaseSchema>,
+  database: IDBPDatabase<ResearchDatabaseSchema>,
   family: ModelFamily,
 ): Promise<StoredModel | undefined> => {
   const installed = await database.getAllFromIndex(MODEL_STORE, "family", family);

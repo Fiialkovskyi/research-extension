@@ -5,7 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { downloadModelFiles, type InstallProgress } from ".";
 import type { ModelManifest } from "@/shared/modelManifest";
-import { MODEL_FILE_STORE, type ModelDatabaseSchema, openModelDatabase } from "@/shared/storage";
+import {
+  MODEL_FILE_STORE,
+  type ResearchDatabaseSchema,
+  openResearchDatabase,
+} from "@/shared/storage";
 
 const revision = "751bff37182d3f1213fa05d7196b954e230abad9";
 const ref = `Xenova/all-MiniLM-L6-v2@${revision}`;
@@ -69,11 +73,11 @@ const createStubFetch = (overrides: { body?: string; ok?: boolean; status?: numb
   }) as unknown as typeof fetch;
 };
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 let manifest: ModelManifest;
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(MODEL_FILE_STORE);
   manifest = await buildManifest();
 });

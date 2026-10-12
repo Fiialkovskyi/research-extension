@@ -1,11 +1,11 @@
 import type { IDBPDatabase } from "idb";
 
 import type { ConformanceOutcome } from "@/features/modelConformance";
-import { MODEL_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
+import { MODEL_STORE, type ResearchDatabaseSchema, type StoredModel } from "@/shared/storage";
 
 export interface ActivateModelOptions {
   ref: string;
-  database: IDBPDatabase<ModelDatabaseSchema>;
+  database: IDBPDatabase<ResearchDatabaseSchema>;
   /**
    * Runs the family's conformance suite against this model.
    *

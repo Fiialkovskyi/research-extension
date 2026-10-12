@@ -1,6 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
-import { MODEL_STORE, type ModelDatabaseSchema } from "@/shared/storage";
+import { MODEL_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 import type { InstalledModelSummary } from "../../types";
 
 /**
@@ -12,7 +12,7 @@ import type { InstalledModelSummary } from "../../types";
  * manifest's shape into the view.
  */
 export const listInstalledModels = async (
-  database: IDBPDatabase<ModelDatabaseSchema>,
+  database: IDBPDatabase<ResearchDatabaseSchema>,
 ): Promise<InstalledModelSummary[]> => {
   const installed = await database.getAll(MODEL_STORE);
 

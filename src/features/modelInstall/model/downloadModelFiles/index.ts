@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { getModelRef, type ModelManifest } from "@/shared/modelManifest";
-import { MODEL_FILE_STORE, type ModelDatabaseSchema } from "@/shared/storage";
+import { MODEL_FILE_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 import { assertFileDigest } from "../assertFileDigest";
 import { getHuggingFaceFileUrl } from "@/shared/huggingFace";
 import { removeStoredFiles } from "./utils/removeStoredFiles";
@@ -18,7 +18,7 @@ export interface InstallProgress {
 
 export interface DownloadModelFilesOptions {
   manifest: ModelManifest;
-  database: IDBPDatabase<ModelDatabaseSchema>;
+  database: IDBPDatabase<ResearchDatabaseSchema>;
   fetchResource: typeof fetch;
   onProgress?: (progress: InstallProgress) => void;
 }

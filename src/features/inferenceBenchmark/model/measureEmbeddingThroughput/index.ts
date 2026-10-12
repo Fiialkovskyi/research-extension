@@ -2,7 +2,7 @@ import type { IDBPDatabase } from "idb";
 
 import type { WorkerModelSession } from "@/features/inference";
 import type { InferenceDevice } from "@/shared/modelManifest";
-import { type ModelDatabaseSchema, recordInferenceRun } from "@/shared/storage";
+import { type ResearchDatabaseSchema, recordInferenceRun } from "@/shared/storage";
 import { BENCHMARK_CHUNK_COUNT, MINIMUM_CHUNKS_PER_SECOND, WARM_UP_CHUNKS } from "../../constants";
 import { buildBenchmarkChunks } from "../buildBenchmarkChunks";
 
@@ -22,7 +22,7 @@ export interface ThroughputMeasurement {
 export interface MeasureEmbeddingThroughputOptions {
   session: WorkerModelSession;
   modelRef: string;
-  database: IDBPDatabase<ModelDatabaseSchema>;
+  database: IDBPDatabase<ResearchDatabaseSchema>;
   chunkCount?: number;
   /** Injected so the arithmetic can be tested against a known clock. */
   now?: () => number;

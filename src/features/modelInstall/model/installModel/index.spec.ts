@@ -8,8 +8,8 @@ import { MINILM_L6_V2, type ModelProfile } from "@/shared/config";
 import {
   MODEL_FILE_STORE,
   MODEL_STORE,
-  type ModelDatabaseSchema,
-  openModelDatabase,
+  type ResearchDatabaseSchema,
+  openResearchDatabase,
 } from "@/shared/storage";
 import { getFileDigest } from "../assertFileDigest/utils/getFileDigest";
 
@@ -70,11 +70,11 @@ const createStubFetch = (
   }) as unknown as typeof fetch;
 };
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 let tree: unknown;
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(MODEL_STORE);
   await database.clear(MODEL_FILE_STORE);
   tree = await buildTree();

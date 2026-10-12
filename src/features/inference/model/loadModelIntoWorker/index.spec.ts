@@ -8,8 +8,8 @@ import type { ModelManifest } from "@/shared/modelManifest";
 import { buildRpcMessage } from "@/shared/rpc";
 import {
   MODEL_FILE_STORE,
-  type ModelDatabaseSchema,
-  openModelDatabase,
+  type ResearchDatabaseSchema,
+  openResearchDatabase,
   type StoredModel,
 } from "@/shared/storage";
 import type { InferenceWorker } from "../createInferenceWorker";
@@ -77,7 +77,7 @@ const createStubWorker = (overrides: Partial<Record<string, unknown>> = {}): Inf
   } as unknown as InferenceWorker;
 };
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 
 const storeFiles = async (paths: readonly string[]) => {
   await Promise.all(
@@ -88,7 +88,7 @@ const storeFiles = async (paths: readonly string[]) => {
 };
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(MODEL_FILE_STORE);
 });
 

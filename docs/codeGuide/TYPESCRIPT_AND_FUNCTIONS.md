@@ -105,7 +105,7 @@ A module-private helper may rely on inference when its body is a single expressi
 ```ts
 export interface InstallModelOptions {
   profile: ModelProfile;
-  database: IDBPDatabase<ModelDatabaseSchema>;
+  database: IDBPDatabase<ResearchDatabaseSchema>;
   fetchResource: typeof fetch;
   onProgress?: (progress: InstallProgress) => void;
 }
@@ -261,7 +261,7 @@ Convert at the boundary: a function that reads from such an API returns `undefin
 
 ```ts
 import type { IDBPDatabase } from "idb";
-import { MODEL_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
+import { MODEL_STORE, type ResearchDatabaseSchema, type StoredModel } from "@/shared/storage";
 ```
 
 **Order**, separated as shown:

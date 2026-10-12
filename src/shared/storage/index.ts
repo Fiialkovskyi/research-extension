@@ -1,6 +1,8 @@
 /**
- * The add-on's local database: installed models, their files, and a
- * content-free log of every inference run.
+ * The add-on's one local database. Today it holds installed models, their
+ * files, and a content-free log of every inference run; research data joins it
+ * as further stores, each added by a migration step rather than a second
+ * database.
  *
  * The background is the only writer, which is not merely a preference: it
  * avoids cross-context transaction races and keeps every surface a pure view.
@@ -13,19 +15,19 @@
 
 export {
   INFERENCE_RUN_STORE,
-  MODEL_DATABASE_NAME,
-  MODEL_DATABASE_VERSION,
+  DATABASE_NAME,
+  DATABASE_VERSION,
   MODEL_FILE_STORE,
   MODEL_STORE,
 } from "./constants";
 export type {
   ConformanceStatus,
   InferenceOutcome,
-  ModelDatabaseSchema,
+  ResearchDatabaseSchema,
   StoredInferenceRun,
   StoredModel,
   StoredModelFile,
 } from "./types";
-export { openModelDatabase } from "./openModelDatabase";
+export { openResearchDatabase } from "./openResearchDatabase";
 export { readInferenceRuns } from "./readInferenceRuns";
 export { recordInferenceRun } from "./recordInferenceRun";

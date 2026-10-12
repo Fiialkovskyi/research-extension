@@ -4,7 +4,7 @@ import { defineBackground } from "wxt/utils/define-background";
 import { createBackgroundApp } from "@/app/backgroundApp";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
 import { collectPolicyViolations } from "@/shared/collectPolicyViolations";
-import { openModelDatabase } from "@/shared/storage";
+import { openResearchDatabase } from "@/shared/storage";
 
 /**
  * The background event page.
@@ -24,7 +24,7 @@ export default defineBackground(() => {
   const app = createBackgroundApp({
     createInferenceWorker: () =>
       createInferenceWorker(browser.runtime.getURL(INFERENCE_WORKER_PATH)),
-    openDatabase: openModelDatabase,
+    openDatabase: openResearchDatabase,
     policyViolations,
     // Bound so the extension's own fetch is used, under the package's policy.
     fetchResource: (...args) => fetch(...args),

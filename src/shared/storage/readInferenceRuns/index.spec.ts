@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { readInferenceRuns } from ".";
 import { INFERENCE_RUN_STORE } from "../constants";
-import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
-import { openModelDatabase } from "../openModelDatabase";
+import { type ResearchDatabaseSchema, type StoredInferenceRun } from "../types";
+import { openResearchDatabase } from "../openResearchDatabase";
 import { recordInferenceRun } from "../recordInferenceRun";
 
 const baseRun: StoredInferenceRun = {
@@ -19,10 +19,10 @@ const baseRun: StoredInferenceRun = {
   startedAt: 1_000,
 };
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(INFERENCE_RUN_STORE);
 });
 

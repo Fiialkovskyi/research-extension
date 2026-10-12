@@ -8,8 +8,8 @@ import type { ConformanceOutcome } from "@/features/modelConformance";
 import type { ModelManifest } from "@/shared/modelManifest";
 import {
   MODEL_STORE,
-  type ModelDatabaseSchema,
-  openModelDatabase,
+  type ResearchDatabaseSchema,
+  openResearchDatabase,
   type StoredModel,
 } from "@/shared/storage";
 import { getActiveModel } from "../getActiveModel";
@@ -59,10 +59,10 @@ const failed: ConformanceOutcome = {
   reason: "4 of 20 pairs ordered correctly, 18 required",
 };
 
-let database: IDBPDatabase<ModelDatabaseSchema>;
+let database: IDBPDatabase<ResearchDatabaseSchema>;
 
 beforeEach(async () => {
-  database = await openModelDatabase();
+  database = await openResearchDatabase();
   await database.clear(MODEL_STORE);
 });
 

@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { INFERENCE_RUN_STORE, MAXIMUM_INFERENCE_RUNS } from "../constants";
-import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
+import { type ResearchDatabaseSchema, type StoredInferenceRun } from "../types";
 
 /**
  * Records one inference run for lineage and for honest throughput claims.
@@ -15,7 +15,7 @@ import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
  * the cap, the oldest runs are removed in the same transaction.
  */
 export const recordInferenceRun = async (
-  database: IDBPDatabase<ModelDatabaseSchema>,
+  database: IDBPDatabase<ResearchDatabaseSchema>,
   run: StoredInferenceRun,
 ): Promise<void> => {
   const transaction = database.transaction(INFERENCE_RUN_STORE, "readwrite");

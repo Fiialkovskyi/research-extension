@@ -3,14 +3,14 @@ import type { IDBPDatabase } from "idb";
 import { buildModelManifest, resolveModelRevision } from "@/features/modelRegistry";
 import type { ModelProfile } from "@/shared/config";
 import { getModelRef } from "@/shared/modelManifest";
-import { MODEL_STORE, type ModelDatabaseSchema, type StoredModel } from "@/shared/storage";
+import { MODEL_STORE, type ResearchDatabaseSchema, type StoredModel } from "@/shared/storage";
 import { downloadModelFiles, type InstallProgress } from "../downloadModelFiles";
 import { getModelTreeUrl } from "./utils/getModelTreeUrl";
 import { readRepositoryJson } from "./utils/readRepositoryJson";
 
 export interface InstallModelOptions {
   profile: ModelProfile;
-  database: IDBPDatabase<ModelDatabaseSchema>;
+  database: IDBPDatabase<ResearchDatabaseSchema>;
   fetchResource: typeof fetch;
   onProgress?: (progress: InstallProgress) => void;
 }

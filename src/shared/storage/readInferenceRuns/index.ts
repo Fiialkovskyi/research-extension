@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { INFERENCE_RUN_STORE } from "../constants";
-import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
+import { type ResearchDatabaseSchema, type StoredInferenceRun } from "../types";
 
 /**
  * Reads the recorded runs, newest first, optionally narrowed to one model and
@@ -12,7 +12,7 @@ import { type ModelDatabaseSchema, type StoredInferenceRun } from "../types";
  * so only the runs returned are read.
  */
 export const readInferenceRuns = async (
-  database: IDBPDatabase<ModelDatabaseSchema>,
+  database: IDBPDatabase<ResearchDatabaseSchema>,
   modelRef?: string,
   limit = Number.POSITIVE_INFINITY,
 ): Promise<StoredInferenceRun[]> => {
