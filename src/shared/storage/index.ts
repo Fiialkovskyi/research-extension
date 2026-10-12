@@ -14,21 +14,29 @@
  */
 
 export {
+  EDGE_STORE,
   INFERENCE_RUN_STORE,
   DATABASE_NAME,
   DATABASE_VERSION,
   MODEL_FILE_STORE,
   MODEL_STORE,
+  NODE_STORE,
   SESSION_STORE,
 } from "./constants";
 export type {
   ConformanceStatus,
+  EdgeKind,
   InferenceOutcome,
+  NodeKind,
+  NodeTabState,
   ResearchDatabaseSchema,
   SessionStatus,
+  StoredEdge,
   StoredInferenceRun,
   StoredModel,
   StoredModelFile,
+  StoredNode,
+  StoredNodeSignals,
   StoredSession,
 } from "./types";
 export { openResearchDatabase } from "./openResearchDatabase";

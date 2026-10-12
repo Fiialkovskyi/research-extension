@@ -1,9 +1,11 @@
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import {
+  EDGE_STORE,
   INFERENCE_RUN_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
+  NODE_STORE,
   SESSION_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -42,6 +44,14 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
   3: (database) => {
     const sessions = database.createObjectStore(SESSION_STORE, { keyPath: "id" });
     sessions.createIndex("status", "status");
+  },
+  4: (database) => {
+    const nodes = database.createObjectStore(NODE_STORE, { keyPath: "id" });
+    nodes.createIndex("sessionId", "sessionId");
+    nodes.createIndex("sessionTab", ["sessionId", "tabId"]);
+
+    const edges = database.createObjectStore(EDGE_STORE, { keyPath: "id" });
+    edges.createIndex("sessionId", "sessionId");
   },
 };
 

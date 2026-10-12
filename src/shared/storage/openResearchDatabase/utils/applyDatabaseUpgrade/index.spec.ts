@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
 import {
+  EDGE_STORE,
   INFERENCE_RUN_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
+  NODE_STORE,
   SESSION_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -80,6 +82,42 @@ describe("applyDatabaseUpgrade", () => {
     expect(await after.count(MODEL_STORE)).toBe(1);
     expect(await after.count(INFERENCE_RUN_STORE)).toBe(1);
     expect(await after.count(SESSION_STORE)).toBe(0);
+
+    after.close();
+  });
+
+  it("adds the graph stores, indexed for reading a session and a tab's node", async () => {
+    const database = await openAt(getNextDatabaseName(), 4);
+    const nodes = database.transaction(NODE_STORE).store;
+    const edges = database.transaction(EDGE_STORE).store;
+
+    expect(nodes.keyPath).toBe("id");
+    expect([...nodes.indexNames].toSorted()).toEqual(["sessionId", "sessionTab"]);
+    expect(nodes.index("sessionTab").keyPath).toEqual(["sessionId", "tabId"]);
+    expect(edges.keyPath).toBe("id");
+    expect([...edges.indexNames]).toEqual(["sessionId"]);
+
+    database.close();
+  });
+
+  it("keeps a version-3 profile's sessions when it gains the graph", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 3);
+
+    await before.put(SESSION_STORE, {
+      id: "session-1",
+      title: "E-bike motors",
+      groupId: 42,
+      status: "active",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    before.close();
+
+    const after = await openAt(name, 4);
+
+    expect(await after.get(SESSION_STORE, "session-1")).toMatchObject({ title: "E-bike motors" });
+    expect(await after.count(NODE_STORE)).toBe(0);
 
     after.close();
   });

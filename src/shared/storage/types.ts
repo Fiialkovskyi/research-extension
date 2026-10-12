@@ -2,9 +2,11 @@ import type { DBSchema } from "idb";
 
 import type { InferenceDevice, ModelManifest } from "../modelManifest";
 import type {
+  EDGE_STORE,
   INFERENCE_RUN_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
+  NODE_STORE,
   SESSION_STORE,
 } from "./constants";
 
@@ -83,6 +85,78 @@ export interface StoredSession {
   updatedAt: number;
 }
 
+/** A search results page, or any other page. */
+export type NodeKind = "serp" | "page";
+
+/** Whether the node's tab is still open. Never focused is `focusCount === 0`. */
+export type NodeTabState = "open" | "closed";
+
+/** How two nodes are related (target spec §4, in camelCase). */
+export type EdgeKind = "opener" | "sameTab" | "refinement" | "coAttention" | "return" | "user";
+
+/**
+ * What was observed about a page, as raw counts and extremes.
+ *
+ * The engagement state (unread, skimmed, deep read, dead end) is not here: it
+ * is derived from these by versioned rules, and storing it would need a rewrite
+ * every time the rules change.
+ */
+export interface StoredNodeSignals {
+  /** Focused, visible and not idle, in milliseconds. */
+  activeDwellMs: number;
+  /** Deepest scroll reached, from 0 to 1. */
+  maxScroll: number;
+  /** Copy events seen. Only their number: the copied text is never read. */
+  copyEvents: number;
+  focusCount: number;
+  revisitCount: number;
+}
+
+/** One page recorded in a session's graph. */
+export interface StoredNode {
+  /** A UUID: the same URL visited twice is two nodes. */
+  id: string;
+  sessionId: string;
+  /**
+   * The tab that showed the page. Not in the target spec's `GraphNode`: a woken
+   * background needs it to find the node each tab shows. Tab ids are reused
+   * across restarts, so it identifies a node only together with `tabState`.
+   */
+  tabId: number;
+  kind: NodeKind;
+  url: string;
+  domain: string;
+  title: string;
+  /** The search query, on SERP nodes only. */
+  query?: string;
+  /** The previous node in the same tab, or `null` for the tab's first. */
+  parentNodeId: string | null;
+  /** The node whose tab opened this one, or `null`. */
+  openerNodeId: string | null;
+  /** The browser's transition type for the navigation, such as `link` or `typed`. */
+  transitionType: string;
+  signals: StoredNodeSignals;
+  /** A closed node keeps its history; it is never deleted for closing. */
+  tabState: NodeTabState;
+  createdAt: number;
+  lastFocusedAt?: number;
+}
+
+/** One relation between two nodes of a session. */
+export interface StoredEdge {
+  /**
+   * `${from}|${to}|${kind}`: the relation is its own key, so recording it again
+   * finds the first record instead of adding a second.
+   */
+  id: string;
+  sessionId: string;
+  kind: EdgeKind;
+  from: string;
+  to: string;
+  weight: number;
+  createdAt: number;
+}
+
 export interface ResearchDatabaseSchema extends DBSchema {
   [MODEL_STORE]: {
     key: string;
@@ -103,5 +177,15 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: string;
     value: StoredSession;
     indexes: { status: SessionStatus };
+  };
+  [NODE_STORE]: {
+    key: string;
+    value: StoredNode;
+    indexes: { sessionId: string; sessionTab: [string, number] };
+  };
+  [EDGE_STORE]: {
+    key: string;
+    value: StoredEdge;
+    indexes: { sessionId: string };
   };
 }
