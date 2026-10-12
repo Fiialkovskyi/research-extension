@@ -56,6 +56,8 @@ export interface BackgroundDependencies {
   focusTab: (tabId: number) => Promise<void>;
   /** Selects the map's tab, opening one outside any tab group if none is open. */
   openMap: () => Promise<void>;
+  /** Selects the "What was recorded" tab, opening one outside any tab group if none is open. */
+  openRecordedPage: () => Promise<void>;
   /** Injects the page observer and asks it for a page's text. */
   pageSignals: PageSignalsApi;
   /**

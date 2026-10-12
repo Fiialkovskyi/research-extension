@@ -411,11 +411,12 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [JOB_STORE]: {
     key: string;
     value: StoredJob;
-    indexes: { statusPriority: [JobStatus, number] };
+    indexes: { statusPriority: [JobStatus, number]; sessionId: string };
   };
   [SNAPSHOT_STORE]: {
     key: string;
     value: StoredSnapshot;
+    indexes: { sessionId: string };
   };
   [KEY_STORE]: {
     key: string;
@@ -432,10 +433,11 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [CHUNK_STORE]: {
     key: string;
     value: StoredChunk;
-    indexes: { snapshotId: string };
+    indexes: { snapshotId: string; sessionId: string };
   };
   [VECTOR_STORE]: {
     key: [string, string, number];
     value: StoredVector;
+    indexes: { sessionId: string; nodeId: string };
   };
 }

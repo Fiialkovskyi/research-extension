@@ -128,6 +128,14 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     // One key range per space: a query reads exactly one partition (REQ-LIN-001).
     database.createObjectStore(VECTOR_STORE, { keyPath: ["spaceId", "chunkId", "part"] });
   },
+  12: (_database, transaction) => {
+    // Deleting a page or a session reads exactly what it deletes (REQ-STO-008).
+    transaction.objectStore(SNAPSHOT_STORE).createIndex("sessionId", "sessionId");
+    transaction.objectStore(CHUNK_STORE).createIndex("sessionId", "sessionId");
+    transaction.objectStore(VECTOR_STORE).createIndex("sessionId", "sessionId");
+    transaction.objectStore(VECTOR_STORE).createIndex("nodeId", "nodeId");
+    transaction.objectStore(JOB_STORE).createIndex("sessionId", "sessionId");
+  },
 };
 
 /**

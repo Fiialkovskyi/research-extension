@@ -110,6 +110,7 @@ const buildDependencies = (
     reportError: () => {},
     focusTab: () => Promise.resolve(),
     openMap: () => Promise.resolve(),
+    openRecordedPage: () => Promise.resolve(),
     pageSignals: {
       executeScript: () => Promise.resolve([]),
       requestPageText: () => Promise.resolve(undefined),
@@ -1816,5 +1817,76 @@ describe("embedding deep-read pages through the background", () => {
         embeddingSpaceId: space?.id,
       }),
     );
+  });
+});
+
+/** A session with page A, deep read by a copy, its text kept. */
+const createRecordedApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
+  const signals = await createSignalsApp(overrides);
+  const { app, clock } = signals;
+
+  await app.handleNavigationCommitted(commit("https://example.org/a"));
+  clock.focusedTabId = 7;
+  await app.handleTabActivated(7);
+  await app.handleContentMessage(batch(0.8, 1), FROM_PAGE_A);
+  await app.handleContentMessage(extracted("Mid-drive motors sit at the cranks."), FROM_PAGE_A);
+
+  return signals;
+};
+
+describe("what was recorded, through the background", () => {
+  it("lists the session's pages without their text, and reads a page's text on request", async () => {
+    const { app, database } = await createRecordedApp();
+    const answer = await app.handleMessage(buildRpcMessage("recorded.read", {}));
+    const [node] = await database.getAll(NODE_STORE);
+
+    expect(answer).toMatchObject({
+      type: "recorded.session",
+      payload: {
+        session: {
+          title: "E-bike motors",
+          pages: [expect.objectContaining({ id: node?.id, snapshot: expect.any(Object) })],
+        },
+      },
+    });
+    expect(JSON.stringify(answer)).not.toContain("cranks");
+    expect(
+      await app.handleMessage(buildRpcMessage("recorded.readText", { nodeId: node?.id ?? "" })),
+    ).toMatchObject({ payload: { text: "Mid-drive motors sit at the cranks." } });
+  });
+
+  it("deletes a page with its snapshot", async () => {
+    const { app, database } = await createRecordedApp();
+    const [node] = await database.getAll(NODE_STORE);
+
+    expect(
+      await app.handleMessage(buildRpcMessage("node.delete", { nodeId: node?.id ?? "" })),
+    ).toMatchObject({ type: "node.deleted", payload: { deleted: true } });
+    expect(await database.count(NODE_STORE)).toBe(0);
+    expect(await database.count(SNAPSHOT_STORE)).toBe(0);
+  });
+
+  it("deletes the session, after which no session is active", async () => {
+    const { app } = await createRecordedApp();
+
+    expect(
+      await app.handleMessage(buildRpcMessage("session.delete", { sessionId: "session-1" })),
+    ).toMatchObject({ type: "session.deleted", payload: { deleted: true } });
+    expect(await app.handleMessage(buildRpcMessage("recorded.read", {}))).toMatchObject({
+      payload: { session: null },
+    });
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      payload: { session: null, closedSession: null },
+    });
+  });
+
+  it("opens the page through its dependency", async () => {
+    const openRecordedPage = vi.fn(() => Promise.resolve());
+    const { app } = await createSessionApp({ openRecordedPage });
+
+    expect(await app.handleMessage(buildRpcMessage("recorded.open", {}))).toMatchObject({
+      type: "recorded.opened",
+    });
+    expect(openRecordedPage).toHaveBeenCalledTimes(1);
   });
 });

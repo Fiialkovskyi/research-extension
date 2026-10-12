@@ -284,6 +284,43 @@ describe("applyDatabaseUpgrade", () => {
     database.close();
   });
 
+  it("indexes a version-11 profile's derived records by session, and vectors by page", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 11);
+
+    await before.put(SNAPSHOT_STORE, { id: "s1", sessionId: "session-1", nodeId: "a" } as never);
+    await before.put(CHUNK_STORE, {
+      id: "s1:0",
+      snapshotId: "s1",
+      sessionId: "session-1",
+    } as never);
+    await before.put(VECTOR_STORE, {
+      spaceId: "space",
+      chunkId: "s1:0",
+      part: 0,
+      nodeId: "a",
+      sessionId: "session-1",
+    } as never);
+    await before.put(JOB_STORE, {
+      id: "j1",
+      sessionId: "session-1",
+      status: "done",
+      priority: 0,
+    } as never);
+    before.close();
+
+    const after = await openAt(name, 12);
+
+    expect(after.version).toBe(12);
+    expect(await after.countFromIndex(SNAPSHOT_STORE, "sessionId", "session-1")).toBe(1);
+    expect(await after.countFromIndex(CHUNK_STORE, "sessionId", "session-1")).toBe(1);
+    expect(await after.countFromIndex(VECTOR_STORE, "sessionId", "session-1")).toBe(1);
+    expect(await after.countFromIndex(VECTOR_STORE, "nodeId", "a")).toBe(1);
+    expect(await after.countFromIndex(JOB_STORE, "sessionId", "session-1")).toBe(1);
+
+    after.close();
+  });
+
   it("keys model files by model and path together, so one model holds many files", async () => {
     const database = await openAt(getNextDatabaseName(), 1);
 

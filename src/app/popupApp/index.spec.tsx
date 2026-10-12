@@ -434,8 +434,9 @@ describe("PopupApp", () => {
         />,
       );
       await screen.findByTestId("session-active");
-
-      expect(graph.sent.map(({ type }) => type)).toEqual(["graph.subscribe"]);
+      await vi.waitFor(() =>
+        expect(graph.sent.map(({ type }) => type)).toEqual(["graph.subscribe"]),
+      );
 
       graph.push(
         snapshot(
@@ -464,6 +465,11 @@ describe("PopupApp", () => {
         />,
       );
       await screen.findByTestId("session-active");
+      // The subscription is made by an effect after the session shows; a
+      // snapshot pushed before it would be heard by nobody.
+      await vi.waitFor(() =>
+        expect(graph.sent.map(({ type }) => type)).toContain("graph.subscribe"),
+      );
       graph.push(snapshot(node("a"), node("b", { parentNodeId: "a", createdAt: 2 })));
 
       const tree = screen.getByRole("tree");
@@ -493,6 +499,40 @@ describe("PopupApp", () => {
 
       expect(graph.sent).toEqual([]);
       expect(screen.queryByRole("tree")).toBeNull();
+    });
+  });
+
+  describe("what was recorded", () => {
+    it("is offered during a session and for a closed one, and opens the page", async () => {
+      const client = createClient({ active: "E-bike motors" });
+
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
+      fireEvent.click(await screen.findByTestId("open-recorded"));
+
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "recorded.open" }),
+      );
+    });
+
+    it("is offered for a closed session", async () => {
+      render(
+        <PopupApp
+          graph={buildGraph()}
+          client={createClient({ closed: "E-bike motors" })}
+          pageAccess={buildPageAccess()}
+        />,
+      );
+
+      expect(await screen.findByTestId("open-recorded")).toBeInTheDocument();
+    });
+
+    it("is not offered without a session", async () => {
+      render(
+        <PopupApp graph={buildGraph()} client={createClient()} pageAccess={buildPageAccess()} />,
+      );
+      await screen.findByLabelText("Session title");
+
+      expect(screen.queryByTestId("open-recorded")).toBeNull();
     });
   });
 });

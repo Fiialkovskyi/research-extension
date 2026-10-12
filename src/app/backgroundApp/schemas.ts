@@ -3,6 +3,7 @@ import { inferenceRequestSchemas } from "@/features/inference";
 import { benchmarkRequestSchemas } from "@/features/inferenceBenchmark";
 import { modelInstallRequestSchemas } from "@/features/modelInstall";
 import { modelRegistryRequestSchemas } from "@/features/modelRegistry";
+import { recordedDataRequestSchemas } from "@/features/recordedData";
 import { researchMapRequestSchemas } from "@/features/researchMap";
 import { researchSessionRequestSchemas } from "@/features/researchSession";
 import { tabGroupRequestSchemas } from "@/features/tabGroups";
@@ -14,6 +15,7 @@ export const requestSchemas = {
   ...inferenceRequestSchemas,
   ...modelInstallRequestSchemas,
   ...modelRegistryRequestSchemas,
+  ...recordedDataRequestSchemas,
   ...researchMapRequestSchemas,
   ...researchSessionRequestSchemas,
   ...tabGroupRequestSchemas,

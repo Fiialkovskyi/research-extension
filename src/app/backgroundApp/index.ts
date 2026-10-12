@@ -21,6 +21,12 @@ import {
   reclusterActiveSession,
   RECLUSTER_DELAY_MS,
 } from "@/features/researchClusters";
+import {
+  deleteNode,
+  deleteSession,
+  readRecordedSession,
+  readRecordedText,
+} from "@/features/recordedData";
 import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
 import {
   type EmbeddingSession,
@@ -776,6 +782,51 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           await dependencies.openMap();
 
           return buildRpcMessage("map.opened", {});
+        }
+
+        case "recorded.open": {
+          await dependencies.openRecordedPage();
+
+          return buildRpcMessage("recorded.opened", {});
+        }
+
+        case "recorded.read": {
+          return buildRpcMessage("recorded.session", {
+            session: (await readRecordedSession(await getDatabase())) ?? null,
+          });
+        }
+
+        case "recorded.readText": {
+          const { nodeId } = request.payload;
+
+          return buildRpcMessage("recorded.text", {
+            nodeId,
+            text: await readRecordedText(await getDatabase(), nodeId),
+          });
+        }
+
+        case "node.delete": {
+          const { nodeId } = request.payload;
+          let deleted = false;
+
+          // On the capture queue, so no capture write interleaves with the
+          // cascade; the clusters are recomputed without the page afterwards.
+          await captureAndPush(async (openedDatabase) => {
+            deleted = await deleteNode(openedDatabase, nodeId);
+          });
+
+          return buildRpcMessage("node.deleted", { nodeId, deleted });
+        }
+
+        case "session.delete": {
+          const { sessionId } = request.payload;
+          let deleted = false;
+
+          await captureAndPush(async (openedDatabase) => {
+            deleted = await deleteSession(openedDatabase, sessionId);
+          });
+
+          return buildRpcMessage("session.deleted", { sessionId, deleted });
         }
 
         case "model.install": {

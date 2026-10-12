@@ -264,6 +264,13 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
     [client, hasPageAccess, requestPageAccess],
   );
 
+  // Opened like the map: the background finds its tab or opens one outside groups.
+  const openRecorded = useCallback(() => {
+    client.request(buildRpcMessage("recorded.open", {})).catch((error: unknown) => {
+      setMapFailure(getErrorMessage(error));
+    });
+  }, [client]);
+
   // The background finds the map's tab or opens one, outside the session's group.
   const openMap = useCallback(() => {
     client
@@ -282,6 +289,13 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
           Session “{state.closedTitle}” is closed. Restore its group or one of its tabs to go on
           with it; starting a new session ends it.
         </p>
+      )}
+      {state.status === "ready" && state.closedTitle !== undefined && (
+        <div className="mt-2">
+          <Button data-testid="open-recorded" onClick={openRecorded}>
+            What was recorded
+          </Button>
+        </div>
       )}
       {state.status === "ready" && <GroupForm pending={state.pending} onSubmit={startSession} />}
       {state.status === "ready" && state.failure !== undefined && (
@@ -305,6 +319,9 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
         <div className="mt-3">
           <Button data-testid="open-map" onClick={openMap}>
             Open map
+          </Button>{" "}
+          <Button data-testid="open-recorded" onClick={openRecorded}>
+            What was recorded
           </Button>
         </div>
       )}
