@@ -33,6 +33,7 @@ export { reopenSessionForGroup } from "./model/reopenSessionForGroup";
 export { restoreSessionTab } from "./model/restoreSessionTab";
 export type { RestoredTabOutcome, RestoreSessionTabOptions } from "./model/restoreSessionTab";
 export { setSessionFocus } from "./model/setSessionFocus";
+export type { SessionFocus } from "./model/setSessionFocus";
 export { startSession } from "./model/startSession";
 export type { StartedSession, StartSessionOptions } from "./model/startSession";
 export { trackSessionTabMembership } from "./model/trackSessionTabMembership";

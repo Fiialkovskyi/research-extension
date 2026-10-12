@@ -91,6 +91,27 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     // them when it next starts (`pageSnapshots/sealPlaintextSnapshots`).
     database.createObjectStore(KEY_STORE, { keyPath: "id" });
   },
+  9: (_database, transaction) => {
+    // Nodes recorded before quick returns were counted had none; zero says
+    // exactly that. Rewritten inside the version-change transaction, like 6.
+    const nodes = transaction.objectStore(NODE_STORE);
+    const rewrite = async (): Promise<void> => {
+      let cursor = await nodes.openCursor();
+
+      while (cursor !== null) {
+        if (cursor.value.signals.quickReturnCount === undefined) {
+          await cursor.update({
+            ...cursor.value,
+            signals: { ...cursor.value.signals, quickReturnCount: 0 },
+          });
+        }
+
+        cursor = await cursor.continue();
+      }
+    };
+
+    void rewrite();
+  },
 };
 
 /**

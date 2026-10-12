@@ -43,6 +43,7 @@ export type {
   StoredModelFile,
   StoredNode,
   StoredNodeSignals,
+  StoredFocusSwitch,
   StoredFocusVisit,
   StoredSession,
   StoredSnapshot,

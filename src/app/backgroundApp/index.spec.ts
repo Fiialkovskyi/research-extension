@@ -1519,6 +1519,32 @@ describe("page signals and reading time through the background", () => {
     expect(await database.count(SNAPSHOT_STORE)).toBe(0);
   });
 
+  it("pushes the map a co-attention edge once the user flips between two pages", async () => {
+    const { app, clock } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
+
+    const map = createFakePort();
+
+    app.attachPort(map.port);
+    map.send(buildRpcMessage("graph.subscribe", {}));
+
+    for (const tabId of [7, 8, 7, 8]) {
+      clock.now += 5_000;
+      clock.focusedTabId = tabId;
+      await app.handleTabActivated(tabId);
+    }
+
+    await vi.waitFor(() => {
+      const latest = readSnapshots(map.posted).at(-1)?.payload as unknown as
+        | { edges: { kind: string }[] }
+        | undefined;
+
+      expect(latest?.edges).toEqual([expect.objectContaining({ kind: "coAttention" })]);
+    });
+  });
+
   it("pushes the map a page's engagement as it changes", async () => {
     const { app, map } = await createSubscribedApp({
       tabCapture: createTabCapture(sessionTab()),

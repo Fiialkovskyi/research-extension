@@ -40,19 +40,30 @@ describe("setSessionFocus", () => {
   it("records the visit on the active session", async () => {
     await database.put(SESSION_STORE, buildSession("active"));
 
-    expect(await setSessionFocus(database, "session-1", VISIT)).toBe(true);
-    expect((await database.get(SESSION_STORE, "session-1"))?.focus).toEqual(VISIT);
+    const recentSwitches = [{ from: "node-0", to: "node-1", at: 900 }];
+
+    expect(await setSessionFocus(database, "session-1", { focus: VISIT, recentSwitches })).toBe(
+      true,
+    );
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      focus: VISIT,
+      recentSwitches,
+    });
   });
 
   it("leaves a session that is no longer active as it was", async () => {
     await database.put(SESSION_STORE, buildSession("closed"));
 
-    expect(await setSessionFocus(database, "session-1", VISIT)).toBe(false);
+    expect(await setSessionFocus(database, "session-1", { focus: VISIT, recentSwitches: [] })).toBe(
+      false,
+    );
     expect((await database.get(SESSION_STORE, "session-1"))?.focus).toBeUndefined();
   });
 
   it("writes nothing for a session that does not exist", async () => {
-    expect(await setSessionFocus(database, "session-1", VISIT)).toBe(false);
+    expect(await setSessionFocus(database, "session-1", { focus: VISIT, recentSwitches: [] })).toBe(
+      false,
+    );
     expect(await database.count(SESSION_STORE)).toBe(0);
   });
 });

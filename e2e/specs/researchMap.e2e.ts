@@ -31,6 +31,14 @@ import {
   readResearchMap,
 } from "../fixtures/researchMap/utils";
 
+/**
+ * The edges a spec about capture asserts on. The harness selects tabs while it
+ * finds them, which flips focus between session pages as a user would, so
+ * co-attention edges may appear; they are covered by their own spec.
+ */
+const withoutCoAttention = <TEdge extends { kind: string }>(edges: TEdge[]): TEdge[] =>
+  edges.filter((edge) => edge.kind !== "coAttention");
+
 /** Opens the popup, reads it, and closes it again. */
 const readPopupOnce = async (): Promise<PopupSnapshot> => {
   await clickToolbarAction();
@@ -206,7 +214,7 @@ describe("the research map", () => {
     const map = await waitForMap(
       (snapshot) =>
         snapshot.nodes.length === 3 &&
-        snapshot.edges.length === 2 &&
+        withoutCoAttention(snapshot.edges).length === 2 &&
         snapshot.nodes.some((node) => node.label === "Page B") &&
         snapshot.nodes.some((node) => node.label === "Page A" && node.tabState === "closed"),
       "pages A, B and C",
@@ -219,7 +227,11 @@ describe("the research map", () => {
     expect(a).toMatchObject({ tabState: "closed", isButton: false });
     expect(b).toMatchObject({ tabState: "open", isButton: true });
     expect(c).toMatchObject({ tabState: "open", isButton: true });
-    expect(map.edges.map((edge) => [edge.id, edge.kind]).toSorted()).toEqual(
+    expect(
+      withoutCoAttention(map.edges)
+        .map((edge) => [edge.id, edge.kind])
+        .toSorted(),
+    ).toEqual(
       [
         [`${a.id}|${b.id}|sameTab`, "sameTab"],
         [`${a.id}|${c.id}|opener`, "opener"],

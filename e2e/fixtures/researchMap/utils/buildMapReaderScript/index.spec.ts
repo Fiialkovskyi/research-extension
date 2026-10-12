@@ -30,7 +30,8 @@ describe("buildMapReaderScript", () => {
         <button data-testid="map-node" data-node-id="b" data-tab-state="open" data-engagement="deep_read" title="Page B"></button>
       </div>
       <svg><g class="react-flow__edge edge-sameTab" data-id="a|b|sameTab"></g>
-        <g class="react-flow__edge edge-opener" data-id="a|c|opener"></g></svg>`;
+        <g class="react-flow__edge edge-opener" data-id="a|c|opener"></g>
+        <g class="react-flow__edge edge-coAttention" data-id="b|c|coAttention"></g></svg>`;
 
     expect(read()).toMatchObject({
       empty: false,
@@ -42,6 +43,7 @@ describe("buildMapReaderScript", () => {
       edges: [
         { id: "a|b|sameTab", kind: "sameTab" },
         { id: "a|c|opener", kind: "opener" },
+        { id: "b|c|coAttention", kind: "coAttention" },
       ],
     });
   });

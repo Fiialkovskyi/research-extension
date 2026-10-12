@@ -21,6 +21,14 @@ import {
 import { PAGE_ORIGIN_VARIABLE } from "../fixtures/pageServer/constants";
 import { readResearchDatabase, type ResearchSnapshot } from "../fixtures/researchDatabase/utils";
 
+/**
+ * The edges a spec about capture asserts on. The harness selects tabs while it
+ * finds them, which flips focus between session pages as a user would, so
+ * co-attention edges may appear; they are covered by their own spec.
+ */
+const withoutCoAttention = <TEdge extends { kind: string }>(edges: TEdge[]): TEdge[] =>
+  edges.filter((edge) => edge.kind !== "coAttention");
+
 /** Opens the popup, reads it, and closes it again. */
 const readPopupOnce = async (): Promise<PopupSnapshot> => {
   await clickToolbarAction();
@@ -126,7 +134,7 @@ describe("capturing a session's pages", () => {
       tabState: "open",
       hasParent: true,
     });
-    expect(graph.edges.map((edge) => edge.kind)).toEqual(["sameTab"]);
+    expect(withoutCoAttention(graph.edges).map((edge) => edge.kind)).toEqual(["sameTab"]);
     expect((await readPopupOnce()).activeSession).toContain(title);
   });
 

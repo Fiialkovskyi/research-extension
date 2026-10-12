@@ -31,6 +31,9 @@ export const mapSnapshotSchema = v.object({
   sessionTitle: v.nullable(v.string()),
   nodes: v.array(mapNodeSnapshotSchema),
   edges: v.array(
-    v.object({ id: v.string(), kind: v.picklist(["sameTab", "opener", "refinement", "other"]) }),
+    v.object({
+      id: v.string(),
+      kind: v.picklist(["sameTab", "opener", "refinement", "coAttention", "other"]),
+    }),
   ),
 });

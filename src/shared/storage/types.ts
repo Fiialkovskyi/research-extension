@@ -104,8 +104,20 @@ export interface StoredSession {
    * unloaded event page loses no reading time. Absent until the first focus.
    */
   focus?: StoredFocusVisit;
+  /**
+   * Moves of focus from one node to another in the last few minutes, oldest
+   * first, from which co-attention is counted. Absent until the first move.
+   */
+  recentSwitches?: StoredFocusSwitch[];
   createdAt: number;
   updatedAt: number;
+}
+
+/** Focus moving from one node to another, and when. */
+export interface StoredFocusSwitch {
+  from: string;
+  to: string;
+  at: number;
 }
 
 /**
@@ -149,6 +161,8 @@ export interface StoredNodeSignals {
   copyEvents: number;
   focusCount: number;
   revisitCount: number;
+  /** First visits, reached from a search, that went straight back to a search. */
+  quickReturnCount: number;
 }
 
 /** One page recorded in a session's graph. */

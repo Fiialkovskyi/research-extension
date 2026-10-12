@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { trackActiveDwell } from ".";
 import { followTabMembership } from "../followTabMembership";
 import type { CaptureTab } from "../../types";
+import { recordNavigation } from "../recordNavigation";
 import {
   EDGE_STORE,
   NODE_STORE,
@@ -171,5 +172,64 @@ describe("trackActiveDwell", () => {
 
     expect(await track(7, 1_000)).toEqual({ dwelledNodeId: undefined });
     expect(await database.count(SESSION_STORE)).toBe(0);
+  });
+
+  it("links two pages the user moves between three times within 5 minutes", async () => {
+    await track(7, 0);
+    await track(8, 10_000);
+    await track(7, 20_000);
+
+    expect(await database.count(EDGE_STORE)).toBe(0);
+
+    await track(8, 30_000);
+
+    expect(await database.getAll(EDGE_STORE)).toEqual([
+      expect.objectContaining({ kind: "coAttention" }),
+    ]);
+  });
+
+  it("does not link pages compared too slowly", async () => {
+    await track(7, 0);
+    await track(8, 1 * MINUTE);
+    await track(7, 4 * MINUTE);
+    await track(8, 7 * MINUTE);
+
+    expect(await database.count(EDGE_STORE)).toBe(0);
+  });
+
+  it("does not take losing and regaining window focus for a move", async () => {
+    await track(7, 0);
+    await track(undefined, 1_000);
+    await track(7, 2_000);
+    await track(undefined, 3_000);
+    await track(7, 4_000);
+    await track(8, 5_000);
+
+    expect(await database.count(EDGE_STORE)).toBe(0);
+    expect((await database.get(SESSION_STORE, "session-1"))?.recentSwitches).toEqual([
+      expect.objectContaining({ at: 5_000 }),
+    ]);
+  });
+
+  it("counts a quick return when the user goes back to the search in the same tab", async () => {
+    const api = {
+      getTab: () => Promise.resolve({ ...sessionTab(9, "https://duckduckgo.com/?q=motors") }),
+      queryGroupTabs: () => Promise.resolve([]),
+    };
+    const navigate = (url: string) =>
+      recordNavigation({
+        database,
+        api,
+        navigation: { tabId: 9, frameId: 0, url, transitionType: "link" },
+      });
+
+    await navigate("https://duckduckgo.com/?q=motors");
+    await track(9, 0);
+    await navigate("https://example.org/result");
+    await track(9, 1_000);
+    await navigate("https://duckduckgo.com/?q=motors");
+    await track(9, 5_000);
+
+    expect((await readNode("https://example.org/result")).signals.quickReturnCount).toBe(1);
   });
 });

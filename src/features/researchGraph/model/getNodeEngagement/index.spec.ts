@@ -9,6 +9,7 @@ const buildNode = (signals: Partial<Parameters<typeof getNodeEngagement>[0]["sig
     copyEvents: 0,
     focusCount: 1,
     revisitCount: 0,
+    quickReturnCount: 0,
     ...signals,
   },
 });
@@ -63,6 +64,21 @@ describe("getNodeEngagement", () => {
     expect(getNodeEngagement(buildNode({ activeDwellMs: 8_000 }), LEFT)).toBe("skimmed");
     expect(getNodeEngagement(buildNode({ activeDwellMs: 1_000, maxScroll: 0.15 }), LEFT)).toBe(
       "skimmed",
+    );
+  });
+
+  it("calls a page left straight for the search a dead end, even while it is focused", () => {
+    expect(
+      getNodeEngagement(
+        buildNode({ quickReturnCount: 1, activeDwellMs: 9_000, maxScroll: 0.3 }),
+        FOCUSED,
+      ),
+    ).toBe("dead_end");
+  });
+
+  it("does not let a quick return outweigh a deep read", () => {
+    expect(getNodeEngagement(buildNode({ quickReturnCount: 1, copyEvents: 1 }), LEFT)).toBe(
+      "deep_read",
     );
   });
 });

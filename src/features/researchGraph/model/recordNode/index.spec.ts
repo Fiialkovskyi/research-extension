@@ -43,7 +43,14 @@ describe("recordNode", () => {
       tabId: 7,
       url: "https://example.org/motors",
       tabState: "open",
-      signals: { activeDwellMs: 0, maxScroll: 0, copyEvents: 0, focusCount: 0, revisitCount: 0 },
+      signals: {
+        activeDwellMs: 0,
+        maxScroll: 0,
+        copyEvents: 0,
+        focusCount: 0,
+        revisitCount: 0,
+        quickReturnCount: 0,
+      },
     });
     expect(await database.get(NODE_STORE, node.id)).toEqual(node);
   });

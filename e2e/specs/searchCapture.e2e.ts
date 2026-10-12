@@ -20,6 +20,14 @@ import { PAGE_ORIGIN_VARIABLE } from "../fixtures/pageServer/constants";
 import { readResearchDatabase, type ResearchSnapshot } from "../fixtures/researchDatabase/utils";
 import { type MapSnapshot, readResearchMap } from "../fixtures/researchMap/utils";
 
+/**
+ * The edges a spec about capture asserts on. The harness selects tabs while it
+ * finds them, which flips focus between session pages as a user would, so
+ * co-attention edges may appear; they are covered by their own spec.
+ */
+const withoutCoAttention = <TEdge extends { kind: string }>(edges: TEdge[]): TEdge[] =>
+  edges.filter((edge) => edge.kind !== "coAttention");
+
 /** The page server's port, which the search hosts are served on too. */
 const readPort = (): string => {
   const origin = process.env[PAGE_ORIGIN_VARIABLE];
@@ -134,7 +142,11 @@ describe("searching in a session", () => {
     expect(root).toMatchObject({ kind: "serp", query: "e-bike motors" });
     expect(refined).toMatchObject({ kind: "serp", query: "e-bike mid-drive motors" });
     expect(result).toMatchObject({ kind: "page", query: null });
-    expect(graph.edges.map((edge) => [edge.kind, edge.from, edge.to]).toSorted()).toEqual(
+    expect(
+      withoutCoAttention(graph.edges)
+        .map((edge) => [edge.kind, edge.from, edge.to])
+        .toSorted(),
+    ).toEqual(
       [
         ["opener", root?.id, result?.id],
         ["refinement", root?.id, refined?.id],
@@ -151,7 +163,7 @@ describe("searching in a session", () => {
     await closePopup();
 
     const map = await waitForMap(
-      (snapshot) => snapshot.nodes.length === 3 && snapshot.edges.length === 3,
+      (snapshot) => snapshot.nodes.length === 3 && withoutCoAttention(snapshot.edges).length === 3,
       "three nodes and three edges",
     );
     const root = map.nodes.find((node) => node.label === "e-bike motors");
@@ -160,11 +172,11 @@ describe("searching in a session", () => {
     expect(root).toMatchObject({ kind: "serp", text: expect.stringContaining("search ·") });
     expect(refined).toMatchObject({ kind: "serp", text: expect.stringContaining("search ·") });
     expect(map.nodes.filter((node) => node.kind === "page")).toHaveLength(1);
-    expect(map.edges.map((edge) => edge.kind).toSorted()).toEqual([
-      "opener",
-      "refinement",
-      "sameTab",
-    ]);
+    expect(
+      withoutCoAttention(map.edges)
+        .map((edge) => edge.kind)
+        .toSorted(),
+    ).toEqual(["opener", "refinement", "sameTab"]);
     expect(refined?.top ?? 0).toBeGreaterThan(root?.top ?? Number.POSITIVE_INFINITY);
   });
 });

@@ -1,7 +1,7 @@
 import { ENGAGEMENT_RULES, type ENGAGEMENT_STATES } from "@/shared/config";
 import type { StoredNode } from "@/shared/storage";
 
-/** How engaged the user was with a page, by `engagement_rules@1`. */
+/** How engaged the user was with a page, by the current engagement rules. */
 export type EngagementState = (typeof ENGAGEMENT_STATES)[number];
 
 export interface EngagementContext {
@@ -22,7 +22,8 @@ export const getNodeEngagement = (
   node: Pick<StoredNode, "signals">,
   { isFocused }: EngagementContext,
 ): EngagementState => {
-  const { activeDwellMs, maxScroll, copyEvents, focusCount, revisitCount } = node.signals;
+  const { activeDwellMs, maxScroll, copyEvents, focusCount, revisitCount, quickReturnCount } =
+    node.signals;
 
   if (focusCount === 0) {
     return "unread";
@@ -36,10 +37,13 @@ export const getNodeEngagement = (
     return "deep_read";
   }
 
+  // A quick return is a dead end even while the page is focused: the user has
+  // already left it once for the search.
   if (
-    !isFocused &&
-    activeDwellMs < ENGAGEMENT_RULES.deadEndDwellMs &&
-    maxScroll < ENGAGEMENT_RULES.deadEndScroll
+    quickReturnCount > 0 ||
+    (!isFocused &&
+      activeDwellMs < ENGAGEMENT_RULES.deadEndDwellMs &&
+      maxScroll < ENGAGEMENT_RULES.deadEndScroll)
   ) {
     return "dead_end";
   }

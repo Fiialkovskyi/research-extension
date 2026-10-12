@@ -14,7 +14,14 @@ const node: StoredNode = {
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",
-  signals: { activeDwellMs: 1000, maxScroll: 0.8, copyEvents: 1, focusCount: 2, revisitCount: 0 },
+  signals: {
+    activeDwellMs: 1000,
+    maxScroll: 0.8,
+    copyEvents: 1,
+    focusCount: 2,
+    revisitCount: 0,
+    quickReturnCount: 0,
+  },
   tabState: "open",
   createdAt: 1,
   lastFocusedAt: 500,
@@ -23,14 +30,20 @@ const node: StoredNode = {
 describe("mergeNodeSignals", () => {
   it("adds dwell and every count", () => {
     expect(
-      mergeNodeSignals(node, { activeDwellMs: 500, copyEvents: 2, focusCount: 1, revisitCount: 1 })
-        .signals,
+      mergeNodeSignals(node, {
+        activeDwellMs: 500,
+        copyEvents: 2,
+        focusCount: 1,
+        revisitCount: 1,
+        quickReturnCount: 1,
+      }).signals,
     ).toEqual({
       activeDwellMs: 1500,
       maxScroll: 0.8,
       copyEvents: 3,
       focusCount: 3,
       revisitCount: 1,
+      quickReturnCount: 1,
     });
   });
 

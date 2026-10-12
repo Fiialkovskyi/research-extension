@@ -91,6 +91,35 @@ describe("buildMapLayout", () => {
     expect(edges[0]).not.toHaveProperty("style");
   });
 
+  it("draws co-attention without an arrow and in a dash of its own, and ranks nothing by it", () => {
+    // C and D were both opened from B and compared side by side.
+    const compared: GraphSnapshot = {
+      ...snapshot,
+      nodes: [...snapshot.nodes, buildNode("d", { tabId: 3, openerNodeId: "b" })],
+      edges: [...snapshot.edges, { id: "b|d|opener", from: "b", to: "d", kind: "opener" }],
+    };
+    const withCoAttention = buildMapLayout({
+      ...compared,
+      edges: [
+        ...compared.edges,
+        { id: "c|d|coAttention", from: "c", to: "d", kind: "coAttention" },
+      ],
+    });
+    const without = buildMapLayout(compared);
+    const coAttention = withCoAttention.edges.find(({ id }) => id === "c|d|coAttention");
+    const dashes = withCoAttention.edges.map(({ style }) => style?.strokeDasharray);
+
+    expect(coAttention).toMatchObject({
+      className: "edge-coAttention",
+      style: { strokeDasharray: "1 3 6 3" },
+    });
+    expect(coAttention).not.toHaveProperty("markerEnd");
+    expect(new Set(dashes).size).toBe(dashes.length - 1);
+    expect(["c", "d"].map((id) => readPosition(withCoAttention, id))).toEqual(
+      ["c", "d"].map((id) => readPosition(without, id)),
+    );
+  });
+
   it("carries what a node renders, falling back to the URL for a blank title", () => {
     const layout = buildMapLayout({
       ...snapshot,

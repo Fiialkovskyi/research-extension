@@ -24,7 +24,14 @@ const buildNode = (overrides: Partial<StoredNode> = {}): StoredNode => ({
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",
-  signals: { activeDwellMs: 0, maxScroll: 0, copyEvents: 1, focusCount: 1, revisitCount: 0 },
+  signals: {
+    activeDwellMs: 0,
+    maxScroll: 0,
+    copyEvents: 1,
+    focusCount: 1,
+    revisitCount: 0,
+    quickReturnCount: 0,
+  },
   tabState: "open",
   createdAt: 1,
   ...overrides,
@@ -64,6 +71,7 @@ describe("readSnapshotCandidate", () => {
           copyEvents: 0,
           focusCount: 1,
           revisitCount: 0,
+          quickReturnCount: 0,
         },
       }),
     );

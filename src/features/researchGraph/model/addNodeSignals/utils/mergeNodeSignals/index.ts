@@ -27,6 +27,7 @@ export const mergeNodeSignals = (node: StoredNode, observation: SignalObservatio
       copyEvents: signals.copyEvents + (observation.copyEvents ?? 0),
       focusCount: signals.focusCount + (observation.focusCount ?? 0),
       revisitCount: signals.revisitCount + (observation.revisitCount ?? 0),
+      quickReturnCount: signals.quickReturnCount + (observation.quickReturnCount ?? 0),
     },
     ...(lastFocusedAt === undefined ? {} : { lastFocusedAt }),
   };

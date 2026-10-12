@@ -17,7 +17,14 @@ export const recordNode = async (
   const recorded: StoredNode = {
     ...node,
     id: crypto.randomUUID(),
-    signals: { activeDwellMs: 0, maxScroll: 0, copyEvents: 0, focusCount: 0, revisitCount: 0 },
+    signals: {
+      activeDwellMs: 0,
+      maxScroll: 0,
+      copyEvents: 0,
+      focusCount: 0,
+      revisitCount: 0,
+      quickReturnCount: 0,
+    },
     tabState: "open",
     createdAt: Date.now(),
   };

@@ -230,6 +230,32 @@ describe("applyDatabaseUpgrade", () => {
     after.close();
   });
 
+  it("gives a version-8 profile's nodes a quick-return count of zero", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 8);
+    const signals = {
+      activeDwellMs: 4,
+      maxScroll: 0.5,
+      copyEvents: 1,
+      focusCount: 2,
+      revisitCount: 0,
+      quickReturnCount: 0,
+    };
+
+    await before.put(NODE_STORE, { id: "node-1", sessionId: "s", tabId: 7, signals } as never);
+    before.close();
+
+    const after = await openAt(name, 9);
+
+    expect(after.version).toBe(9);
+    expect(await after.get(NODE_STORE, "node-1")).toMatchObject({
+      tabId: 7,
+      signals: { ...signals, quickReturnCount: 0 },
+    });
+
+    after.close();
+  });
+
   it("keys model files by model and path together, so one model holds many files", async () => {
     const database = await openAt(getNextDatabaseName(), 1);
 

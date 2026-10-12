@@ -6,19 +6,19 @@
 export const ENGAGEMENT_STATES = ["unread", "skimmed", "deep_read", "dead_end"] as const;
 
 /**
- * The rule set that derives a node's engagement from its signals
+ * The rule set that derives a node's engagement from its signals, and the
+ * focus thresholds capture applies
  * (target spec §4, "Engagement states").
  *
  * Versioned because the state is derived, never stored: a change here
  * re-labels every node at once, and anything that records a decision taken on
  * a state — such as a snapshot — can say which rules took it.
  *
- * The target table's "return to the SERP within 10 s" dead-end clause is not
- * part of this version: it needs the SERP a page was reached from and when
- * focus went back to it, which nothing records yet.
+ * Version 2 adds the target table's quick return to the search to the dead
+ * end, and the co-attention thresholds capture links pages by.
  */
 export const ENGAGEMENT_RULES = {
-  version: "engagement_rules@1",
+  version: "engagement_rules@2",
   /** Deep read by reading: at least this much active dwell… */
   deepReadDwellMs: 45_000,
   /** …together with at least this much of the page scrolled into view. */
@@ -31,6 +31,17 @@ export const ENGAGEMENT_RULES = {
   deadEndDwellMs: 8_000,
   /** …and less of the page scrolled into view than this. */
   deadEndScroll: 0.15,
+  /**
+   * Dead end by leaving: a first visit to a page reached from a search that
+   * goes back to a search before this much active dwell.
+   */
+  quickReturnMs: 10_000,
+  /** Co-attention: this many moves between the same two pages… */
+  coAttentionMoves: 3,
+  /** …within this long. */
+  coAttentionWindowMs: 300_000,
+  /** The most recent moves the session keeps for counting co-attention. */
+  maximumRecentSwitches: 50,
   /** Without input for this long, the user is idle and dwell stops counting. */
   idleThresholdSeconds: 60,
   /**

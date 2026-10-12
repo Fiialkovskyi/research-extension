@@ -27,7 +27,14 @@ const node: StoredNode = {
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "typed",
-  signals: { activeDwellMs: 5, maxScroll: 0.5, copyEvents: 1, focusCount: 2, revisitCount: 0 },
+  signals: {
+    activeDwellMs: 5,
+    maxScroll: 0.5,
+    copyEvents: 1,
+    focusCount: 2,
+    revisitCount: 0,
+    quickReturnCount: 0,
+  },
   tabState: "closed",
   createdAt: 10,
   lastFocusedAt: 11,
@@ -86,6 +93,7 @@ describe("buildGraphSnapshot", () => {
         copyEvents: 0,
         focusCount: 1,
         revisitCount: 0,
+        quickReturnCount: 0,
       },
     };
     const unread: StoredNode = {

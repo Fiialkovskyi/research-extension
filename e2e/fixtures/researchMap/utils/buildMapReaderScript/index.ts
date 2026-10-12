@@ -33,7 +33,8 @@ export const buildMapReaderScript = (): string => {
     const readKind = (edge) =>
       edge.classList.contains("edge-opener") ? "opener"
         : edge.classList.contains("edge-sameTab") ? "sameTab"
-        : edge.classList.contains("edge-refinement") ? "refinement" : "other";
+        : edge.classList.contains("edge-refinement") ? "refinement"
+        : edge.classList.contains("edge-coAttention") ? "coAttention" : "other";
     return JSON.stringify({
       documentId: window[${key}],
       nodesChangedAt: window[${changedKey}],

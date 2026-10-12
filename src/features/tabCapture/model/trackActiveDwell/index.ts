@@ -3,7 +3,10 @@ import type { IDBPDatabase } from "idb";
 import { addNodeSignals, readTabNode } from "@/features/researchGraph";
 import { getActiveSession, setSessionFocus } from "@/features/researchSession";
 import { ENGAGEMENT_RULES } from "@/shared/config";
-import type { ResearchDatabaseSchema, StoredFocusVisit } from "@/shared/storage";
+import type { ResearchDatabaseSchema, StoredFocusSwitch, StoredFocusVisit } from "@/shared/storage";
+
+import { countQuickReturn } from "./utils/countQuickReturn";
+import { linkCoAttention } from "./utils/linkCoAttention";
 
 export interface TrackActiveDwellOptions {
   database: IDBPDatabase<ResearchDatabaseSchema>;
@@ -43,6 +46,9 @@ const getIntervalMs = (since: number, now: number): number =>
  * when the same node is read again; it ends when another node gets focus. A
  * visit to a node that already had dwell is a revisit, counted once it reaches
  * the revisit threshold.
+ *
+ * Focus moving from one node to another is also what co-attention and quick
+ * returns are counted from, so both are decided here, on the same move.
  */
 export const trackActiveDwell = async ({
   database,
@@ -87,6 +93,19 @@ export const trackActiveDwell = async ({
   const target =
     focusedTabId === undefined ? undefined : await readTabNode(database, session.id, focusedTabId);
 
+  let recentSwitches: StoredFocusSwitch[] = session.recentSwitches ?? [];
+
+  if (target !== undefined && visit !== undefined && visit.nodeId !== target.id) {
+    recentSwitches = [
+      ...recentSwitches.filter(
+        ({ at }) => at > now - ENGAGEMENT_RULES.coAttentionWindowMs && at <= now,
+      ),
+      { from: visit.nodeId, to: target.id, at: now },
+    ].slice(-ENGAGEMENT_RULES.maximumRecentSwitches);
+    await linkCoAttention(database, session.id, recentSwitches);
+    await countQuickReturn(database, visit, target);
+  }
+
   if (target !== undefined) {
     visit =
       visit?.nodeId === target.id
@@ -101,7 +120,7 @@ export const trackActiveDwell = async ({
   }
 
   if (visit !== undefined) {
-    await setSessionFocus(database, session.id, visit);
+    await setSessionFocus(database, session.id, { focus: visit, recentSwitches });
   }
 
   return { dwelledNodeId };

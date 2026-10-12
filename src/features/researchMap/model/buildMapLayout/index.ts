@@ -55,7 +55,9 @@ export const buildMapLayout = (snapshot: GraphSnapshot): MapLayout => {
   // An edge to a node the snapshot does not hold would make dagre invent one.
   const edges = snapshot.edges.filter((edge) => graph.hasNode(edge.from) && graph.hasNode(edge.to));
 
-  for (const edge of edges) {
+  // Co-attention joins pages read side by side: neither came first, so it is
+  // drawn but ranks nothing.
+  for (const edge of edges.filter(({ kind }) => kind !== "coAttention")) {
     graph.setEdge(edge.from, edge.to);
   }
 
@@ -98,15 +100,21 @@ export const buildMapLayout = (snapshot: GraphSnapshot): MapLayout => {
         source: edge.from,
         target: edge.to,
         className: `edge-${edge.kind}`,
-        markerEnd: { type: MarkerType.ArrowClosed },
       };
 
-      // Dashed for an opener and dotted for a refinement, so the kinds differ
-      // in shape and not only in colour; a same-tab edge stays solid.
+      // Dashed for an opener, dotted for a refinement and dash-dotted for
+      // co-attention, so the kinds differ in shape and not only in colour; a
+      // same-tab edge stays solid. Co-attention has no direction, so no arrow.
       if (edge.kind === "opener") {
         drawn.style = { strokeDasharray: "6 4" };
       } else if (edge.kind === "refinement") {
         drawn.style = { strokeDasharray: "2 4" };
+      } else if (edge.kind === "coAttention") {
+        drawn.style = { strokeDasharray: "1 3 6 3" };
+      }
+
+      if (edge.kind !== "coAttention") {
+        drawn.markerEnd = { type: MarkerType.ArrowClosed };
       }
 
       return drawn;
