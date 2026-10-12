@@ -57,7 +57,7 @@ WHEN a node's tab closes, the node SHALL be marked closed and SHALL keep its sig
 
 ### Requirement: Pages read in the session's group become nodes
 
-WHEN a page commits in the top frame of a tab that is in the active session's group, the extension SHALL record a node for it within 1 s. It SHALL NOT record a node for a reload, a fragment change, a page that is not `http` or `https`, a page on the capture denylist, a tab in a private window, or a tab outside the group.
+WHEN a page commits in the top frame of a tab that is in the active session's group, the extension SHALL record a node for it within 1 s. It SHALL NOT record a node for a reload, a fragment change, a commit of the URL the tab's current page already has, a page that is not `http` or `https`, a page on the capture denylist, a tab in a private window, or a tab outside the group.
 
 #### Scenario: Navigating in a session tab
 
@@ -71,6 +71,12 @@ WHEN a page commits in the top frame of a tab that is in the active session's gr
 
 - **WHEN** the user reloads a session tab
 - **THEN** no node is recorded
+
+#### Scenario: An unloaded tab loads its page
+
+- **GIVEN** a resumed session tab whose node A is `https://example.org/a`, not yet loaded
+- **WHEN** the user selects it and it loads `https://example.org/a`
+- **THEN** no node is recorded, and A stays the tab's node
 
 #### Scenario: New-tab page
 
