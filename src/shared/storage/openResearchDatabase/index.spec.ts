@@ -7,6 +7,7 @@ import {
   DATABASE_VERSION,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
+  JOB_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -26,6 +27,7 @@ describe("openResearchDatabase", () => {
         SESSION_STORE,
         NODE_STORE,
         EDGE_STORE,
+        JOB_STORE,
       ].toSorted(),
     );
 

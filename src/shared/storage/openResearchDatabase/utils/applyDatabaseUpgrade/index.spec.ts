@@ -7,6 +7,7 @@ import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
 import {
   EDGE_STORE,
   INFERENCE_RUN_STORE,
+  JOB_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -118,6 +119,35 @@ describe("applyDatabaseUpgrade", () => {
 
     expect(await after.get(SESSION_STORE, "session-1")).toMatchObject({ title: "E-bike motors" });
     expect(await after.count(NODE_STORE)).toBe(0);
+
+    after.close();
+  });
+
+  it("adds a jobs store indexed by status and priority", async () => {
+    const database = await openAt(getNextDatabaseName(), 5);
+    const jobs = database.transaction(JOB_STORE).store;
+
+    expect(jobs.keyPath).toBe("id");
+    expect([...jobs.indexNames]).toEqual(["statusPriority"]);
+    expect(jobs.index("statusPriority").keyPath).toEqual(["status", "priority"]);
+
+    database.close();
+  });
+
+  it("keeps a version-4 profile's graph when it gains the job queue", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 4);
+
+    // Only the keys matter here: the step under test never reads the records.
+    await before.put(NODE_STORE, { id: "node-1", sessionId: "session-1", tabId: 7 } as never);
+    await before.put(EDGE_STORE, { id: "a|b|opener", sessionId: "session-1" } as never);
+    before.close();
+
+    const after = await openAt(name, 5);
+
+    expect(await after.count(NODE_STORE)).toBe(1);
+    expect(await after.count(EDGE_STORE)).toBe(1);
+    expect(await after.count(JOB_STORE)).toBe(0);
 
     after.close();
   });

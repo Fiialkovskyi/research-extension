@@ -1,6 +1,7 @@
 # research-graph Specification
 
 ## Purpose
+
 TBD - created by archiving change add-graph-store. Update Purpose after archive.
 
 ## Requirements

@@ -4,6 +4,7 @@ import type { InferenceDevice, ModelManifest } from "../modelManifest";
 import type {
   EDGE_STORE,
   INFERENCE_RUN_STORE,
+  JOB_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -157,6 +158,43 @@ export interface StoredEdge {
   createdAt: number;
 }
 
+/** Where a job is in its life. `failed` is final until the work is asked for again. */
+export type JobStatus = "queued" | "running" | "done" | "failed";
+
+/**
+ * One unit of background work, durable across event-page unloads.
+ *
+ * Its id is derived from what it does — type, inputs, producer version — so the
+ * same work asked for twice is one job, not two.
+ */
+export interface StoredJob {
+  /** SHA-256 of the type, the sorted input hashes and the producer version. */
+  id: string;
+  type: string;
+  /** The session the work is for, so deleting a session can find its jobs. */
+  sessionId?: string;
+  /** Content hashes of what the job reads. Part of its identity. */
+  inputHashes: string[];
+  /** Version of the code or model that produces the output. Part of its identity. */
+  producerVersion: string;
+  status: JobStatus;
+  /** Higher runs first. */
+  priority: number;
+  /** Failed attempts so far. An interrupted attempt is not counted. */
+  attempts: number;
+  /** The job is not handed out before this time; a retry's backoff sets it. */
+  nextAttemptAt: number;
+  /**
+   * The job type's own progress record, opaque to the queue. The job validates
+   * it when it reads it back; kept across retries so a retry resumes.
+   */
+  checkpoint?: unknown;
+  /** Why the last attempt failed, shown when the job has failed for good. */
+  failureReason?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ResearchDatabaseSchema extends DBSchema {
   [MODEL_STORE]: {
     key: string;
@@ -187,5 +225,10 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: string;
     value: StoredEdge;
     indexes: { sessionId: string };
+  };
+  [JOB_STORE]: {
+    key: string;
+    value: StoredJob;
+    indexes: { statusPriority: [JobStatus, number] };
   };
 }

@@ -3,6 +3,7 @@ import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 import {
   EDGE_STORE,
   INFERENCE_RUN_STORE,
+  JOB_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
   NODE_STORE,
@@ -52,6 +53,10 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
 
     const edges = database.createObjectStore(EDGE_STORE, { keyPath: "id" });
     edges.createIndex("sessionId", "sessionId");
+  },
+  5: (database) => {
+    const jobs = database.createObjectStore(JOB_STORE, { keyPath: "id" });
+    jobs.createIndex("statusPriority", ["status", "priority"]);
   },
 };
 
