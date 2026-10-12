@@ -198,4 +198,46 @@ describe("recordNavigation", () => {
     expect(api.getTab).not.toHaveBeenCalled();
     expect(await readNodes()).toHaveLength(0);
   });
+
+  it("records a search as a SERP, and a narrower search after it as a refinement", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+
+    try {
+      const first = "https://duckduckgo.com/?q=e-bike+motors";
+      const second = "https://www.bing.com/search?q=e-bike+mid-drive+motors";
+      const root = await recordNavigation({
+        database,
+        api: createApi(sessionTab({ url: first })),
+        navigation: commit({ url: first, transitionType: "typed" }),
+      });
+      vi.advanceTimersByTime(1);
+      const refined = await recordNavigation({
+        database,
+        api: createApi(sessionTab({ url: second })),
+        navigation: commit({ url: second, transitionType: "typed" }),
+      });
+
+      expect(root).toMatchObject({ kind: "serp", query: "e-bike motors" });
+      expect(refined).toMatchObject({ kind: "serp", query: "e-bike mid-drive motors" });
+      expect(
+        (await database.getAll(EDGE_STORE))
+          .map((edge) => [edge.kind, edge.from, edge.to])
+          .toSorted(),
+      ).toEqual(
+        [
+          ["refinement", root?.id, refined?.id],
+          ["sameTab", root?.id, refined?.id],
+        ].toSorted(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("records a result followed from a search as a plain page", async () => {
+    expect(
+      await recordNavigation({ database, api: createApi(sessionTab()), navigation: commit() }),
+    ).toMatchObject({ kind: "page" });
+    expect((await readNodes())[0]).not.toHaveProperty("query");
+  });
 });

@@ -53,6 +53,7 @@ describe("buildGraphSnapshot", () => {
           title: "A",
           url: "https://example.com/a",
           domain: "example.com",
+          kind: "page",
           tabId: 7,
           tabState: "closed",
           parentNodeId: null,
@@ -62,6 +63,15 @@ describe("buildGraphSnapshot", () => {
         },
       ],
       edges: [{ id: "node-a|node-b|sameTab", from: "node-a", to: "node-b", kind: "sameTab" }],
+    });
+  });
+
+  it("carries a SERP's kind and query", () => {
+    const serp: StoredNode = { ...node, kind: "serp", query: "e-bike motors" };
+
+    expect(buildGraphSnapshot(session, { nodes: [serp], edges: [] }).nodes[0]).toMatchObject({
+      kind: "serp",
+      query: "e-bike motors",
     });
   });
 

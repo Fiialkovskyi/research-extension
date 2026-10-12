@@ -7,13 +7,14 @@ import {
   MAP_NODE_WIDTH,
   MAP_RANK_SEPARATION,
 } from "../../constants";
-import type { GraphSnapshot } from "../../types";
+import type { GraphSnapshot, MapNode } from "../../types";
 
 /** What a drawn node needs to render itself. */
 export interface MapNodeData extends Record<string, unknown> {
-  /** The page title, or its URL when the page reported none. */
+  /** A SERP's query; otherwise the page title, or its URL when the page reported none. */
   label: string;
   domain: string;
+  kind: "serp" | "page";
   tabId: number;
   tabState: "open" | "closed";
 }
@@ -23,6 +24,15 @@ export interface MapLayout {
   nodes: Node<MapNodeData, "page">[];
   edges: Edge[];
 }
+
+/** What a node is called on the map: a search by its query, a page by its title. */
+const readNodeLabel = (node: MapNode): string => {
+  if (node.kind === "serp" && node.query !== undefined) {
+    return node.query;
+  }
+
+  return node.title.trim() === "" ? node.url : node.title;
+};
 
 /**
  * Lays the snapshot out top-down, so a page sits below the page it was reached
@@ -72,8 +82,9 @@ export const buildMapLayout = (snapshot: GraphSnapshot): MapLayout => {
           { type: "source", position: Position.Bottom, x: MAP_NODE_WIDTH / 2, y: MAP_NODE_HEIGHT },
         ],
         data: {
-          label: node.title.trim() === "" ? node.url : node.title,
+          label: readNodeLabel(node),
           domain: node.domain,
+          kind: node.kind,
           tabId: node.tabId,
           tabState: node.tabState,
         },
@@ -88,9 +99,12 @@ export const buildMapLayout = (snapshot: GraphSnapshot): MapLayout => {
         markerEnd: { type: MarkerType.ArrowClosed },
       };
 
-      // Dashed for an opener, so the two kinds differ in shape and not only in colour.
+      // Dashed for an opener and dotted for a refinement, so the kinds differ
+      // in shape and not only in colour; a same-tab edge stays solid.
       if (edge.kind === "opener") {
         drawn.style = { strokeDasharray: "6 4" };
+      } else if (edge.kind === "refinement") {
+        drawn.style = { strokeDasharray: "2 4" };
       }
 
       return drawn;

@@ -1,4 +1,5 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
+import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -28,5 +29,32 @@ describe("startPageServer", () => {
     expect(page.headers.get("content-type")).toContain("text/html");
     expect(await page.text()).toBe("<title>A</title>");
     expect((await fetch(`${server.origin}/missing.html`)).status).toBe(404);
+  });
+
+  it("answers a search host with a results page for the query", async () => {
+    server = await startPageServer(await mkdtemp(join(tmpdir(), "pages-")));
+
+    const { port } = new URL(server.origin);
+    // Sent as the browser sends it once the profile resolves the host here.
+    const body = await new Promise<string>((resolve, reject) => {
+      request(
+        {
+          host: "127.0.0.1",
+          port,
+          path: "/?q=e-bike+motors",
+          headers: { host: `duckduckgo.com:${port}` },
+        },
+        (response) => {
+          let text = "";
+          response.on("data", (chunk: Buffer) => (text += chunk.toString()));
+          response.on("end", () => resolve(text));
+        },
+      )
+        .on("error", reject)
+        .end();
+    });
+
+    expect(body).toContain("<title>e-bike motors - Search</title>");
+    expect(body).toContain(`href="${server.origin}/a.html"`);
   });
 });

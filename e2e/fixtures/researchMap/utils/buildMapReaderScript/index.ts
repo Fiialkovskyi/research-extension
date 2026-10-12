@@ -2,7 +2,7 @@ import { MAP_DOCUMENT_KEY, MAP_NODES_CHANGED_KEY } from "../../constants";
 
 /**
  * Builds the script, evaluated in the map page, that reports what it shows: the
- * empty state, the session title, every node with its label, state and place,
+ * empty state, the session title, every node with its label, kind, text, state and place,
  * and every edge with its kind.
  *
  * A node's place is the top-left corner of the box React Flow positions, so a
@@ -32,7 +32,8 @@ export const buildMapReaderScript = (): string => {
     }
     const readKind = (edge) =>
       edge.classList.contains("edge-opener") ? "opener"
-        : edge.classList.contains("edge-sameTab") ? "sameTab" : "other";
+        : edge.classList.contains("edge-sameTab") ? "sameTab"
+        : edge.classList.contains("edge-refinement") ? "refinement" : "other";
     return JSON.stringify({
       documentId: window[${key}],
       nodesChangedAt: window[${changedKey}],
@@ -43,6 +44,8 @@ export const buildMapReaderScript = (): string => {
         return {
           id: node.dataset.nodeId,
           label: node.title,
+          kind: node.dataset.nodeKind,
+          text: node.textContent,
           tabState: node.dataset.tabState,
           isButton: node.tagName === "BUTTON",
           top: box.top,

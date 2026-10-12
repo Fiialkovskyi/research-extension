@@ -87,14 +87,17 @@ export const readResearchDatabase = async (): Promise<ResearchSnapshot> => {
                         status,
                       })),
                       nodes: nodes.result.map((node) => ({
+                        id: node.id,
                         url: node.url,
+                        kind: node.kind,
+                        query: node.query ?? null,
                         transitionType: node.transitionType,
                         tabState: node.tabState,
                         hasOpener: node.openerNodeId !== null,
                         hasParent: node.parentNodeId !== null,
                         createdAt: node.createdAt,
                       })),
-                      edges: edges.result.map(({ kind }) => ({ kind })),
+                      edges: edges.result.map(({ kind, from, to }) => ({ kind, from, to })),
                       groups: groups.map(({ id, title }) => ({ id, title: title ?? "" })),
                     }),
                   );

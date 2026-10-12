@@ -9,6 +9,7 @@ const buildNode = (id: string, overrides: Partial<MapNode> = {}): MapNode => ({
   title: id.toUpperCase(),
   url: `https://example.com/${id}`,
   domain: "example.com",
+  kind: "page",
   tabId: 1,
   tabState: "open",
   parentNodeId: null,
@@ -99,8 +100,32 @@ describe("buildMapLayout", () => {
     expect(layout.nodes[0]).toMatchObject({
       id: "a",
       type: "page",
-      data: { label: "https://example.com/a", domain: "example.com", tabId: 9, tabState: "closed" },
+      data: {
+        label: "https://example.com/a",
+        domain: "example.com",
+        kind: "page",
+        tabId: 9,
+        tabState: "closed",
+      },
     });
+  });
+
+  it("labels a search by its query, dots refinement edges, and ranks a refined search below the root", () => {
+    const layout = buildMapLayout({
+      ...snapshot,
+      nodes: [
+        buildNode("root", { kind: "serp", query: "e-bike motors" }),
+        buildNode("refined", { tabId: 2, kind: "serp", query: "e-bike mid-drive motors" }),
+      ],
+      edges: [{ id: "root|refined|refinement", from: "root", to: "refined", kind: "refinement" }],
+    });
+
+    expect(layout.nodes[0]?.data).toMatchObject({ label: "e-bike motors", kind: "serp" });
+    expect(layout.edges[0]).toMatchObject({
+      className: "edge-refinement",
+      style: { strokeDasharray: "2 4" },
+    });
+    expect(readPosition(layout, "refined").y).toBeGreaterThan(readPosition(layout, "root").y);
   });
 
   it("lays out nothing for an empty snapshot", () => {

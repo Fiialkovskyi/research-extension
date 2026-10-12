@@ -5,7 +5,11 @@ export const researchSnapshotSchema = v.object({
   sessions: v.array(v.object({ title: v.string(), groupId: v.number(), status: v.string() })),
   nodes: v.array(
     v.object({
+      id: v.string(),
       url: v.string(),
+      kind: v.string(),
+      /** The search query, on SERP nodes only. */
+      query: v.nullable(v.string()),
       transitionType: v.string(),
       tabState: v.string(),
       hasOpener: v.boolean(),
@@ -14,7 +18,7 @@ export const researchSnapshotSchema = v.object({
       createdAt: v.number(),
     }),
   ),
-  edges: v.array(v.object({ kind: v.string() })),
+  edges: v.array(v.object({ kind: v.string(), from: v.string(), to: v.string() })),
   /** The groups as the extension sees them, with the extension's ids. */
   groups: v.array(v.object({ id: v.number(), title: v.string() })),
 });

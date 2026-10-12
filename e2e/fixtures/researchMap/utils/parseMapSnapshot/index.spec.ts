@@ -7,8 +7,19 @@ const snapshot = {
   nodesChangedAt: null,
   empty: false,
   sessionTitle: "Motors",
-  nodes: [{ id: "a", label: "Page A", tabState: "open", isButton: true, top: 10, left: 20 }],
-  edges: [{ id: "a|b|sameTab", kind: "sameTab" }],
+  nodes: [
+    {
+      id: "a",
+      label: "e-bike motors",
+      kind: "serp",
+      text: "e-bike motorssearch · duckduckgo.com",
+      tabState: "open",
+      isButton: true,
+      top: 10,
+      left: 20,
+    },
+  ],
+  edges: [{ id: "a|b|refinement", kind: "refinement" }],
 };
 
 describe("parseMapSnapshot", () => {

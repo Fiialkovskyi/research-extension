@@ -6,6 +6,9 @@ export const mapNodeSchema = v.object({
   title: v.string(),
   url: v.string(),
   domain: v.string(),
+  /** `serp` for a search engine's results page, which carries its `query`. */
+  kind: v.picklist(["serp", "page"]),
+  query: v.optional(v.string()),
   tabId: v.number(),
   tabState: v.picklist(["open", "closed"]),
   parentNodeId: v.nullable(v.string()),

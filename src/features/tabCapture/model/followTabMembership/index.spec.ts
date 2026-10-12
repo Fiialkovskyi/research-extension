@@ -101,4 +101,15 @@ describe("followTabMembership", () => {
 
     expect(await readNodes()).toHaveLength(0);
   });
+
+  it("records a tab dragged in while it shows a search as a SERP", async () => {
+    await followTabMembership({
+      database,
+      tab: sessionTab({ url: "https://www.bing.com/search?q=hub+motor" }),
+    });
+
+    expect(await readNodes()).toEqual([
+      expect.objectContaining({ kind: "serp", query: "hub motor", domain: "www.bing.com" }),
+    ]);
+  });
 });

@@ -104,4 +104,15 @@ describe("reconcileSessionTabs", () => {
 
     expect(api.queryGroupTabs).not.toHaveBeenCalled();
   });
+
+  it("records a restored tab that shows a search as a SERP", async () => {
+    await reconcileSessionTabs({
+      database,
+      api: createApi(sessionTab({ id: 12, url: "https://kagi.com/search?q=bafang" })),
+    });
+
+    expect(await readNodes()).toEqual([
+      expect.objectContaining({ kind: "serp", query: "bafang", transitionType: "restored" }),
+    ]);
+  });
 });

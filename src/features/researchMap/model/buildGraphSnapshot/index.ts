@@ -25,6 +25,8 @@ export const buildGraphSnapshot = (
       title: node.title,
       url: node.url,
       domain: node.domain,
+      kind: node.kind,
+      ...(node.query === undefined ? {} : { query: node.query }),
       tabId: node.tabId,
       tabState: node.tabState,
       parentNodeId: node.parentNodeId,

@@ -6,7 +6,9 @@ import { NODE_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 
 import { RESTORED_TRANSITION } from "../../constants";
 import type { TabCaptureApi } from "../../types";
+import { buildPageFields } from "../buildPageFields";
 import { isCapturableUrl } from "../isCapturableUrl";
+import { linkRefinement } from "../linkRefinement";
 import { readTabTitle } from "../readTabTitle";
 
 export interface ReconcileSessionTabsOptions {
@@ -51,17 +53,18 @@ export const reconcileSessionTabs = async ({
 
   for (const tab of tabs) {
     if (!coveredTabIds.has(tab.id) && isCapturableUrl(tab.url)) {
-      await recordNode(database, {
+      const node = await recordNode(database, {
         sessionId: session.id,
         tabId: tab.id,
-        kind: "page",
         url: tab.url,
-        domain: new URL(tab.url).hostname,
+        ...buildPageFields(tab.url),
         title: readTabTitle(tab, tab.url),
         parentNodeId: null,
         openerNodeId: null,
         transitionType: RESTORED_TRANSITION,
       });
+
+      await linkRefinement(database, node);
     }
   }
 };

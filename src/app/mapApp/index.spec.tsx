@@ -63,6 +63,7 @@ const buildSnapshot = (...titles: string[]): GraphSnapshot => ({
     title,
     url: `https://example.org/${index}`,
     domain: "example.org",
+    kind: "page" as const,
     tabId: 7 + index,
     tabState: "open",
     parentNodeId: null,

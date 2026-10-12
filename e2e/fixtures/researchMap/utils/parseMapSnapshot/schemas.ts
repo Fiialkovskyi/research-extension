@@ -4,6 +4,10 @@ import * as v from "valibot";
 export const mapNodeSnapshotSchema = v.object({
   id: v.string(),
   label: v.string(),
+  /** `serp` for a search, which the map labels with its query. */
+  kind: v.picklist(["serp", "page"]),
+  /** Everything the node says, labels included. */
+  text: v.string(),
   tabState: v.picklist(["open", "closed"]),
   /** Whether the node can be activated: an open page is a button. */
   isButton: v.boolean(),
@@ -24,5 +28,7 @@ export const mapSnapshotSchema = v.object({
   empty: v.boolean(),
   sessionTitle: v.nullable(v.string()),
   nodes: v.array(mapNodeSnapshotSchema),
-  edges: v.array(v.object({ id: v.string(), kind: v.picklist(["sameTab", "opener", "other"]) })),
+  edges: v.array(
+    v.object({ id: v.string(), kind: v.picklist(["sameTab", "opener", "refinement", "other"]) }),
+  ),
 });

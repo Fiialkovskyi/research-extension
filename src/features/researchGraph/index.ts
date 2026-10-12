@@ -15,6 +15,7 @@ export { addNodeSignals } from "./model/addNodeSignals";
 export { closeNode } from "./model/closeNode";
 export { countSessionNodes } from "./model/countSessionNodes";
 export { readSessionGraph } from "./model/readSessionGraph";
+export { readSessionRoot } from "./model/readSessionRoot";
 export { readTabNode } from "./model/readTabNode";
 export { recordEdge } from "./model/recordEdge";
 export { recordNode } from "./model/recordNode";

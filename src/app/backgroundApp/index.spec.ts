@@ -1091,6 +1091,33 @@ describe("the research map through the background", () => {
     );
   });
 
+  it("pushes a refined search together with its refinement edge", async () => {
+    const second = "https://www.bing.com/search?q=e-bike+mid-drive+motors";
+    const { app, database, map } = await createSubscribedApp({
+      tabCapture: createTabCapture(sessionTab({ url: second })),
+    });
+
+    // Back to back, as a user searching twice in one tab produces them.
+    await Promise.all([
+      app.handleNavigationCommitted(commit("https://duckduckgo.com/?q=e-bike+motors")),
+      app.handleNavigationCommitted(commit(second)),
+    ]);
+
+    const edges = await database.getAll(EDGE_STORE);
+
+    expect(edges.filter((edge) => edge.kind === "refinement")).toHaveLength(1);
+    await vi.waitFor(() => {
+      const last = readSnapshots(map.posted).at(-1) as unknown as {
+        payload: { edges: { kind: string }[] };
+      };
+
+      expect(last.payload.edges.map((edge) => edge.kind).toSorted()).toEqual([
+        "refinement",
+        "sameTab",
+      ]);
+    });
+  });
+
   it("coalesces a burst of events into at most two pushes", async () => {
     const { app, map } = await createSubscribedApp();
 

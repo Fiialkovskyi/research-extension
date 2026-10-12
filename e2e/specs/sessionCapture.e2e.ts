@@ -126,7 +126,7 @@ describe("capturing a session's pages", () => {
       tabState: "open",
       hasParent: true,
     });
-    expect(graph.edges).toEqual([{ kind: "sameTab" }]);
+    expect(graph.edges.map((edge) => edge.kind)).toEqual(["sameTab"]);
     expect((await readPopupOnce()).activeSession).toContain(title);
   });
 

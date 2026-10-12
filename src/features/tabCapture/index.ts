@@ -12,11 +12,15 @@
 
 export { CAPTURE_EDGE_WEIGHTS } from "./constants";
 export type { CaptureTab, CommittedNavigation, TabCaptureApi } from "./types";
+export { buildPageFields } from "./model/buildPageFields";
+export type { PageFields } from "./model/buildPageFields";
 export { closeTabNode } from "./model/closeTabNode";
 export { followTabMembership } from "./model/followTabMembership";
 export { isCapturableUrl } from "./model/isCapturableUrl";
+export { linkRefinement } from "./model/linkRefinement";
 export { readCaptureTab } from "./model/readCaptureTab";
 export { reconcileSessionTabs } from "./model/reconcileSessionTabs";
 export { recordNavigation } from "./model/recordNavigation";
+export { readSearchQuery } from "./model/readSearchQuery";
 export { recordTabFocus } from "./model/recordTabFocus";
 export { updateTabTitle } from "./model/updateTabTitle";

@@ -6,7 +6,9 @@ import type { ResearchDatabaseSchema } from "@/shared/storage";
 
 import { CAPTURE_EDGE_WEIGHTS, JOINED_TRANSITION } from "../../constants";
 import type { CaptureTab } from "../../types";
+import { buildPageFields } from "../buildPageFields";
 import { isCapturableUrl } from "../isCapturableUrl";
+import { linkRefinement } from "../linkRefinement";
 import { readTabTitle } from "../readTabTitle";
 
 export interface FollowTabMembershipOptions {
@@ -55,9 +57,8 @@ export const followTabMembership = async ({
   const node = await recordNode(database, {
     sessionId: session.id,
     tabId: tab.id,
-    kind: "page",
     url: tab.url,
-    domain: new URL(tab.url).hostname,
+    ...buildPageFields(tab.url),
     title: readTabTitle(tab, tab.url),
     parentNodeId: null,
     openerNodeId: opener?.id ?? null,
@@ -73,4 +74,6 @@ export const followTabMembership = async ({
       weight: CAPTURE_EDGE_WEIGHTS.opener,
     });
   }
+
+  await linkRefinement(database, node);
 };

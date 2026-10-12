@@ -6,7 +6,10 @@ const snapshot = {
   sessions: [{ title: "Motors", groupId: 1791, status: "active" }],
   nodes: [
     {
-      url: "http://x/a.html",
+      id: "node-a",
+      url: "http://duckduckgo.com/?q=motors",
+      kind: "serp",
+      query: "motors",
       transitionType: "link",
       tabState: "open",
       hasOpener: false,
@@ -14,7 +17,7 @@ const snapshot = {
       createdAt: 1,
     },
   ],
-  edges: [{ kind: "opener" }],
+  edges: [{ kind: "opener", from: "node-a", to: "node-b" }],
   groups: [{ id: 1791, title: "Motors" }],
 };
 

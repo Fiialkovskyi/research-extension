@@ -65,6 +65,7 @@ const buildNode = (id: string, overrides: Partial<MapNode> = {}): MapNode => ({
   title: id.toUpperCase(),
   url: `https://example.com/${id}`,
   domain: "example.com",
+  kind: "page",
   tabId: 1,
   tabState: "open",
   parentNodeId: null,
@@ -101,6 +102,39 @@ describe("ResearchMap", () => {
     expect(findNode("a")).toHaveTextContent("example.com · closed");
     expect(findNode("a")).toHaveAttribute("data-tab-state", "closed");
     expect(findNode("b")).toHaveAttribute("data-tab-state", "open");
+  });
+
+  it("says a search is a search and shows its query, open or closed", () => {
+    render(
+      <ResearchMap
+        snapshot={{
+          ...snapshot,
+          nodes: [
+            buildNode("s", { kind: "serp", query: "e-bike motors", domain: "duckduckgo.com" }),
+            buildNode("t", {
+              kind: "serp",
+              query: "hub motor",
+              domain: "www.bing.com",
+              tabState: "closed",
+            }),
+          ],
+          edges: [],
+        }}
+        onFocusTab={() => {}}
+      />,
+    );
+
+    expect(findNode("s")).toHaveTextContent("e-bike motors");
+    expect(findNode("s")).toHaveTextContent("search · duckduckgo.com");
+    expect(findNode("s")).toHaveAttribute("data-node-kind", "serp");
+    expect(findNode("t")).toHaveTextContent("search · www.bing.com · closed");
+  });
+
+  it("does not call a plain page a search", () => {
+    render(<ResearchMap snapshot={snapshot} onFocusTab={() => {}} />);
+
+    expect(findNode("b")).toHaveAttribute("data-node-kind", "page");
+    expect(findNode("b")).not.toHaveTextContent("search");
   });
 
   it("makes an open page a button and a closed one not", () => {

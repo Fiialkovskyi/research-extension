@@ -6,7 +6,9 @@ import type { ResearchDatabaseSchema, StoredNode } from "@/shared/storage";
 
 import { CAPTURE_EDGE_WEIGHTS } from "../../constants";
 import type { CommittedNavigation, TabCaptureApi } from "../../types";
+import { buildPageFields } from "../buildPageFields";
 import { isCapturableUrl } from "../isCapturableUrl";
+import { linkRefinement } from "../linkRefinement";
 import { readTabTitle } from "../readTabTitle";
 
 export interface RecordNavigationOptions {
@@ -70,9 +72,8 @@ export const recordNavigation = async ({
   const node = await recordNode(database, {
     sessionId: session.id,
     tabId,
-    kind: "page",
     url,
-    domain: new URL(url).hostname,
+    ...buildPageFields(url),
     title: readTabTitle(tab, url),
     parentNodeId: parent?.id ?? null,
     openerNodeId: opener?.id ?? null,
@@ -99,6 +100,8 @@ export const recordNavigation = async ({
       weight: CAPTURE_EDGE_WEIGHTS.opener,
     });
   }
+
+  await linkRefinement(database, node);
 
   return node;
 };

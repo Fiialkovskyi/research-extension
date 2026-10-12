@@ -6,5 +6,6 @@
  * This file is the public surface and holds no logic.
  */
 
+export { buildSearchResultsPage } from "./buildSearchResultsPage";
 export { resolvePagePath } from "./resolvePagePath";
 export { type PageServer, startPageServer } from "./startPageServer";

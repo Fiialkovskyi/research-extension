@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildProfilePreferences } from "./index";
 import { EXTENSION_ID } from "@/shared/config";
+import { SEARCH_HOSTS } from "../../../pageServer/constants";
 import { PINNED_EXTENSION_UUID } from "../../constants";
 
 describe("buildProfilePreferences", () => {
@@ -21,6 +22,14 @@ describe("buildProfilePreferences", () => {
 
   it("lifts the signature requirement so an unsigned local build can install", () => {
     expect(buildProfilePreferences()["xpinstall.signatures.required"]).toBe(false);
+  });
+
+  it("resolves the search hosts locally, over plain HTTP, so searches load offline", () => {
+    const prefs = buildProfilePreferences();
+
+    expect(prefs["network.dns.localDomains"].split(",")).toEqual([...SEARCH_HOSTS]);
+    expect(prefs["network.stricttransportsecurity.preloadlist"]).toBe(false);
+    expect(prefs["dom.security.https_first"]).toBe(false);
   });
 
   it("defaults to this project's add-on id", () => {

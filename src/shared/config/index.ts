@@ -19,3 +19,5 @@ export type {
 } from "./modelProfiles/types";
 export { ONNX_RUNTIME_DIRECTORY, ONNX_RUNTIME_WASM_VARIANTS } from "./onnxRuntime/constants";
 export type { OnnxRuntimeVariant } from "./onnxRuntime/types";
+export { SEARCH_ENGINES } from "./searchEngines/constants";
+export type { SearchEngine } from "./searchEngines/types";
