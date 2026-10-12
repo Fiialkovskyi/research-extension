@@ -1,6 +1,7 @@
 # page-snapshots Specification
 
 ## Purpose
+
 Defines how the readable text of a page the user read closely is captured once, bounded, identified
 by a content hash and stored locally against its node, for later use by indexing and synthesis.
 

@@ -1317,6 +1317,26 @@ describe("page signals and reading time through the background", () => {
     });
   });
 
+  it("neither records, observes nor times a denylisted page in a session tab", async () => {
+    const { app, database, clock, executeScript } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://www.paypal.com/myaccount"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    clock.now += 60_000;
+    clock.focusedTabId = 8;
+    await app.handleTabActivated(8);
+
+    expect(await database.count(NODE_STORE)).toBe(0);
+    expect(executeScript).not.toHaveBeenCalled();
+    expect(
+      await app.handleContentMessage(batch(0.9, 1), {
+        tabId: 7,
+        url: "https://www.paypal.com/myaccount",
+      }),
+    ).toMatchObject({ type: "signal.dropped", payload: { stop: true } });
+  });
+
   it("observes the session's open pages once page access is granted", async () => {
     const { app, executeScript } = await createSignalsApp();
 

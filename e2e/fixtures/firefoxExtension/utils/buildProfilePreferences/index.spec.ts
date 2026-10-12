@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildProfilePreferences } from "./index";
 import { EXTENSION_ID } from "@/shared/config";
-import { SEARCH_HOSTS } from "../../../pageServer/constants";
+import { DENYLISTED_TEST_HOST, SEARCH_HOSTS } from "../../../pageServer/constants";
 import { PINNED_EXTENSION_UUID } from "../../constants";
 
 describe("buildProfilePreferences", () => {
@@ -27,7 +27,10 @@ describe("buildProfilePreferences", () => {
   it("resolves the search hosts locally, over plain HTTP, so searches load offline", () => {
     const prefs = buildProfilePreferences();
 
-    expect(prefs["network.dns.localDomains"].split(",")).toEqual([...SEARCH_HOSTS]);
+    expect(prefs["network.dns.localDomains"].split(",")).toEqual([
+      ...SEARCH_HOSTS,
+      DENYLISTED_TEST_HOST,
+    ]);
     expect(prefs["network.stricttransportsecurity.preloadlist"]).toBe(false);
     expect(prefs["dom.security.https_first"]).toBe(false);
     expect(prefs["extensions.webextOptionalPermissionPrompts"]).toBe(false);

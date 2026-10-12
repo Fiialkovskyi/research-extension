@@ -96,6 +96,15 @@ describe("reconcileSessionTabs", () => {
     expect(await readNodes()).toHaveLength(0);
   });
 
+  it("leaves a group tab on a denylisted page unrecorded", async () => {
+    await reconcileSessionTabs({
+      database,
+      api: createApi(sessionTab({ url: "https://www.irs.gov/" }), sessionTab({ id: 8 })),
+    });
+
+    expect(await readNodes()).toEqual([expect.objectContaining({ tabId: 8 })]);
+  });
+
   it("asks the browser nothing without an active session", async () => {
     await database.clear(SESSION_STORE);
     const api = createApi();

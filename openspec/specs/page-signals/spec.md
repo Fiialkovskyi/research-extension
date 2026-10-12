@@ -1,6 +1,7 @@
 # page-signals Specification
 
 ## Purpose
+
 Defines the engagement signals of a session page — active reading time, revisits, scroll depth and
 copy events — how they reach the page's node, and how a node's engagement state is derived from them.
 

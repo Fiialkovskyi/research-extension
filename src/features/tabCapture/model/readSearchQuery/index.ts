@@ -1,6 +1,6 @@
 import { SEARCH_ENGINES } from "@/shared/config";
 
-import { isEngineHost } from "./utils/isEngineHost";
+import { isEngineHost } from "../isEngineHost";
 
 /**
  * Reads the search query from a search engine's results URL.

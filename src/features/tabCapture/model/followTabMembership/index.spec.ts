@@ -96,6 +96,15 @@ describe("followTabMembership", () => {
     expect(await readNodes()).toEqual([expect.objectContaining({ tabState: "closed" })]);
   });
 
+  it("records nothing for a tab that joins on a denylisted page", async () => {
+    await followTabMembership({
+      database,
+      tab: sessionTab({ url: "https://mail.google.com/mail/u/0/" }),
+    });
+
+    expect(await readNodes()).toHaveLength(0);
+  });
+
   it("ignores a private tab", async () => {
     await followTabMembership({ database, tab: sessionTab({ incognito: true }) });
 

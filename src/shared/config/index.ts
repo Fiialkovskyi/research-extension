@@ -5,6 +5,12 @@
  * entity, so it has no `index.ts` of its own.
  */
 
+export { CAPTURE_DENYLIST } from "./captureDenylist/constants";
+export type {
+  CaptureDenylist,
+  DenylistCategory,
+  DenylistCategoryName,
+} from "./captureDenylist/types";
 export { ENGAGEMENT_RULES, ENGAGEMENT_STATES } from "./engagementRules/constants";
 export { EXTENSION_ID, FIREFOX_MIN_VERSION, OPTIONS_PATH, POPUP_PATH } from "./extension/constants";
 export {

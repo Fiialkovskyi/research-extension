@@ -1,5 +1,5 @@
 import { EXTENSION_ID } from "@/shared/config";
-import { SEARCH_HOSTS } from "../../../pageServer/constants";
+import { DENYLISTED_TEST_HOST, SEARCH_HOSTS } from "../../../pageServer/constants";
 import { PINNED_EXTENSION_UUID } from "../../constants";
 import { isCanonicalUuid } from "../isCanonicalUuid";
 
@@ -16,8 +16,8 @@ import { isCanonicalUuid } from "../isCanonicalUuid";
  *
  * Three more let the suite load search engine URLs offline:
  *
- * - `network.dns.localDomains` resolves the search hosts to the loopback
- *   interface, where the page server answers them.
+ * - `network.dns.localDomains` resolves the search hosts, and one denylisted
+ *   host, to the loopback interface, where the page server answers them.
  * - `network.stricttransportsecurity.preloadlist` off, because the HSTS preload
  *   list would upgrade `http://duckduckgo.com` to `https`, which the local
  *   server does not speak.
@@ -62,7 +62,7 @@ export const buildProfilePreferences = (
   return {
     "extensions.webextensions.uuids": JSON.stringify({ [extensionId]: uuid }),
     "xpinstall.signatures.required": false,
-    "network.dns.localDomains": SEARCH_HOSTS.join(","),
+    "network.dns.localDomains": [...SEARCH_HOSTS, DENYLISTED_TEST_HOST].join(","),
     "network.stricttransportsecurity.preloadlist": false,
     "dom.security.https_first": false,
     "extensions.webextOptionalPermissionPrompts": false,

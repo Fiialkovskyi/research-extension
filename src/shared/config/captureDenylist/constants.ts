@@ -1,0 +1,140 @@
+import type { CaptureDenylist } from "./types";
+
+/**
+ * Sensitive pages that never become part of a session (REQ-CAP-008,
+ * REQ-SEC-007): no node, so no signals, reading time, observer or snapshot.
+ *
+ * Bundled and versioned with the extension, never fetched. The lists are a
+ * starting point rather than a census; the word and suffix entries catch the
+ * long tail a list of names cannot. Where a host is in doubt it is listed:
+ * a research page left out costs less than a bank page recorded.
+ *
+ * Raise the version with every edit.
+ */
+export const CAPTURE_DENYLIST: CaptureDenylist = {
+  version: "capture_denylist@1",
+  categories: [
+    {
+      name: "banking",
+      domains: [
+        "chase.com",
+        "bankofamerica.com",
+        "wellsfargo.com",
+        "citi.com",
+        "capitalone.com",
+        "usbank.com",
+        "americanexpress.com",
+        "discover.com",
+        "schwab.com",
+        "fidelity.com",
+        "vanguard.com",
+        "hsbc.*",
+        "barclays.*",
+        "santander.*",
+        "ing.*",
+        "lloydsbank.com",
+        "natwest.com",
+        "bnpparibas.*",
+        "societegenerale.*",
+        "credit-agricole.*",
+        "commerzbank.*",
+        "deutsche-bank.*",
+        "sparkasse.de",
+        "ubs.com",
+        "revolut.com",
+        "wise.com",
+        "monzo.com",
+        "n26.com",
+        "paypal.com",
+        "stripe.com",
+        "klarna.com",
+        "privatbank.ua",
+        "privat24.ua",
+        "monobank.ua",
+        "oschadbank.ua",
+        "sberbank.ru",
+        "tbank.ru",
+        "tinkoff.ru",
+        "vtb.ru",
+        "alfabank.ru",
+      ],
+      // The word covers the `.bank` and `.banking` top-level domains too.
+      suffixes: [],
+      words: ["bank"],
+    },
+    {
+      name: "health",
+      domains: [
+        "mychart.*",
+        "nhs.uk",
+        "healthcare.gov",
+        "kaiserpermanente.org",
+        "zocdoc.com",
+        "labcorp.com",
+        "questdiagnostics.com",
+        "doctolib.*",
+        "helsi.me",
+        "teladoc.com",
+        "patientaccess.com",
+      ],
+      suffixes: [],
+      words: [],
+    },
+    {
+      name: "government",
+      domains: ["gosuslugi.ru", "nalog.ru", "diia.gov.ua", "login.gov"],
+      suffixes: [
+        "gov",
+        "mil",
+        "gov.uk",
+        "gouv.fr",
+        "gc.ca",
+        "gov.au",
+        "gov.ua",
+        "gov.ru",
+        "bund.de",
+        "admin.ch",
+        "europa.eu",
+      ],
+      words: [],
+    },
+    {
+      name: "webmail",
+      domains: [
+        "mail.google.com",
+        "outlook.live.com",
+        "outlook.office.com",
+        "outlook.office365.com",
+        "mail.yahoo.com",
+        "proton.me",
+        "protonmail.com",
+        "fastmail.com",
+        "icloud.com",
+        "mail.ru",
+        "ukr.net",
+        "gmx.*",
+        "web.de",
+        "tutanota.com",
+        "tuta.com",
+        "zoho.com",
+        "mail.yandex.ru",
+      ],
+      suffixes: [],
+      words: [],
+    },
+    {
+      name: "passwordManagers",
+      // Proton Pass is under `proton.me`, which the webmail category lists.
+      domains: [
+        "1password.com",
+        "bitwarden.com",
+        "lastpass.com",
+        "dashlane.com",
+        "keepersecurity.com",
+        "nordpass.com",
+      ],
+      suffixes: [],
+      words: [],
+    },
+  ],
+};

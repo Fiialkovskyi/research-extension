@@ -169,6 +169,31 @@ describe("recordNavigation", () => {
     expect(await readNodes()).toHaveLength(1);
   });
 
+  it("records nothing for a denylisted page, closes the page left for it, and starts afresh after it", async () => {
+    const api = createApi(sessionTab());
+    const before = await recordNavigation({ database, api, navigation: commit() });
+
+    expect(
+      await recordNavigation({
+        database,
+        api,
+        navigation: commit({ url: "https://www.paypal.com/myaccount" }),
+      }),
+    ).toBeUndefined();
+    expect(await readNodes()).toEqual([
+      expect.objectContaining({ id: before?.id, tabState: "closed" }),
+    ]);
+
+    const after = await recordNavigation({
+      database,
+      api,
+      navigation: commit({ url: "https://example.org/b" }),
+    });
+
+    expect(after).toMatchObject({ parentNodeId: null });
+    expect(await database.count(EDGE_STORE)).toBe(0);
+  });
+
   it("ignores a tab outside the session's group", async () => {
     await recordNavigation({
       database,

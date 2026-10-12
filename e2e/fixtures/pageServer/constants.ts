@@ -18,3 +18,10 @@ export const PAGE_ORIGIN_VARIABLE = "E2E_PAGE_ORIGIN";
  * capture sees real search URLs without the suite going online.
  */
 export const SEARCH_HOSTS = ["duckduckgo.com", "www.bing.com"] as const;
+
+/**
+ * A host on the capture denylist that the test profile also resolves to the
+ * loopback interface. The page server serves it the suite's ordinary pages, so
+ * a spec can load a denylisted page offline and see that nothing is recorded.
+ */
+export const DENYLISTED_TEST_HOST = "www.paypal.com";
