@@ -146,35 +146,6 @@ WHEN a model declares distinct prefixes for query and document text, the system 
 - **WHEN** a model declaring no prefixes embeds a text
 - **THEN** the text reaches the model unmodified
 
-### Requirement: Generation is bounded and interruptible
-
-A text-generation run SHALL stop at the token limit the caller requested, and SHALL stop promptly when the caller cancels it, releasing the runtime for other work.
-
-#### Scenario: Generation stops at the requested limit
-
-- **WHEN** a generation is requested with a token limit and the model does not stop earlier on its own
-- **THEN** generation stops at that limit
-
-#### Scenario: Generation stops when cancelled
-
-- **WHEN** the caller cancels an in-flight generation
-- **THEN** generation stops without producing a final result
-- **AND** the runtime becomes available for the next request
-
-### Requirement: Structured output is validated when the runtime cannot constrain it
-
-A model SHALL declare whether it can constrain its output to a schema. WHEN it cannot, the system SHALL validate generated output against the expected schema and SHALL discard output that fails validation rather than passing it on.
-
-#### Scenario: Runtime cannot constrain output
-
-- **WHEN** a model that cannot constrain output to a schema returns text that does not satisfy the schema
-- **THEN** that output is discarded and not surfaced as a result
-
-#### Scenario: Valid structured output is accepted
-
-- **WHEN** generated output satisfies the expected schema
-- **THEN** it is accepted as a result
-
 ### Requirement: The inference run log is content-free
 
 The system SHALL record, for each inference run, an identifier, the model revision, the device, the duration and the outcome. It SHALL NOT record the text that was processed.

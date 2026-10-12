@@ -166,6 +166,49 @@ The conclusion is **not** that local inference is unworkable. It is narrower and
    pipeline and the conformance suite; the `native` provider slots in behind the same interface, and
    the in-extension provider stays as the no-install fallback that §5's REQ-CLU-001 already assumes.
 
+## Closing the spike
+
+The spike is archived with 5 of its 47 tasks open, on purpose:
+
+- **9.1, the offline model e2e,** is left for a change of its own (`add-offline-model-e2e`). The opt-in network run (9.2) still covers the model path end to end.
+- **12.1–12.4, phase B (text generation),** were stopped by the gate above. Generation belongs to synthesis (M4) and, per the gate, most likely to the native host.
+
+The two requirements written for generation are moved out of this change's `model-runtime` delta, so that the main spec states only what is built:
+
+- "Generation is bounded and interruptible";
+- "Structured output is validated when the runtime cannot constrain it".
+
+They return, as written, with the change that implements generation:
+
+> **Requirement:** Generation is bounded and interruptible
+>
+> A text-generation run SHALL stop at the token limit the caller requested, and SHALL stop promptly when the caller cancels it, releasing the runtime for other work.
+>
+> _Scenario:_ Generation stops at the requested limit
+>
+> - **WHEN** a generation is requested with a token limit and the model does not stop earlier on its own
+> - **THEN** generation stops at that limit
+>
+> _Scenario:_ Generation stops when cancelled
+>
+> - **WHEN** the caller cancels an in-flight generation
+> - **THEN** generation stops without producing a final result
+> - **AND** the runtime becomes available for the next request
+>
+> **Requirement:** Structured output is validated when the runtime cannot constrain it
+>
+> A model SHALL declare whether it can constrain its output to a schema. WHEN it cannot, the system SHALL validate generated output against the expected schema and SHALL discard output that fails validation rather than passing it on.
+>
+> _Scenario:_ Runtime cannot constrain output
+>
+> - **WHEN** a model that cannot constrain output to a schema returns text that does not satisfy the schema
+> - **THEN** that output is discarded and not surfaced as a result
+>
+> _Scenario:_ Valid structured output is accepted
+>
+> - **WHEN** generated output satisfies the expected schema
+> - **THEN** it is accepted as a result
+
 ## Open Questions
 
 - Which model profiles ship as the recommended defaults per hardware tier (REQ-MOD-007). The spike installs two embedding models to prove the registry is not hardwired to one, but choosing defaults needs the benchmark numbers first, and §15 already assigns that decision to an architecture decision record after M0-2.
