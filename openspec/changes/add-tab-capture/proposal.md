@@ -6,7 +6,7 @@ The graph store (database version 4) has no producer: a session records which gr
 
 ## What Changes
 
-- **Permissions:** the manifest adds `tabs` and `webNavigation`. Without them a tab carries no URL or title, and a navigation no transition type. No network behaviour is added.
+- **Permissions:** the manifest adds `tabs` and `webNavigation` to `tabGroups` and `sessions`. Without them a tab carries no URL or title, and a navigation no transition type. No network behaviour is added.
 - **A node per committed page** in a tab of the session's group:
   - top frame only, `http`/`https` only, never in a private window;
   - not on a reload; fragment changes are not navigations;
@@ -29,9 +29,9 @@ None.
 
 ### Modified Capabilities
 
-- `extension-shell`: the permission requirement now declares `tabs` and `webNavigation` alongside `tabGroups`.
+- `extension-shell`: the permission requirement now declares `tabs` and `webNavigation` alongside `tabGroups` and `sessions`.
 - `research-graph`: adds capture: what produces nodes and edges, membership, titles, focus and reconciliation.
-- `research-session`: the popup shows the recorded page count.
+- `research-session`: the popup shows the recorded page count, beside the closed-session notice added by `add-session-restore`.
 
 ## Impact
 
@@ -39,7 +39,7 @@ None.
 - **Modified code:**
   - `src/features/researchGraph`: `updateNodeTitle`, `countSessionNodes`;
   - `src/features/researchSession`: the summary gains `pageCount`;
-  - `src/app/backgroundApp`: capture event handlers behind a serial queue, `pageCount` in `session.active`;
+  - `src/app/backgroundApp`: capture event handlers on the existing session work queue, `pageCount` in `session.active`;
   - `src/entrypoints/background`: listeners and the real `TabCaptureApi`;
   - `src/app/popupApp`: the page count;
   - `wxt.config.ts`: the permissions;

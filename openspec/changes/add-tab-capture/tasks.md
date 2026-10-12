@@ -2,7 +2,7 @@
 
 ## 1. Permissions
 
-- [ ] 1.1 Declare `permissions: ["tabGroups", "tabs", "webNavigation"]` in `wxt.config.ts`, updating its comment. Verify after `npm run build:firefox` that `.output/firefox-mv3/manifest.json` lists exactly those three.
+- [ ] 1.1 Declare `permissions: ["tabGroups", "sessions", "tabs", "webNavigation"]` in `wxt.config.ts`, updating its comment (keep the reason for `sessions`). Verify after `npm run build:firefox` that `.output/firefox-mv3/manifest.json` lists exactly those four.
 
 ## 2. Graph additions
 
@@ -19,12 +19,13 @@
 
 ## 4. Background
 
-- [ ] 4.1 `backgroundApp`: add `TabCaptureApi` to the dependencies and handlers for committed navigation, tab updated, activated and removed, run through one serial queue that logs and survives a failed handler. `reconcileSession` also reconciles tabs. `session.active` carries `pageCount`. Extend `index.spec.ts`, including the order of a commit and a title update arriving together.
-- [ ] 4.2 Entrypoint: register `webNavigation.onCommitted`, `tabs.onUpdated`, `tabs.onActivated` and `tabs.onRemoved` synchronously, and pass the real `TabCaptureApi`. Verify with `npm run typecheck`.
+- [ ] 4.1 `backgroundApp`: add `TabCaptureApi` to the dependencies and handlers for committed navigation, tab updated, activated and removed, run through the existing `serializeSessionWork` queue, logging a failed handler. `reconcileSession` also reconciles tabs. `session.active` carries `pageCount`. Extend `index.spec.ts`, including the order of a commit and a title update arriving together.
+- [ ] 4.2 Entrypoint: register `webNavigation.onCommitted`, `tabs.onActivated` and `tabs.onRemoved` synchronously; widen the existing `tabs.onUpdated` filter to `["groupId", "title"]` and dispatch title changes to capture; pass the real `TabCaptureApi`. Verify with `npm run typecheck`.
+- [ ] 4.3 Store each recorded node's id as the per-tab value `researchNodeId`, and link a restored tab's first node to the node it names (design.md, Working alongside session restore), with specs.
 
 ## 5. Popup
 
-- [ ] 5.1 Show `· N pages recorded` (`session-page-count`) beside the active session; update `researchSession` schemas and the popup spec.
+- [ ] 5.1 Show `· N pages recorded` (`session-page-count`) beside the active session, keeping the closed-session notice (`session-closed`); update `researchSession` schemas and the popup spec.
 
 ## 6. End-to-end
 

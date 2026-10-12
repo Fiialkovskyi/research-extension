@@ -5,7 +5,7 @@
 - The database is at version 5. `researchGraph` offers:
   - `recordNode`, `closeNode`, `addNodeSignals`, `recordEdge`, `readTabNode` (the newest open node of a tab) and `readSessionGraph`;
   - nodes carry `tabId`, and a closed node is never returned for a tab.
-- `researchSession` keeps one active session with its `groupId`. Its listeners for group renames and removals, and `runtime.onStartup`, already exist in the background entrypoint.
+- `researchSession` keeps one active or closed session with its `groupId` (`add-session-restore`). The background entrypoint already registers `tabGroups.onCreated`, `onUpdated` and `onRemoved`, `tabs.onCreated`, `tabs.onUpdated` filtered to `groupId`, and `runtime.onStartup`. A removed group closes the session; a returning group reopens it; session tabs carry the session's id as a per-tab session value, and a restored session tab is put back into the session's group.
 - From the tab groups spike Findings:
   - without `tabs`, a `Tab` has `groupId`, `openerTabId` and `active`, but no `url` or `title`;
   - a tab opened from a grouped tab joins the group by itself, and `tabs.onCreated` already reports the opener's `groupId`;
@@ -70,7 +70,13 @@ At commit `tab.title` is usually still the previous page's. The node is recorded
 
 ### Order of events
 
-The browser can deliver `onCommitted`, `onUpdated` (title) and `onActivated` for one tab within milliseconds, and each handler awaits the database. To keep writes in arrival order, the background app chains capture handlers on one promise. A failed handler is logged with `console.error` and does not break the chain. Each handler reads the active session itself (`getActiveSession`, an index read), so the queue holds no session state that an unload could lose.
+The browser can deliver `onCommitted`, `onUpdated` (title) and `onActivated` for one tab within milliseconds, and each handler awaits the database. To keep writes in arrival order, capture handlers run on the background app's existing `serializeSessionWork` queue (from `add-session-restore`), not a second one: a restored tab is regrouped by that queue, and capture must see the tab after it has rejoined the group. A failed handler is logged with `console.error` and does not break the chain. Each handler reads the active session itself (`getActiveSession`, an index read), so the queue holds no session state that an unload could lose.
+
+### Working alongside session restore
+
+- **Listeners.** `tabs.onUpdated` is already registered with the filter `{ properties: ["groupId"] }`. Capture widens the filter to `["groupId", "title"]` and dispatches each change to the handler that wants it, rather than registering a second listener. `tabs.onCreated` is already registered for restore; capture adds nothing to it, because a tab's first node comes from its first commit.
+- **A closed session captures nothing.** Capture reads `getActiveSession`, so while the session is `closed` no node is written. Restoring the group or a tab reopens the session first (same queue), and the restored tab's next commit is captured.
+- **Restored tabs and their nodes.** A restored tab has a new `tabId`, so its open node, keyed by the old id, would be closed by reconciliation and a new chain started. The `sessions` permission is already declared, so the node can be re-linked instead: capture stores the node's id as a second per-tab value (`researchNodeId`) whenever it records a node, and on the restored tab's first commit (or in `reconcileSessionTabs`) reads it, and links the new node to it as `parentNodeId`. This replaces the "same URL" heuristic in Risks for restored tabs; that heuristic stays as the fallback for tabs restored without a value.
 
 ### Reconciliation after a restart
 
@@ -96,7 +102,7 @@ The suite stays offline. `wdio.conf.ts` starts a static server on `127.0.0.1` in
 
 ## Risks / Trade-offs
 
-- **Restored tabs start new chains.** After a restart a restored tab gets a new node with no parent; its pre-restart node was closed. → Acceptable for the MVP. Later, a closed-at-shutdown node with the same URL can be linked as the parent.
+- **Restored tabs start new chains** unless they carry a `researchNodeId` value (see Working alongside session restore). → A tab restored without one gets a new node with no parent. Later, a closed-at-shutdown node with the same URL can be linked as the parent.
 - **SPA navigations are invisible** until `onHistoryStateUpdated` is handled. → Listed as a follow-up.
 - **Permission prompt on update** for existing installs. → Expected; the extension is not published yet.
 - **The serial queue delays a burst of events.** → The handlers are a few IndexedDB operations each; NFR-001 (1 s p95) leaves ample room.
