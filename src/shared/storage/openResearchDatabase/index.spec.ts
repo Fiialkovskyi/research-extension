@@ -3,7 +3,13 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 
 import { openResearchDatabase } from ".";
-import { INFERENCE_RUN_STORE, DATABASE_VERSION, MODEL_FILE_STORE, MODEL_STORE } from "../constants";
+import {
+  DATABASE_VERSION,
+  INFERENCE_RUN_STORE,
+  MODEL_FILE_STORE,
+  MODEL_STORE,
+  SESSION_STORE,
+} from "../constants";
 
 describe("openResearchDatabase", () => {
   it("opens at the current schema version with every store present", async () => {
@@ -11,7 +17,7 @@ describe("openResearchDatabase", () => {
 
     expect(database.version).toBe(DATABASE_VERSION);
     expect([...database.objectStoreNames].toSorted()).toEqual(
-      [MODEL_STORE, MODEL_FILE_STORE, INFERENCE_RUN_STORE].toSorted(),
+      [MODEL_STORE, MODEL_FILE_STORE, INFERENCE_RUN_STORE, SESSION_STORE].toSorted(),
     );
 
     database.close();

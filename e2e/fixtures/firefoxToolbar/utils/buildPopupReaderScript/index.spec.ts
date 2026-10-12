@@ -7,6 +7,8 @@ describe("POPUP_SNAPSHOT_SCRIPT", () => {
   it("reads the elements the popup marks for testing", () => {
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="popup-panel"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="greeting"]');
+    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="session-active"]');
+    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="group-form"]');
   });
 
   // Only simple values survive the actor boundary reliably.

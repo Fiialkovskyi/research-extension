@@ -24,6 +24,8 @@ const SNAPSHOT = JSON.stringify({
   panelWidth: 320,
   backgroundColor: "rgb(255, 255, 255)",
   textColor: "rgb(15, 23, 42)",
+  activeSession: null,
+  hasSessionForm: true,
 });
 
 describe("readPopup", () => {

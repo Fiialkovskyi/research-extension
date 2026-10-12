@@ -8,7 +8,13 @@ import type { TabGroupApi } from "@/features/tabGroups";
 import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/utils/getFileDigest";
 import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
-import { MODEL_FILE_STORE, MODEL_STORE, openResearchDatabase } from "@/shared/storage";
+import {
+  MODEL_FILE_STORE,
+  MODEL_STORE,
+  openResearchDatabase,
+  SESSION_STORE,
+  type StoredSession,
+} from "@/shared/storage";
 
 const pong = { availableDevices: ["wasm"] as const, crossOriginIsolated: false, threadCount: 1 };
 
@@ -43,6 +49,7 @@ const buildDependencies = (
     fetchResource: (() => Promise.reject(new Error("no network in this test"))) as typeof fetch,
     policyViolations: { read: () => [] },
     tabGroups: createStubTabGroups(),
+    persistStorage: () => Promise.resolve(true),
     ...overrides,
   };
 };
@@ -66,6 +73,7 @@ const createFreshDatabase = async () => {
 
   await database.clear(MODEL_STORE);
   await database.clear(MODEL_FILE_STORE);
+  await database.clear(SESSION_STORE);
 
   return database;
 };
@@ -98,49 +106,6 @@ describe("createBackgroundApp", () => {
     const response = await app.handleMessage(buildRpcMessage("inference.probe", {}));
 
     expect(response).toMatchObject({ type: "inference.capabilities", payload: pong });
-  });
-
-  it("starts a session as a titled tab group, answering with the colour Firefox assigned", async () => {
-    const app = createBackgroundApp(buildDependencies());
-
-    const response = await app.handleMessage(
-      buildRpcMessage("tabGroup.create", { title: "  E-bike motors  " }),
-    );
-
-    expect(response).toMatchObject({
-      type: "tabGroup.created",
-      payload: { groupId: 42, tabId: 7, title: "E-bike motors", color: "blue" },
-    });
-  });
-
-  it("answers a tab group the browser refused as a failure, not a protocol error", async () => {
-    const tabGroups = createStubTabGroups({
-      groupTabs: vi.fn().mockRejectedValue(new Error("tabs.group is not allowed")),
-    });
-    const app = createBackgroundApp(buildDependencies({ tabGroups }));
-
-    const response = await app.handleMessage(
-      buildRpcMessage("tabGroup.create", { title: "Motors" }),
-    );
-
-    expect(response).toMatchObject({
-      type: "tabGroup.failed",
-      payload: { reason: "tabs.group is not allowed" },
-    });
-    expect(tabGroups.removeTab).toHaveBeenCalledWith(7);
-  });
-
-  it("refuses a blank session title before any tab is opened", async () => {
-    const tabGroups = createStubTabGroups();
-    const app = createBackgroundApp(buildDependencies({ tabGroups }));
-
-    const response = await app.handleMessage(buildRpcMessage("tabGroup.create", { title: "   " }));
-
-    expect(response).toMatchObject({
-      type: "rpc.refused",
-      payload: { rejection: "invalid-payload" },
-    });
-    expect(tabGroups.createTab).not.toHaveBeenCalled();
   });
 
   it("starts no worker until something is actually asked of it", () => {
@@ -578,5 +543,175 @@ describe("the background's worker and the compute path", () => {
     await app.handleMessage(buildRpcMessage("inference.probe", {}));
 
     expect(createInferenceWorker).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A session recorded as active, following group 42. */
+const activeSession: StoredSession = {
+  id: "session-1",
+  title: "E-bike motors",
+  groupId: 42,
+  status: "active",
+  createdAt: 1,
+  updatedAt: 1,
+};
+
+/** A background over an empty database, so one test's session cannot leak into the next. */
+const createSessionApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
+  const database = await createFreshDatabase();
+  const app = createBackgroundApp(
+    buildDependencies({ openDatabase: () => Promise.resolve(database), ...overrides }),
+  );
+
+  return { app, database };
+};
+
+describe("a research session through the background", () => {
+  it("starts a session as a titled tab group, answering with the colour Firefox assigned", async () => {
+    const { app, database } = await createSessionApp();
+
+    const response = await app.handleMessage(
+      buildRpcMessage("tabGroup.create", { title: "  E-bike motors  " }),
+    );
+
+    expect(response).toMatchObject({
+      type: "tabGroup.created",
+      payload: { groupId: 42, tabId: 7, title: "E-bike motors", color: "blue" },
+    });
+    expect(await database.getFromIndex(SESSION_STORE, "status", "active")).toMatchObject({
+      title: "E-bike motors",
+      groupId: 42,
+    });
+  });
+
+  it("asks for persistent storage once a session has started", async () => {
+    const persistStorage = vi.fn(() => Promise.resolve(false));
+    const { app } = await createSessionApp({ persistStorage });
+
+    const response = await app.handleMessage(buildRpcMessage("tabGroup.create", { title: "A" }));
+
+    expect(response).toMatchObject({ type: "tabGroup.created" });
+    expect(persistStorage).toHaveBeenCalledTimes(1);
+  });
+
+  it("still answers a start when the browser refuses persistent storage", async () => {
+    const { app } = await createSessionApp({
+      persistStorage: () => Promise.reject(new Error("not allowed")),
+    });
+
+    const response = await app.handleMessage(buildRpcMessage("tabGroup.create", { title: "A" }));
+
+    expect(response).toMatchObject({ type: "tabGroup.created" });
+  });
+
+  it("answers a tab group the browser refused as a failure, not a protocol error", async () => {
+    const tabGroups = createStubTabGroups({
+      groupTabs: vi.fn().mockRejectedValue(new Error("tabs.group is not allowed")),
+    });
+    const { app, database } = await createSessionApp({ tabGroups });
+
+    const response = await app.handleMessage(
+      buildRpcMessage("tabGroup.create", { title: "Motors" }),
+    );
+
+    expect(response).toMatchObject({
+      type: "tabGroup.failed",
+      payload: { reason: "tabs.group is not allowed" },
+    });
+    expect(tabGroups.removeTab).toHaveBeenCalledWith(7);
+    expect(await database.count(SESSION_STORE)).toBe(0);
+  });
+
+  it("refuses a second session without opening a tab, naming the active one", async () => {
+    const tabGroups = createStubTabGroups({
+      getGroup: vi.fn().mockResolvedValue({ color: "blue", title: "E-bike motors" }),
+    });
+    const { app, database } = await createSessionApp({ tabGroups });
+    await database.put(SESSION_STORE, activeSession);
+
+    const response = await app.handleMessage(
+      buildRpcMessage("tabGroup.create", { title: "Batteries" }),
+    );
+
+    expect(response).toMatchObject({
+      type: "tabGroup.failed",
+      payload: { reason: 'A session is already active: "E-bike motors".' },
+    });
+    expect(tabGroups.createTab).not.toHaveBeenCalled();
+  });
+
+  it("refuses a blank session title before any tab is opened", async () => {
+    const tabGroups = createStubTabGroups();
+    const { app } = await createSessionApp({ tabGroups });
+
+    const response = await app.handleMessage(buildRpcMessage("tabGroup.create", { title: "   " }));
+
+    expect(response).toMatchObject({
+      type: "rpc.refused",
+      payload: { rejection: "invalid-payload" },
+    });
+    expect(tabGroups.createTab).not.toHaveBeenCalled();
+  });
+
+  it("reports the active session, and none once its group has gone", async () => {
+    const getGroup = vi
+      .fn<TabGroupApi["getGroup"]>()
+      .mockResolvedValueOnce({ color: "blue", title: "E-bike motors" })
+      .mockRejectedValue(new Error("No group with id: 42"));
+    const { app, database } = await createSessionApp({
+      tabGroups: createStubTabGroups({ getGroup }),
+    });
+    await database.put(SESSION_STORE, activeSession);
+
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      type: "session.active",
+      payload: { session: { id: "session-1", title: "E-bike motors", groupId: 42 } },
+    });
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      type: "session.active",
+      payload: { session: null },
+    });
+  });
+
+  it("ends the session when the user removes its group", async () => {
+    const { app, database } = await createSessionApp();
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.handleGroupRemoved({ id: 42 }, { isWindowClosing: false });
+
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "saved" });
+  });
+
+  it("keeps the session when its group goes because the window is closing", async () => {
+    const { app, database } = await createSessionApp();
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.handleGroupRemoved({ id: 42 }, { isWindowClosing: true });
+
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "active" });
+  });
+
+  it("renames the session with its group", async () => {
+    const { app, database } = await createSessionApp();
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.handleGroupUpdated({ id: 42, title: "Mid-drive motors" });
+
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      title: "Mid-drive motors",
+    });
+  });
+
+  it("ends a session whose group did not come back after a restart", async () => {
+    const { app, database } = await createSessionApp({
+      tabGroups: createStubTabGroups({
+        getGroup: vi.fn().mockRejectedValue(new Error("No group with id: 42")),
+      }),
+    });
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.reconcileSession();
+
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "saved" });
   });
 });

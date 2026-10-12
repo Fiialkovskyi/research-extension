@@ -10,6 +10,7 @@ export const POPUP_SNAPSHOT_SCRIPT = `
     const panel = document.querySelector('[data-testid="popup-panel"]');
     const greeting = document.querySelector('[data-testid="greeting"]');
     const rect = greeting?.getBoundingClientRect();
+    const session = document.querySelector('[data-testid="session-active"]');
     return JSON.stringify({
       uri: document.documentURI,
       greeting: greeting?.textContent ?? null,
@@ -17,6 +18,8 @@ export const POPUP_SNAPSHOT_SCRIPT = `
       panelWidth: panel ? Math.round(panel.getBoundingClientRect().width) : 0,
       backgroundColor: panel ? getComputedStyle(panel).backgroundColor : "",
       textColor: greeting ? getComputedStyle(greeting).color : "",
+      activeSession: session?.textContent ?? null,
+      hasSessionForm: !!document.querySelector('[data-testid="group-form"]'),
     });
   `;
 

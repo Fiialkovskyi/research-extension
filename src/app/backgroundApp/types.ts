@@ -31,8 +31,19 @@ export interface BackgroundDependencies {
    * surface would never see them.
    */
   policyViolations: PolicyViolationLog;
-  /** The browser's tab and tab group calls, used to start a session. */
+  /** The browser's tab and tab group calls, used to start and follow a session. */
   tabGroups: TabGroupApi;
+  /**
+   * Asks the browser not to evict the database under storage pressure
+   * (REQ-STO-009). The browser may decline; a session starts either way.
+   */
+  persistStorage: () => Promise<boolean>;
+}
+
+/** What a tab group event reports about the group. */
+export interface GroupEventDetails {
+  id: number;
+  title?: string;
 }
 
 /**
@@ -66,6 +77,21 @@ export interface BackgroundApp {
    * mid-job.
    */
   attachPort: (port: BackgroundPort) => void;
+  /** Follows a group's rename onto the session, when it is the session's group. */
+  handleGroupUpdated: (group: GroupEventDetails) => Promise<void>;
+  /**
+   * Ends the session when its group is removed by the user.
+   *
+   * A removal because the window is closing is ignored: the user did not end
+   * the research, and session restore may bring the group back. Reconciling
+   * decides later whether it did.
+   */
+  handleGroupRemoved: (
+    group: GroupEventDetails,
+    removeInfo: { isWindowClosing: boolean },
+  ) => Promise<void>;
+  /** Checks the recorded session against the browser, as on browser start-up. */
+  reconcileSession: () => Promise<void>;
   /** Releases the worker, if one was ever started. */
   shutdown: () => void;
 }

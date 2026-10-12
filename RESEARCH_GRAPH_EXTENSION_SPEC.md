@@ -107,7 +107,7 @@ The exact Hugging Face download hosts (LFS and CDN redirects) SHALL be enumerate
 
 **Requirements**
 
-- **REQ-RT-001:** The extension SHALL NOT inject content scripts or record telemetry until the user explicitly starts a session (toolbar action, sidebar button, or context-menu "Start research").
+- **REQ-RT-001:** The extension SHALL NOT inject content scripts or record telemetry until the user explicitly starts a session. A session is started by naming it in the popup, which creates a Firefox tab group with that title. Until after the MVP, at most one session SHALL be active: starting one while another is active SHALL be refused.
 - **REQ-RT-002:** WHEN the first session is started, the system SHALL request `<all_urls>` host permission from that user gesture; IF denied, the system SHALL run in degraded mode (tab-tree and navigation signals only, no scroll, copy or content).
 - **REQ-RT-003:** Content scripts SHALL be registered with `scripting.registerContentScripts` only while at least one session is active, and unregistered when none is.
 - **REQ-RT-004:** The background SHALL be restart-safe. Every listener is registered synchronously at top level, and in-memory caches are rebuilt lazily from IndexedDB.
@@ -150,11 +150,12 @@ The graph is built from browser events (tabs, navigation) plus throttled in-page
 - **REQ-CAP-001:** WHEN a session is active and a tab is created with an opener inside the session, the system SHALL create a node with `opener_node_id` set and add it to that session within 1 s.
 - **REQ-CAP-002:** WHEN a navigation commits in a session tab, the system SHALL create a new node (`parent_node_id` = previous node in that tab) unless the transition is `reload` or a same-document fragment change.
 - **REQ-CAP-003:** WHEN a committed URL matches a SERP pattern, the node SHALL have `kind = "serp"` and `query`. The first SERP in a session SHALL become the root; later SERPs SHALL be linked to the root by a `refinement` edge.
-- **REQ-CAP-004:** A tab SHALL belong to at most one session. Tabs opened from outside any session SHALL NOT be captured unless the user drags them in.
+- **REQ-CAP-004:** A tab SHALL belong to the active session if and only if it is in the session's tab group. Tabs that join the group, including those Firefox adds because they were opened from a grouped tab, SHALL be captured from the moment they join. Tabs that leave the group SHALL stop being captured but keep their recorded history. Tabs outside the group SHALL NOT be captured.
 - **REQ-CAP-005:** Content scripts SHALL batch signals and flush them at most every 2 s, on `visibilitychange` to hidden, and on `pagehide`. Added main-thread cost SHALL stay under 1 ms per event, measured at p95.
 - **REQ-CAP-006:** WHEN a page node first reaches deep read (see engagement states), the content script SHALL extract readable text with Mozilla Readability and send it with a SHA-256 `content_hash`. Text over 200 KB SHALL be truncated and flagged.
 - **REQ-CAP-007:** Co-attention edges SHALL be created WHEN focus alternates between the same two nodes at least 3 times within 5 minutes.
 - **REQ-CAP-008:** Private-browsing windows, `about:` and `moz-extension:` pages, and denylisted domains SHALL never produce nodes.
+- **REQ-CAP-009:** WHEN the session's tab group is removed other than by its window closing, the session SHALL end and be kept as saved, not deleted. WHEN the group is renamed, the session's title SHALL follow it. The session SHALL record its group's id, which is stable across a browser restart, and SHALL be reconciled with the browser at start-up.
 
 **Engagement states (rule-based, versioned as `engagement_rules@1`)**
 
@@ -175,6 +176,7 @@ interface Session {
   id: SessionId;
   schema_version: 1;
   title: string;
+  group_id: number; // the Firefox tab group the session is
   root_node_id: NodeId | null;
   status: "active" | "paused" | "saved";
   created_at: number;

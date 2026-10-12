@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { Greeting } from "@/features/greeting/ui/greeting";
+import { researchSessionResponseSchemas } from "@/features/researchSession";
 import { tabGroupResponseSchemas } from "@/features/tabGroups";
 import { GroupForm } from "@/features/tabGroups/ui/groupForm";
 import { getErrorMessage } from "@/shared/getErrorMessage";
@@ -27,31 +28,73 @@ export interface PopupAppProps {
 }
 
 /** Every answer the background may send this surface. */
-const responseSchemas = { ...tabGroupResponseSchemas, ...rpcResponseSchemas } as const;
+const responseSchemas = {
+  ...researchSessionResponseSchemas,
+  ...tabGroupResponseSchemas,
+  ...rpcResponseSchemas,
+} as const;
 
-type SessionStart =
-  | { status: "idle" }
-  | { status: "pending" }
-  | { status: "started"; title: string }
-  | { status: "failed"; reason: string };
+/**
+ * What the popup shows: nothing yet, the form to start a session (with the
+ * last failure, if any), or the session that is active.
+ */
+type PopupState =
+  | { status: "loading" }
+  | { status: "ready"; pending: boolean; failure?: string }
+  | { status: "active"; title: string };
 
 /** Turns the background's answer into what the popup shows. */
-const readAnswer = (answer: unknown): SessionStart => {
+const readAnswer = (answer: unknown): PopupState => {
   const response = parseRpcMessage(answer, responseSchemas);
 
   switch (response.type) {
+    case "session.active":
+      return response.payload.session === null
+        ? { status: "ready", pending: false }
+        : { status: "active", title: response.payload.session.title };
     case "tabGroup.created":
-      return { status: "started", title: response.payload.title };
+      return { status: "active", title: response.payload.title };
     case "tabGroup.failed":
     case "rpc.refused":
     case "rpc.failed":
-      return { status: "failed", reason: response.payload.reason };
+      return { status: "ready", pending: false, failure: response.payload.reason };
   }
+};
+
+/** A request that failed or was answered with nothing this surface reads. */
+const readFailure = (error: unknown): PopupState => {
+  return { status: "ready", pending: false, failure: getErrorMessage(error) };
 };
 
 /** Composition root of the toolbar popup surface. */
 export function PopupApp({ client }: PopupAppProps) {
-  const [start, setStart] = useState<SessionStart>({ status: "idle" });
+  const [state, setState] = useState<PopupState>({ status: "loading" });
+
+  // Asked on every open rather than remembered: the session lives in the
+  // background's database, and its group may have closed since the last look.
+  useEffect(() => {
+    let isCurrent = true;
+
+    client
+      .request(buildRpcMessage("session.getActive", {}))
+      .then(readAnswer)
+      .then(
+        (next) => {
+          if (isCurrent) {
+            setState(next);
+          }
+        },
+        (error: unknown) => {
+          if (isCurrent) {
+            setState(readFailure(error));
+          }
+        },
+      );
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [client]);
 
   // The background does the work, so it finishes even if the user dismisses
   // the popup first. Firefox keeps the popup open when the extension itself
@@ -59,15 +102,15 @@ export function PopupApp({ client }: PopupAppProps) {
   // seen.
   const startSession = useCallback(
     (title: string) => {
-      setStart({ status: "pending" });
+      setState({ status: "ready", pending: true });
 
       // A reply this surface cannot parse is a failure too, so it is caught
       // by the same handler rather than escaping as an unhandled rejection.
       client
         .request(buildRpcMessage("tabGroup.create", { title }))
         .then(readAnswer)
-        .then(setStart, (error: unknown) => {
-          setStart({ status: "failed", reason: getErrorMessage(error) });
+        .then(setState, (error: unknown) => {
+          setState(readFailure(error));
         });
     },
     [client],
@@ -76,19 +119,19 @@ export function PopupApp({ client }: PopupAppProps) {
   return (
     <Panel>
       <Greeting />
-      <GroupForm pending={start.status === "pending"} onSubmit={startSession} />
-      {start.status === "failed" && (
+      {state.status === "ready" && <GroupForm pending={state.pending} onSubmit={startSession} />}
+      {state.status === "ready" && state.failure !== undefined && (
         <p
           data-testid="group-error"
           role="alert"
           className="mt-2 text-sm text-red-700 dark:text-red-400"
         >
-          {start.reason}
+          {state.failure}
         </p>
       )}
-      {start.status === "started" && (
-        <p data-testid="group-started" className="mt-2 text-sm">
-          Started “{start.title}”.
+      {state.status === "active" && (
+        <p data-testid="session-active" className="mt-2 text-sm">
+          Session “{state.title}” is active.
         </p>
       )}
     </Panel>

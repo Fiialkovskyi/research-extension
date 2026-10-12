@@ -19,14 +19,17 @@ export {
   DATABASE_VERSION,
   MODEL_FILE_STORE,
   MODEL_STORE,
+  SESSION_STORE,
 } from "./constants";
 export type {
   ConformanceStatus,
   InferenceOutcome,
   ResearchDatabaseSchema,
+  SessionStatus,
   StoredInferenceRun,
   StoredModel,
   StoredModelFile,
+  StoredSession,
 } from "./types";
 export { openResearchDatabase } from "./openResearchDatabase";
 export { readInferenceRuns } from "./readInferenceRuns";

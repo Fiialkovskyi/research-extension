@@ -5,7 +5,13 @@ import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
 import { runEmbeddingConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
-import { createTabGroup } from "@/features/tabGroups";
+import {
+  buildSessionSummary,
+  endSessionForGroup,
+  reconcileActiveSession,
+  renameSessionForGroup,
+  startSession,
+} from "@/features/researchSession";
 import { BUNDLED_MODEL_PROFILES } from "@/shared/config";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
 import type { InferenceDevice } from "@/shared/modelManifest";
@@ -22,7 +28,12 @@ import type { ProbeResult } from "@/features/modelConformance";
 import { requestSchemas } from "./schemas";
 import type { BackgroundApp, BackgroundDependencies, Emit } from "./types";
 
-export type { BackgroundApp, BackgroundDependencies, BackgroundPort } from "./types";
+export type {
+  BackgroundApp,
+  BackgroundDependencies,
+  BackgroundPort,
+  GroupEventDetails,
+} from "./types";
 
 /** Answers a request that could not be trusted, saying which check it failed. */
 const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown> => {
@@ -231,15 +242,31 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         case "tabGroup.create": {
           try {
-            const created = await createTabGroup({
+            const { group } = await startSession({
+              database: await getDatabase(),
               title: request.payload.title,
               api: dependencies.tabGroups,
             });
 
-            return buildRpcMessage("tabGroup.created", created);
+            // Not awaited into the answer: the browser may decline, or take its
+            // time asking, and neither outcome changes that the session started.
+            dependencies.persistStorage().catch(() => false);
+
+            return buildRpcMessage("tabGroup.created", group);
           } catch (error) {
             return buildRpcMessage("tabGroup.failed", { reason: getErrorMessage(error) });
           }
+        }
+
+        case "session.getActive": {
+          const session = await reconcileActiveSession({
+            database: await getDatabase(),
+            getGroup: dependencies.tabGroups.getGroup,
+          });
+
+          return buildRpcMessage("session.active", {
+            session: session === undefined ? null : buildSessionSummary(session),
+          });
         }
 
         case "model.install": {
@@ -300,6 +327,22 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }).then((response) => {
           port.postMessage(response);
         });
+      });
+    },
+    handleGroupUpdated: async (group) => {
+      if (group.title !== undefined) {
+        await renameSessionForGroup(await getDatabase(), group.id, group.title);
+      }
+    },
+    handleGroupRemoved: async (group, { isWindowClosing }) => {
+      if (!isWindowClosing) {
+        await endSessionForGroup(await getDatabase(), group.id);
+      }
+    },
+    reconcileSession: async () => {
+      await reconcileActiveSession({
+        database: await getDatabase(),
+        getGroup: dependencies.tabGroups.getGroup,
       });
     },
     shutdown: () => {

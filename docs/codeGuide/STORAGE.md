@@ -37,7 +37,7 @@ Everything about the database's shape lives in `src/shared/storage/`:
 shared/storage/
 ├── index.ts                    # barrel
 ├── constants.ts                # name, version, store names, limits
-├── types.ts                    # StoredModel, StoredModelFile, StoredInferenceRun, ResearchDatabaseSchema …
+├── types.ts                    # StoredModel, StoredModelFile, StoredInferenceRun, StoredSession, ResearchDatabaseSchema …
 ├── openResearchDatabase/
 │   └── utils/
 │       └── applyDatabaseUpgrade/   # UPGRADE_STEPS and the runner
@@ -45,7 +45,7 @@ shared/storage/
 └── recordInferenceRun/
 ```
 
-- **Store names are constants** (`MODEL_STORE`, `MODEL_FILE_STORE`, `INFERENCE_RUN_STORE`), used
+- **Store names are constants** (`MODEL_STORE`, `MODEL_FILE_STORE`, `INFERENCE_RUN_STORE`, `SESSION_STORE`), used
   everywhere a store is named — never a string literal at a call site.
 - **`ResearchDatabaseSchema`** (an `idb` `DBSchema`) declares each store's key, value and indexes. It is
   what types every `get`, `put` and index query; a store or index that is not in it does not

@@ -36,6 +36,7 @@ export default defineBackground(() => {
       activateTab: (tabId) => browser.tabs.update(tabId, { active: true }),
       removeTab: (tabId) => browser.tabs.remove(tabId),
     },
+    persistStorage: () => navigator.storage.persist(),
   });
 
   browser.runtime.onMessage.addListener((message: unknown) => app.handleMessage(message));
@@ -45,5 +46,23 @@ export default defineBackground(() => {
   // event-page lifetime.
   browser.runtime.onConnect.addListener((port) => {
     app.attachPort(port);
+  });
+
+  // The session follows its group. These wake the page, so like every other
+  // listener they are attached before anything is awaited.
+  browser.tabGroups.onUpdated.addListener((group) => {
+    void app.handleGroupUpdated(group);
+  });
+  // Firefox passes `removeInfo` as a second argument, which the shared typings
+  // (written for Chrome) do not declare; it is optional here for that reason.
+  browser.tabGroups.onRemoved.addListener((group, removeInfo?: { isWindowClosing?: boolean }) => {
+    void app.handleGroupRemoved(group, {
+      isWindowClosing: removeInfo?.isWindowClosing ?? false,
+    });
+  });
+  // After a restart the group may not have come back; the record is checked
+  // against what session restore actually restored.
+  browser.runtime.onStartup.addListener(() => {
+    void app.reconcileSession();
   });
 });

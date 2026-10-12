@@ -9,6 +9,8 @@ const SNAPSHOT = JSON.stringify({
   panelWidth: 320,
   backgroundColor: "rgb(255, 255, 255)",
   textColor: "rgb(15, 23, 42)",
+  activeSession: null,
+  hasSessionForm: true,
 });
 
 describe("parsePopupSnapshot", () => {
@@ -20,6 +22,8 @@ describe("parsePopupSnapshot", () => {
       panelWidth: 320,
       backgroundColor: "rgb(255, 255, 255)",
       textColor: "rgb(15, 23, 42)",
+      activeSession: null,
+      hasSessionForm: true,
     });
   });
 
@@ -27,6 +31,19 @@ describe("parsePopupSnapshot", () => {
     const raw = JSON.stringify({ ...JSON.parse(SNAPSHOT), greeting: null, greetingVisible: false });
 
     expect(parsePopupSnapshot(raw).greeting).toBeNull();
+  });
+
+  it("reads the active session the popup announces", () => {
+    const raw = JSON.stringify({
+      ...JSON.parse(SNAPSHOT),
+      activeSession: "Session “Motors” is active.",
+      hasSessionForm: false,
+    });
+
+    expect(parsePopupSnapshot(raw)).toMatchObject({
+      activeSession: "Session “Motors” is active.",
+      hasSessionForm: false,
+    });
   });
 
   it("rejects a JSON string that is not a snapshot", () => {

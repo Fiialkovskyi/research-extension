@@ -4,7 +4,12 @@ import { openDB } from "idb";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
-import { INFERENCE_RUN_STORE, MODEL_FILE_STORE, MODEL_STORE } from "../../../constants";
+import {
+  INFERENCE_RUN_STORE,
+  MODEL_FILE_STORE,
+  MODEL_STORE,
+  SESSION_STORE,
+} from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
 
 let databaseCount = 0;
@@ -48,6 +53,35 @@ describe("applyDatabaseUpgrade", () => {
     expect([...database.transaction(INFERENCE_RUN_STORE).store.indexNames]).toContain("startedAt");
 
     database.close();
+  });
+
+  it("adds a sessions store keyed by id and indexed by status", async () => {
+    const database = await openAt(getNextDatabaseName(), 3);
+    const sessions = database.transaction(SESSION_STORE).store;
+
+    expect(sessions.keyPath).toBe("id");
+    expect([...sessions.indexNames]).toEqual(["status"]);
+
+    database.close();
+  });
+
+  it("keeps a version-2 profile's models and runs when it gains sessions", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 2);
+
+    // Only the keys matter here: the step under test never reads the records.
+    await before.put(MODEL_STORE, { ref: "org/model@sha" } as never);
+    await before.put(INFERENCE_RUN_STORE, { runId: "run-1", modelRef: "org/model@sha" } as never);
+    before.close();
+
+    const after = await openAt(name, 3);
+
+    expect(after.version).toBe(3);
+    expect(await after.count(MODEL_STORE)).toBe(1);
+    expect(await after.count(INFERENCE_RUN_STORE)).toBe(1);
+    expect(await after.count(SESSION_STORE)).toBe(0);
+
+    after.close();
   });
 
   it("keys model files by model and path together, so one model holds many files", async () => {

@@ -21,6 +21,7 @@
 export { clearSystemColorScheme } from "./clearSystemColorScheme";
 export { clickToolbarAction } from "./clickToolbarAction";
 export { closePopup } from "./closePopup";
+export { closeTabGroup } from "./closeTabGroup";
 export { enterBrowserChrome } from "./enterBrowserChrome";
 export { leaveBrowserChrome } from "./leaveBrowserChrome";
 export { placeToolbarAction } from "./placeToolbarAction";

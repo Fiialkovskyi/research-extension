@@ -18,7 +18,7 @@ export interface TabGroupApi {
   createTab: (properties: { active: boolean }) => Promise<{ id?: number }>;
   groupTabs: (options: { tabIds: [number, ...number[]] }) => Promise<number>;
   updateGroup: (groupId: number, properties: { title: string }) => Promise<unknown>;
-  getGroup: (groupId: number) => Promise<{ color: string }>;
+  getGroup: (groupId: number) => Promise<{ color: string; title?: string }>;
   activateTab: (tabId: number) => Promise<unknown>;
   removeTab: (tabId: number) => Promise<void>;
 }
