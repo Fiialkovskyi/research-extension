@@ -20,6 +20,7 @@
 
 export { clearSystemColorScheme } from "./clearSystemColorScheme";
 export { clickInTabShowing } from "./clickInTabShowing";
+export { clickPopupButton } from "./clickPopupButton";
 export { clickToolbarAction } from "./clickToolbarAction";
 export { closePopup } from "./closePopup";
 export { closeTabGroup } from "./closeTabGroup";
@@ -32,8 +33,10 @@ export { placeToolbarAction } from "./placeToolbarAction";
 export { type PopupPanelState, getPopupPanelState } from "./getPopupPanelState";
 export { type PopupSnapshot, readPopup } from "./readPopup";
 export { type TabGroupSnapshot, readTabGroups } from "./readTabGroups";
+export { type TabSnapshot, readTabs } from "./readTabs";
 export { reopenSavedTabGroup } from "./reopenSavedTabGroup";
 export { saveAndCloseTabGroup } from "./saveAndCloseTabGroup";
+export { selectTabShowing } from "./selectTabShowing";
 export { type SystemColorScheme, setSystemColorScheme } from "./setSystemColorScheme";
 export { getToolbarWidgetId } from "./getToolbarWidgetId";
 export { submitPopupGroupTitle } from "./submitPopupGroupTitle";

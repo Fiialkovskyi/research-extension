@@ -10,6 +10,8 @@ export const researchSnapshotSchema = v.object({
       tabState: v.string(),
       hasOpener: v.boolean(),
       hasParent: v.boolean(),
+      /** When the background recorded the node, in epoch milliseconds. */
+      createdAt: v.number(),
     }),
   ),
   edges: v.array(v.object({ kind: v.string() })),

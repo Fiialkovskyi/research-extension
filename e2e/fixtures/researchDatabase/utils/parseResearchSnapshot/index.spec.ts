@@ -11,6 +11,7 @@ const snapshot = {
       tabState: "open",
       hasOpener: false,
       hasParent: false,
+      createdAt: 1,
     },
   ],
   edges: [{ kind: "opener" }],

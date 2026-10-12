@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Greeting } from "@/features/greeting/ui/greeting";
+import { researchMapResponseSchemas } from "@/features/researchMap";
 import { researchSessionResponseSchemas } from "@/features/researchSession";
 import { tabGroupResponseSchemas } from "@/features/tabGroups";
 import { GroupForm } from "@/features/tabGroups/ui/groupForm";
@@ -11,7 +12,7 @@ import {
   type RpcMessage,
   rpcResponseSchemas,
 } from "@/shared/rpc";
-import { Panel } from "@/shared/ui";
+import { Button, Panel } from "@/shared/ui";
 
 /**
  * The popup's end of its conversation with the background.
@@ -66,6 +67,27 @@ const readAnswer = (answer: unknown): PopupState => {
   }
 };
 
+/** Every answer the background may send to opening the map. */
+const mapResponseSchemas = {
+  ...researchMapResponseSchemas,
+  ...rpcResponseSchemas,
+} as const;
+
+/** Why the map could not be opened, or `undefined` when it was. */
+const readMapAnswer = (answer: unknown): string | undefined => {
+  const response = parseRpcMessage(answer, mapResponseSchemas);
+
+  switch (response.type) {
+    case "map.opened":
+      return undefined;
+    case "rpc.refused":
+    case "rpc.failed":
+      return response.payload.reason;
+    default:
+      return `The map answered "${response.type}".`;
+  }
+};
+
 /** A request that failed or was answered with nothing this surface reads. */
 const readFailure = (error: unknown): PopupState => {
   return { status: "ready", pending: false, failure: getErrorMessage(error) };
@@ -74,6 +96,7 @@ const readFailure = (error: unknown): PopupState => {
 /** Composition root of the toolbar popup surface. */
 export function PopupApp({ client }: PopupAppProps) {
   const [state, setState] = useState<PopupState>({ status: "loading" });
+  const [mapFailure, setMapFailure] = useState<string | undefined>();
 
   // Asked on every open rather than remembered: the session lives in the
   // background's database, and its group may have closed since the last look.
@@ -121,6 +144,16 @@ export function PopupApp({ client }: PopupAppProps) {
     [client],
   );
 
+  // The background finds the map's tab or opens one, outside the session's group.
+  const openMap = useCallback(() => {
+    client
+      .request(buildRpcMessage("map.open", {}))
+      .then(readMapAnswer)
+      .then(setMapFailure, (error: unknown) => {
+        setMapFailure(getErrorMessage(error));
+      });
+  }, [client]);
+
   return (
     <Panel>
       <Greeting />
@@ -140,6 +173,22 @@ export function PopupApp({ client }: PopupAppProps) {
           <span data-testid="session-page-count">
             {state.pageCount === 1 ? "1 page recorded" : `${state.pageCount} pages recorded`}
           </span>
+        </p>
+      )}
+      {state.status === "active" && (
+        <div className="mt-3">
+          <Button data-testid="open-map" onClick={openMap}>
+            Open map
+          </Button>
+        </div>
+      )}
+      {state.status === "active" && mapFailure !== undefined && (
+        <p
+          data-testid="map-error"
+          role="alert"
+          className="mt-2 text-sm text-red-700 dark:text-red-400"
+        >
+          {mapFailure}
         </p>
       )}
     </Panel>

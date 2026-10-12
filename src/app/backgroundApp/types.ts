@@ -47,6 +47,10 @@ export interface BackgroundDependencies {
    * would vanish.
    */
   reportError: (error: unknown) => void;
+  /** Selects a tab and focuses its window, for a node activated on the map. */
+  focusTab: (tabId: number) => Promise<void>;
+  /** Selects the map's tab, opening one outside any tab group if none is open. */
+  openMap: () => Promise<void>;
 }
 
 /** The changes of a tab update that capture follows. */
@@ -70,6 +74,8 @@ export interface GroupEventDetails {
 export interface BackgroundPort {
   postMessage: (message: unknown) => void;
   onMessage: { addListener: (listener: (message: unknown) => void) => void };
+  /** Fires when the surface's page goes away, ending anything it subscribed to. */
+  onDisconnect: { addListener: (listener: () => void) => void };
 }
 
 /** Sends a message that is not the answer to a request, such as progress. */

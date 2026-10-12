@@ -11,6 +11,8 @@ interface ClientAnswers {
   pageCount?: number;
   /** The answer to a start; a rejection when it is an `Error`. */
   start?: unknown;
+  /** The answer to opening the map. */
+  map?: unknown;
 }
 
 /** A background that reports `active` when asked, and answers a start with `start`. */
@@ -18,8 +20,13 @@ const createClient = ({
   active = null,
   pageCount = 0,
   start,
+  map = buildRpcMessage("map.opened", {}),
 }: ClientAnswers = {}): PopupClient => ({
   request: vi.fn((message: RpcMessage<string, unknown>) => {
+    if (message.type === "map.open") {
+      return Promise.resolve(map);
+    }
+
     if (message.type === "session.getActive") {
       return Promise.resolve(
         buildRpcMessage("session.active", {
@@ -66,6 +73,37 @@ describe("PopupApp", () => {
     render(<PopupApp client={createClient({ active: "E-bike motors", pageCount: 2 })} />);
 
     expect(await screen.findByTestId("session-page-count")).toHaveTextContent("2 pages recorded");
+  });
+
+  it("offers the map only while a session is active", async () => {
+    render(<PopupApp client={createClient()} />);
+
+    await screen.findByLabelText("Session title");
+
+    expect(screen.queryByTestId("open-map")).not.toBeInTheDocument();
+  });
+
+  it("asks the background to open the map", async () => {
+    const client = createClient({ active: "E-bike motors" });
+    render(<PopupApp client={client} />);
+
+    fireEvent.click(await screen.findByTestId("open-map"));
+
+    expect(client.request).toHaveBeenCalledWith(expect.objectContaining({ type: "map.open" }));
+    await vi.waitFor(() => expect(client.request).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId("map-error")).not.toBeInTheDocument();
+  });
+
+  it("says why the map could not be opened", async () => {
+    const client = createClient({
+      active: "E-bike motors",
+      map: buildRpcMessage("rpc.failed", { requestType: "map.open", reason: "No window." }),
+    });
+    render(<PopupApp client={client} />);
+
+    fireEvent.click(await screen.findByTestId("open-map"));
+
+    expect(await screen.findByTestId("map-error")).toHaveTextContent("No window.");
   });
 
   it("says a single page in the singular", async () => {

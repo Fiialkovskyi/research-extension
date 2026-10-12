@@ -18,6 +18,8 @@ export const popupSnapshotSchema = v.object({
   activeSession: v.nullable(v.string()),
   /** Whether the popup offers the form that starts a session. */
   hasSessionForm: v.boolean(),
+  /** Whether the popup offers to open the research map. */
+  hasOpenMap: v.boolean(),
   /** Text giving the active session's recorded page count, or null without one. */
   pageCount: v.nullable(v.string()),
 });

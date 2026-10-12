@@ -567,14 +567,14 @@ UI pages are thin views over background state. They subscribe to `graph.patch` s
 
 **Surfaces**
 
-| Surface          | Implementation                                        | Key elements                                                                                                                                        |
-| ---------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Toolbar action   | `action` button with a badge                          | Start research or Save; badge shows the unread count of the active session                                                                          |
-| Sidebar          | `sidebar_action` page, virtualized tree               | Root query, clusters (collapsible, renameable), page rows with engagement dot, unread badge and copy marker; a "Prune dead ends" action per cluster |
-| Synthesis panel  | A sidebar tab                                         | Cluster summary with citations, comparison table, gaps and open questions, freshness and stale markers                                              |
-| Research map     | `map.html` in a tab; graphology with sigma.js (WebGL) | Radial layout, cluster bubbles sized by total active dwell, co-attention edges dashed, click to focus tab                                           |
-| Research library | A sidebar view and `library.html`                     | Saved sessions, resume, rename, export, delete                                                                                                      |
-| Options          | `options_ui` page                                     | Models (install, activate, conformance results, disk use per model and space), denylist, passphrase, data deletion, "What was recorded"             |
+| Surface          | Implementation                                    | Key elements                                                                                                                                        |
+| ---------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Toolbar action   | `action` button with a badge                      | Start research or Save; badge shows the unread count of the active session                                                                          |
+| Sidebar          | `sidebar_action` page, virtualized tree           | Root query, clusters (collapsible, renameable), page rows with engagement dot, unread badge and copy marker; a "Prune dead ends" action per cluster |
+| Synthesis panel  | A sidebar tab                                     | Cluster summary with citations, comparison table, gaps and open questions, freshness and stale markers                                              |
+| Research map     | `map.html` in a tab; React Flow with dagre (DOM)¹ | Radial layout, cluster bubbles sized by total active dwell, co-attention edges dashed, click to focus tab                                           |
+| Research library | A sidebar view and `library.html`                 | Saved sessions, resume, rename, export, delete                                                                                                      |
+| Options          | `options_ui` page                                 | Models (install, activate, conformance results, disk use per model and space), denylist, passphrase, data deletion, "What was recorded"             |
 
 **Requirements**
 
@@ -585,6 +585,8 @@ UI pages are thin views over background state. They subscribe to `graph.patch` s
 - **REQ-UI-005:** The UI SHALL show the inference state honestly: "No model installed", "Running on CPU, synthesis is slower", "Waiting for idle", "Re-embedding: 40%".
 - **REQ-UI-006:** The UI SHALL follow the Firefox light and dark theme (`prefers-color-scheme`) and system font settings.
 - **REQ-UI-007:** The framework SHALL be lightweight (Preact or Svelte), and the bundle per UI page SHALL stay under 300 KB gzipped, excluding the map's graph library.
+
+¹ The first map (OpenSpec change `add-research-map`) is drawn with React Flow and laid out top-down with dagre, instead of graphology with sigma.js. React Flow renders each node as a DOM element. That gives every node keyboard focus (REQ-UI-002), lets unit and end-to-end tests read the map from the DOM, and lets a node carry rich content such as the engagement dot and the unread badge. React Flow's group nodes also cover the cluster bubbles. A session's graph is a few hundred nodes (REQ-UI-001), which DOM rendering handles. Move to sigma.js when the map has to show thousands of nodes at once, for example across the whole library. Only the map component would change: the snapshot message and the layout input stay the same.
 
 ## 12. Non-functional requirements (NFR)
 

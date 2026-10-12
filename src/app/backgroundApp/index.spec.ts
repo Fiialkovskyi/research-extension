@@ -58,6 +58,8 @@ const buildDependencies = (
       queryGroupTabs: () => Promise.resolve([]),
     },
     reportError: () => {},
+    focusTab: () => Promise.resolve(),
+    openMap: () => Promise.resolve(),
     ...overrides,
   };
 };
@@ -91,6 +93,7 @@ const createFreshDatabase = async () => {
 /** A stand-in for a runtime port, capturing what the background posts back. */
 const createFakePort = () => {
   const listeners: ((message: unknown) => void)[] = [];
+  const disconnectListeners: (() => void)[] = [];
   const posted: unknown[] = [];
 
   return {
@@ -100,10 +103,18 @@ const createFakePort = () => {
       onMessage: {
         addListener: (listener: (message: unknown) => void) => listeners.push(listener),
       },
+      onDisconnect: {
+        addListener: (listener: () => void) => disconnectListeners.push(listener),
+      },
     },
     send: (message: unknown) => {
       for (const listener of listeners) {
         listener(message);
+      }
+    },
+    disconnect: () => {
+      for (const listener of disconnectListeners) {
+        listener();
       }
     },
   };
@@ -867,5 +878,202 @@ describe("capturing the session's tabs through the background", () => {
     expect(nodes.filter((node) => node.tabState === "open")).toEqual([
       expect.objectContaining({ tabId: 12, transitionType: "restored" }),
     ]);
+  });
+});
+
+/** The graph snapshots a port has received so far, oldest first. */
+const readSnapshots = (posted: unknown[]) =>
+  posted.filter((message) => (message as { type: string }).type === "graph.snapshot") as {
+    payload: { session: { title: string } | null; nodes: { tabState: string }[] };
+  }[];
+
+/** A background with an active session and one map page subscribed over a port. */
+const createSubscribedApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
+  const { app, database } = await createSessionApp({
+    tabCapture: createTabCapture(sessionTab({ url: "https://example.org/b" })),
+    ...overrides,
+  });
+  await database.put(SESSION_STORE, activeSession);
+
+  const map = createFakePort();
+
+  app.attachPort(map.port);
+  map.send(buildRpcMessage("graph.subscribe", {}));
+  await vi.waitFor(() => expect(readSnapshots(map.posted)).toHaveLength(1));
+
+  return { app, database, map };
+};
+
+describe("the research map through the background", () => {
+  it("answers a subscription with the active session's graph", async () => {
+    const { app, map } = await createSubscribedApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await vi.waitFor(() => expect(readSnapshots(map.posted)).toHaveLength(2));
+
+    expect(readSnapshots(map.posted)[0]?.payload).toEqual({
+      session: { id: "session-1", title: "E-bike motors" },
+      nodes: [],
+      edges: [],
+    });
+  });
+
+  it("pushes a snapshot that already holds the write that caused it", async () => {
+    const { app, map } = await createSubscribedApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted(commit("https://example.org/b"));
+    // Nodes come in key order, which is a random UUID's, not the order of capture.
+    await vi.waitFor(() =>
+      expect(
+        readSnapshots(map.posted)
+          .at(-1)
+          ?.payload.nodes.map((node) => node.tabState)
+          .toSorted(),
+      ).toEqual(["closed", "open"]),
+    );
+  });
+
+  it("coalesces a burst of events into at most two pushes", async () => {
+    const { app, map } = await createSubscribedApp();
+
+    // The browser reports a commit, its title and the focus within milliseconds.
+    await Promise.all([
+      app.handleNavigationCommitted(commit("https://example.org/a")),
+      app.handleTabUpdated(sessionTab(), { title: "Mid-drive motors" }),
+      app.handleTabActivated(7),
+    ]);
+    await vi.waitFor(() => expect(readSnapshots(map.posted).at(-1)?.payload.nodes).toHaveLength(1));
+
+    expect(readSnapshots(map.posted).length - 1).toBeLessThanOrEqual(2);
+  });
+
+  it("pushes no session once the session's group is removed", async () => {
+    const { app, map } = await createSubscribedApp();
+
+    await app.handleGroupRemoved({ id: 42 }, { isWindowClosing: false });
+    await vi.waitFor(() => expect(readSnapshots(map.posted)).toHaveLength(2));
+
+    expect(readSnapshots(map.posted)[1]?.payload).toEqual({ session: null, nodes: [], edges: [] });
+  });
+
+  it("pushes a rename of the session", async () => {
+    const { app, map } = await createSubscribedApp();
+
+    await app.handleGroupUpdated({ id: 42, title: "Hub motors" });
+    await vi.waitFor(() => expect(readSnapshots(map.posted)).toHaveLength(2));
+
+    expect(readSnapshots(map.posted)[1]?.payload.session).toMatchObject({ title: "Hub motors" });
+  });
+
+  it("stops pushing to a map page that has gone", async () => {
+    const { app, map } = await createSubscribedApp();
+
+    map.disconnect();
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+    expect(readSnapshots(map.posted)).toHaveLength(1);
+  });
+
+  it("reads nothing for a push when no map page is listening", async () => {
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab()),
+    });
+    await database.put(SESSION_STORE, activeSession);
+    const getAllFromIndex = vi.spyOn(database, "getAllFromIndex");
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+    // Capture itself looks up the tab's node; reading the whole graph would
+    // also read the session's edges.
+    expect(getAllFromIndex).not.toHaveBeenCalledWith(EDGE_STORE, "sessionId", "session-1");
+  });
+
+  it("drops a map page whose port can no longer be posted to", async () => {
+    const { app, map } = await createSubscribedApp();
+    const failing = createFakePort();
+
+    failing.port.postMessage = () => {
+      throw new Error("Attempt to postMessage on disconnected port");
+    };
+    // Subscribed after the throw is armed, the answer is lost too; only the
+    // working map page should still receive pushes.
+    app.attachPort(failing.port);
+    failing.send(buildRpcMessage("graph.subscribe", {}));
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted(commit("https://example.org/b"));
+    await vi.waitFor(() => expect(readSnapshots(map.posted).at(-1)?.payload.nodes).toHaveLength(2));
+  });
+
+  it("selects the tab of an open node", async () => {
+    const focusTab = vi.fn(() => Promise.resolve());
+    const { app, database } = await createSessionApp({ focusTab });
+    await database.put(SESSION_STORE, activeSession);
+    await app.handleTabUpdated(sessionTab(), { groupId: 42 });
+
+    const response = await app.handleMessage(buildRpcMessage("tab.focus", { tabId: 7 }));
+
+    expect(response).toMatchObject({ type: "tab.focused", payload: { tabId: 7 } });
+    expect(focusTab).toHaveBeenCalledWith(7);
+  });
+
+  it("refuses to select a tab whose node is closed", async () => {
+    const focusTab = vi.fn(() => Promise.resolve());
+    const { app, database } = await createSessionApp({ focusTab });
+    await database.put(SESSION_STORE, activeSession);
+    await app.handleTabUpdated(sessionTab(), { groupId: 42 });
+    await app.handleTabRemoved(7, { isWindowClosing: false });
+
+    const response = await app.handleMessage(buildRpcMessage("tab.focus", { tabId: 7 }));
+
+    expect(response).toMatchObject({ type: "tab.focusRefused", payload: { tabId: 7 } });
+    expect(focusTab).not.toHaveBeenCalled();
+  });
+
+  it("refuses to select a tab outside the session", async () => {
+    const focusTab = vi.fn(() => Promise.resolve());
+    const { app, database } = await createSessionApp({ focusTab });
+    await database.put(SESSION_STORE, activeSession);
+
+    const response = await app.handleMessage(buildRpcMessage("tab.focus", { tabId: 99 }));
+
+    expect(response).toMatchObject({ type: "tab.focusRefused" });
+    expect(focusTab).not.toHaveBeenCalled();
+  });
+
+  it("refuses to select a tab when no session is active", async () => {
+    const focusTab = vi.fn(() => Promise.resolve());
+    const { app } = await createSessionApp({ focusTab });
+
+    const response = await app.handleMessage(buildRpcMessage("tab.focus", { tabId: 7 }));
+
+    expect(response).toMatchObject({ type: "tab.focusRefused" });
+    expect(focusTab).not.toHaveBeenCalled();
+  });
+
+  it("answers a tab the browser could not select as refused", async () => {
+    const { app, database } = await createSessionApp({
+      focusTab: () => Promise.reject(new Error("Invalid tab ID: 7")),
+    });
+    await database.put(SESSION_STORE, activeSession);
+    await app.handleTabUpdated(sessionTab(), { groupId: 42 });
+
+    const response = await app.handleMessage(buildRpcMessage("tab.focus", { tabId: 7 }));
+
+    expect(response).toMatchObject({
+      type: "tab.focusRefused",
+      payload: { reason: "Invalid tab ID: 7" },
+    });
+  });
+
+  it("opens the map when asked", async () => {
+    const openMap = vi.fn(() => Promise.resolve());
+    const app = createBackgroundApp(buildDependencies({ openMap }));
+
+    const response = await app.handleMessage(buildRpcMessage("map.open", {}));
+
+    expect(response).toMatchObject({ type: "map.opened" });
+    expect(openMap).toHaveBeenCalledTimes(1);
   });
 });

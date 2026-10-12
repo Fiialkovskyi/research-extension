@@ -4,11 +4,13 @@ import { type InferenceWorker, loadModelIntoWorker } from "@/features/inference"
 import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
 import { runEmbeddingConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
-import { countSessionNodes } from "@/features/researchGraph";
+import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
+import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
 import {
   buildSessionSummary,
   endSessionForGroup,
+  getActiveSession,
   reconcileActiveSession,
   renameSessionForGroup,
   startSession,
@@ -59,6 +61,20 @@ const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown>
   });
 };
 
+/** The active session's graph as the map draws it. */
+const readGraphSnapshot = async (
+  openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+): Promise<GraphSnapshot> => {
+  const session = await getActiveSession(openedDatabase);
+
+  return buildGraphSnapshot(
+    session,
+    session === undefined
+      ? { nodes: [], edges: [] }
+      : await readSessionGraph(openedDatabase, session.id),
+  );
+};
+
 export const createBackgroundApp = (dependencies: BackgroundDependencies): BackgroundApp => {
   let worker: InferenceWorker | undefined;
   let database: IDBPDatabase<ResearchDatabaseSchema> | undefined;
@@ -107,6 +123,19 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     return database;
   };
 
+  /**
+   * Where the map pages listen. Each is the `emit` of one port, removed when
+   * that port disconnects or can no longer be posted to.
+   */
+  const graphSubscribers = new Set<Emit>();
+  /** Capture writes queued so far, counted so a waiting push knows what came after it. */
+  let captureWriteCount = 0;
+  /**
+   * How many writes had been queued when the waiting push was queued, or
+   * `undefined` while no push is waiting.
+   */
+  let graphPushQueuedAt: number | undefined;
+
   /** The tail of the capture queue; each capture event runs after the one before. */
   let captureQueue: Promise<void> = Promise.resolve();
 
@@ -130,12 +159,70 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     return captureQueue;
   };
 
+  /** Queues a push behind every write queued so far. */
+  const queueGraphPush = (): void => {
+    graphPushQueuedAt = captureWriteCount;
+
+    void enqueueCapture(async (openedDatabase) => {
+      // Writes queued behind this push would be missed by reading now, so it
+      // moves behind them instead: a burst of events ends in one push.
+      if (captureWriteCount !== graphPushQueuedAt) {
+        queueGraphPush();
+        return;
+      }
+
+      // Cleared before reading, so a change made during the read is pushed too.
+      graphPushQueuedAt = undefined;
+
+      if (graphSubscribers.size === 0) {
+        return;
+      }
+
+      const message = buildRpcMessage("graph.snapshot", await readGraphSnapshot(openedDatabase));
+
+      for (const emit of graphSubscribers) {
+        try {
+          emit(message);
+        } catch {
+          // A port whose page has gone throws rather than delivering.
+          graphSubscribers.delete(emit);
+        }
+      }
+    });
+  };
+
+  /**
+   * Sends every map page a fresh snapshot once the queued capture work is done.
+   *
+   * The push runs on the capture queue, so it reads the graph only after the
+   * writes that called for it. While one push is waiting, a further change adds
+   * nothing: that push will read it too.
+   */
+  const pushGraphSnapshot = (): void => {
+    if (graphSubscribers.size > 0 && graphPushQueuedAt === undefined) {
+      queueGraphPush();
+    }
+  };
+
+  /** Runs capture work, then tells the map pages the graph may have changed. */
+  const captureAndPush = (
+    work: (openedDatabase: IDBPDatabase<ResearchDatabaseSchema>) => Promise<unknown>,
+  ): Promise<void> => {
+    captureWriteCount += 1;
+
+    const captured = enqueueCapture(work);
+
+    pushGraphSnapshot();
+
+    return captured;
+  };
+
   // The switch below is exhaustive over the parsed message union, and the
   // compiler knows it: adding a message type without a case makes this
   // function stop returning on every path, which is the error we want.
   const handleMessage = async (
     candidate: unknown,
-    emit: Emit,
+    emit: Emit | undefined,
   ): Promise<RpcMessage<string, unknown>> => {
     let request;
 
@@ -284,6 +371,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             // Not awaited into the answer: the browser may decline, or take its
             // time asking, and neither outcome changes that the session started.
             dependencies.persistStorage().catch(() => false);
+            pushGraphSnapshot();
 
             return buildRpcMessage("tabGroup.created", group);
           } catch (error) {
@@ -306,6 +394,60 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           });
         }
 
+        case "graph.subscribe": {
+          let snapshot: GraphSnapshot | undefined;
+
+          // Read on the capture queue, and subscribed in the same step, so no
+          // change can fall between the snapshot answered here and the pushes
+          // that follow it.
+          await enqueueCapture(async (openedDatabase) => {
+            snapshot = await readGraphSnapshot(openedDatabase);
+
+            // A one-shot message has nowhere to push to; it gets one snapshot.
+            if (emit !== undefined) {
+              graphSubscribers.add(emit);
+            }
+          });
+
+          if (snapshot === undefined) {
+            throw new Error("The session's graph could not be read.");
+          }
+
+          return buildRpcMessage("graph.snapshot", snapshot);
+        }
+
+        case "tab.focus": {
+          const { tabId } = request.payload;
+          const openedDatabase = await getDatabase();
+          const session = await getActiveSession(openedDatabase);
+
+          // Only a tab the map draws as open may be selected: the map is not a
+          // channel for selecting arbitrary tabs, and a closed node has none.
+          if (
+            session === undefined ||
+            (await readTabNode(openedDatabase, session.id, tabId)) === undefined
+          ) {
+            return buildRpcMessage("tab.focusRefused", {
+              tabId,
+              reason: "This page's tab is not open in the active session.",
+            });
+          }
+
+          try {
+            await dependencies.focusTab(tabId);
+          } catch (error) {
+            return buildRpcMessage("tab.focusRefused", { tabId, reason: getErrorMessage(error) });
+          }
+
+          return buildRpcMessage("tab.focused", { tabId });
+        }
+
+        case "map.open": {
+          await dependencies.openMap();
+
+          return buildRpcMessage("map.opened", {});
+        }
+
         case "model.install": {
           const { repository } = request.payload;
           const profile = BUNDLED_MODEL_PROFILES.find(
@@ -325,7 +467,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
               database: await getDatabase(),
               fetchResource: dependencies.fetchResource,
               onProgress: (progress) => {
-                emit(buildRpcMessage("model.installProgress", progress));
+                emit?.(buildRpcMessage("model.installProgress", progress));
               },
             });
 
@@ -353,27 +495,38 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   };
 
   return {
-    handleMessage: (candidate) =>
-      handleMessage(candidate, () => {
-        // Nowhere to stream to on a one-shot message.
-      }),
+    // Nowhere to stream or push to on a one-shot message.
+    handleMessage: (candidate) => handleMessage(candidate, undefined),
     attachPort: (port) => {
+      // One per port, so the port's subscription can be found and dropped.
+      const emit: Emit = (update) => {
+        port.postMessage(update);
+      };
+
       port.onMessage.addListener((message) => {
-        void handleMessage(message, (update) => {
-          port.postMessage(update);
-        }).then((response) => {
-          port.postMessage(response);
+        void handleMessage(message, emit).then((response) => {
+          try {
+            port.postMessage(response);
+          } catch {
+            // The page went away before its answer; it has nothing to push to.
+            graphSubscribers.delete(emit);
+          }
         });
+      });
+      port.onDisconnect.addListener(() => {
+        graphSubscribers.delete(emit);
       });
     },
     handleGroupUpdated: async (group) => {
       if (group.title !== undefined) {
         await renameSessionForGroup(await getDatabase(), group.id, group.title);
+        pushGraphSnapshot();
       }
     },
     handleGroupRemoved: async (group, { isWindowClosing }) => {
       if (!isWindowClosing) {
         await endSessionForGroup(await getDatabase(), group.id);
+        pushGraphSnapshot();
       }
     },
     reconcileSession: async () => {
@@ -381,16 +534,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         database: await getDatabase(),
         getGroup: dependencies.tabGroups.getGroup,
       });
-      await enqueueCapture((openedDatabase) =>
+      await captureAndPush((openedDatabase) =>
         reconcileSessionTabs({ database: openedDatabase, api: dependencies.tabCapture }),
       );
     },
     handleNavigationCommitted: (navigation) =>
-      enqueueCapture((openedDatabase) =>
+      captureAndPush((openedDatabase) =>
         recordNavigation({ database: openedDatabase, api: dependencies.tabCapture, navigation }),
       ),
     handleTabUpdated: (tab, changes) =>
-      enqueueCapture(async (openedDatabase) => {
+      captureAndPush(async (openedDatabase) => {
         if (changes.groupId !== undefined) {
           await followTabMembership({ database: openedDatabase, tab });
         }
@@ -400,10 +553,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
       }),
     handleTabActivated: (tabId) =>
-      enqueueCapture((openedDatabase) => recordTabFocus(openedDatabase, tabId)),
+      captureAndPush((openedDatabase) => recordTabFocus(openedDatabase, tabId)),
     handleTabRemoved: async (tabId, { isWindowClosing }) => {
       if (!isWindowClosing) {
-        await enqueueCapture((openedDatabase) => closeTabNode(openedDatabase, tabId));
+        await captureAndPush((openedDatabase) => closeTabNode(openedDatabase, tabId));
       }
     },
     shutdown: () => {

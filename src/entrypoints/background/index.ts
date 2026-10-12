@@ -3,6 +3,7 @@ import { defineBackground } from "wxt/utils/define-background";
 
 import { createBackgroundApp } from "@/app/backgroundApp";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
+import { MAP_PAGE_PATH, openMapTab, readMapTab } from "@/features/researchMap";
 import { readCaptureTab } from "@/features/tabCapture";
 import { collectPolicyViolations } from "@/shared/collectPolicyViolations";
 import { openResearchDatabase } from "@/shared/storage";
@@ -18,6 +19,12 @@ import { openResearchDatabase } from "@/shared/storage";
  * Wiring only — the dispatch logic lives in `app/backgroundApp`, where it is
  * unit tested without a browser.
  */
+/** Selects a tab and brings its window to the front. */
+const focusBrowserTab = async (tabId: number, windowId: number): Promise<void> => {
+  await browser.tabs.update(tabId, { active: true });
+  await browser.windows.update(windowId, { focused: true });
+};
+
 export default defineBackground(() => {
   // Attached before anything can fetch, so the first refusal is not missed.
   const policyViolations = collectPolicyViolations(document);
@@ -48,6 +55,21 @@ export default defineBackground(() => {
     reportError: (error) => {
       console.error("Research Graph:", error);
     },
+    focusTab: async (tabId) => {
+      const tab = await browser.tabs.get(tabId);
+
+      await focusBrowserTab(tabId, tab.windowId ?? browser.windows.WINDOW_ID_CURRENT);
+    },
+    openMap: () =>
+      openMapTab(
+        {
+          queryTabs: async () => (await browser.tabs.query({})).map(readMapTab),
+          createTab: async (url) => readMapTab(await browser.tabs.create({ url })),
+          focusTab: (tab) => focusBrowserTab(tab.id, tab.windowId),
+          ungroupTab: (tabId) => browser.tabs.ungroup(tabId),
+        },
+        browser.runtime.getURL(MAP_PAGE_PATH),
+      ),
   });
 
   browser.runtime.onMessage.addListener((message: unknown) => app.handleMessage(message));
