@@ -11,8 +11,12 @@ import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/ut
 import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import {
+  CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  JOB_STORE,
+  SPACE_STORE,
+  VECTOR_STORE,
   KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
@@ -143,6 +147,10 @@ const createFreshDatabase = async () => {
   await database.clear(SNAPSHOT_STORE);
   await database.clear(KEY_STORE);
   await database.clear(CLUSTERING_STORE);
+  await database.clear(JOB_STORE);
+  await database.clear(SPACE_STORE);
+  await database.clear(CHUNK_STORE);
+  await database.clear(VECTOR_STORE);
 
   return database;
 };
@@ -1642,5 +1650,138 @@ describe("clustering through the background", () => {
       algorithmVersion: "louvain@1",
       clusters: [expect.objectContaining({ memberIds: [expect.any(String)] })],
     });
+  });
+});
+
+/** An active, conformant embedding model, as activation leaves it. */
+const EMBEDDING_MODEL = {
+  ref: "Xenova/all-MiniLM-L6-v2@aaaa",
+  manifest: {
+    manifestVersion: 1,
+    reference: {
+      hub: "huggingface",
+      repository: "Xenova/all-MiniLM-L6-v2",
+      revision: "a".repeat(40),
+    },
+    format: "onnx",
+    files: [
+      { path: "onnx/model.onnx", bytes: 1, digest: { algorithm: "sha256", value: "0".repeat(64) } },
+    ],
+    license: "apache-2.0",
+    contract: {
+      family: "embedding",
+      dimensions: 4,
+      maxInputTokens: 256,
+      pooling: "mean",
+      normalize: true,
+      similarity: "cosine",
+      prefixes: { query: "", document: "" },
+    },
+  },
+  active: true,
+  conformance: "passed",
+  diskBytes: 1,
+  installedAt: 1,
+} as const;
+
+/** An embedding model stub that records how many calls run at once. */
+const createEmbeddingStub = () => {
+  let running = 0;
+  const stub = {
+    calls: 0,
+    mostAtOnce: 0,
+    load: vi.fn(() =>
+      Promise.resolve({
+        embed: async (texts: readonly string[]) => {
+          stub.calls += 1;
+          running += 1;
+          stub.mostAtOnce = Math.max(stub.mostAtOnce, running);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          running -= 1;
+          return texts.map(() => new Float32Array([1, 0, 0, 0]));
+        },
+      }),
+    ),
+  };
+
+  return stub;
+};
+
+const extracted = (text: string) =>
+  buildRpcMessage("content.extracted", {
+    text,
+    truncated: false,
+    extractorVersion: "readability@0.6.0/1",
+  });
+
+describe("embedding deep-read pages through the background", () => {
+  it("embeds a stored snapshot into the active model's space", async () => {
+    const embedding = createEmbeddingStub();
+    const { app, database, clock } = await createSignalsApp({
+      loadEmbeddingSession: embedding.load,
+    });
+
+    await database.put(MODEL_STORE, EMBEDDING_MODEL as never);
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+    await app.handleContentMessage(extracted("Mid-drive motors sit at the cranks."), FROM_PAGE_A);
+
+    await vi.waitFor(async () => expect(await database.count(VECTOR_STORE)).toBe(1));
+
+    const [space] = await database.getAll(SPACE_STORE);
+
+    expect((await database.get(SESSION_STORE, "session-1"))?.activeEmbeddingSpaceId).toBe(
+      space?.id,
+    );
+    expect(await database.getAll(JOB_STORE)).toEqual([expect.objectContaining({ status: "done" })]);
+  });
+
+  it("queues nothing without an active embedding model", async () => {
+    const embedding = createEmbeddingStub();
+    const { app, database, clock } = await createSignalsApp({
+      loadEmbeddingSession: embedding.load,
+    });
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+    await app.handleContentMessage(extracted("Mid-drive motors."), FROM_PAGE_A);
+    await app.reconcileSession();
+
+    expect(await database.count(JOB_STORE)).toBe(0);
+    expect(embedding.load).not.toHaveBeenCalled();
+  });
+
+  it("runs one job at a time, however many triggers arrive", async () => {
+    const embedding = createEmbeddingStub();
+    const { app, database, clock } = await createSignalsApp({
+      loadEmbeddingSession: embedding.load,
+      tabCapture: createTabCapture(
+        sessionTab(),
+        sessionTab({ id: 8, url: "https://example.org/c" }),
+      ),
+    });
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
+
+    for (const [tabId, url] of [
+      [7, "https://example.org/a"],
+      [8, "https://example.org/c"],
+    ] as const) {
+      clock.focusedTabId = tabId;
+      await app.handleTabActivated(tabId);
+      await app.handleContentMessage(batch(0.3, 1), { tabId, url });
+      await app.handleContentMessage(extracted(`Text of ${url}.`), { tabId, url });
+    }
+
+    await database.put(MODEL_STORE, EMBEDDING_MODEL as never);
+    await Promise.all([app.reconcileSession(), app.reconcileSession()]);
+
+    await vi.waitFor(async () => expect(await database.count(VECTOR_STORE)).toBe(2));
+    expect(embedding.mostAtOnce).toBe(1);
   });
 });

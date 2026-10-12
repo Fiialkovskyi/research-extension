@@ -2,12 +2,13 @@ import type { IDBPDatabase } from "idb";
 
 import type { InferenceWorker } from "@/features/inference";
 import type { PageSender, PageSignalsApi } from "@/features/pageSignals";
+import type { EmbeddingSession } from "@/features/snapshotEmbeddings";
 import type { SessionTab, SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, CommittedNavigation, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
 import type { PolicyViolationLog } from "@/shared/collectPolicyViolations";
 import type { RpcMessage } from "@/shared/rpc";
-import type { ResearchDatabaseSchema } from "@/shared/storage";
+import type { ResearchDatabaseSchema, StoredModel } from "@/shared/storage";
 
 /**
  * Composition root for the background context.
@@ -72,6 +73,12 @@ export interface BackgroundDependencies {
    * the page's own, which an unloaded event page simply loses.
    */
   setTimer?: (callback: () => void, delayMs: number) => unknown;
+  /**
+   * Loads an embedding model for the background's jobs. Defaults to the
+   * inference worker on the software path; injected so jobs are exercised
+   * without a model runtime.
+   */
+  loadEmbeddingSession?: (model: StoredModel) => Promise<EmbeddingSession>;
   clearTimer?: (handle: unknown) => void;
 }
 

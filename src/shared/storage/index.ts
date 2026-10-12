@@ -14,6 +14,7 @@
  */
 
 export {
+  CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
@@ -26,6 +27,8 @@ export {
   NODE_STORE,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  SPACE_STORE,
+  VECTOR_STORE,
 } from "./constants";
 export type {
   ConformanceStatus,
@@ -50,6 +53,9 @@ export type {
   StoredFocusVisit,
   StoredSession,
   StoredSnapshot,
+  StoredSpace,
+  StoredChunk,
+  StoredVector,
 } from "./types";
 export { openResearchDatabase } from "./openResearchDatabase";
 export { readInferenceRuns } from "./readInferenceRuns";

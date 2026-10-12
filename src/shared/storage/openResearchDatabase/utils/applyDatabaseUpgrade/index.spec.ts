@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
 import {
+  CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
@@ -15,6 +16,8 @@ import {
   NODE_STORE,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  SPACE_STORE,
+  VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
 
@@ -262,6 +265,21 @@ describe("applyDatabaseUpgrade", () => {
 
     expect(database.version).toBe(10);
     expect(database.transaction(CLUSTERING_STORE).store.keyPath).toBe("sessionId");
+
+    database.close();
+  });
+
+  it("adds spaces, chunks indexed by snapshot, and vectors keyed by space first", async () => {
+    const database = await openAt(getNextDatabaseName(), 11);
+
+    expect(database.version).toBe(11);
+    expect(database.transaction(SPACE_STORE).store.keyPath).toBe("id");
+    expect([...database.transaction(CHUNK_STORE).store.indexNames]).toEqual(["snapshotId"]);
+    expect(database.transaction(VECTOR_STORE).store.keyPath).toEqual([
+      "spaceId",
+      "chunkId",
+      "part",
+    ]);
 
     database.close();
   });

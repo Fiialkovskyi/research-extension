@@ -439,6 +439,15 @@ Provenance is attached to every fact, summary statement, cluster label, comparis
 
 - **REQ-LIN-001:** Every vector SHALL store its `space` ID. The vector store SHALL be partitioned by space, so a query reads exactly one partition.
 - **REQ-LIN-002:** Each session SHALL have one `active_embedding_space_id`. Similarity, clustering and entity resolution SHALL use only vectors from that space. A cross-space comparison SHALL throw `EmbeddingSpaceMismatchError` and be reported in the local diagnostics log.
+
+  **Built so far (OpenSpec change `add-snapshot-embeddings`).**
+
+  - **Spaces.** They are stored with their id, the SHA-256 of the canonical JSON of the model's repository and commit, dims, pooling, normalisation, similarity, prefixes, quantization, chunker and extractor versions.
+  - **Vectors.** They are keyed `[space, chunk, part]`, so one space is one key range.
+  - **Session space.** A session takes the space of its first vectors.
+  - **The guard.** `compareVectors` throws `EmbeddingSpaceMismatchError`. Reporting it to the diagnostics log comes with its first caller.
+  - **Not encrypted.** Vectors are not encrypted at rest. Embedding inversion can partly recover text from them, so encrypting them is a follow-up to REQ-SEC-005.
+
 - **REQ-LIN-003 (embedding swap):** WHEN the user activates a different embedding model, the system SHALL create the new space, enqueue a re-embedding job from the stored text chunks, and keep using the old space until the new one covers 100% of the session's chunks. The switch SHALL be atomic per session.
 - **REQ-LIN-004:** Old spaces SHALL be kept until the user confirms removal or 14 days pass after the switch, whichever comes first. The options page SHALL show disk usage per space.
 - **REQ-LIN-005 (generation swap):** WHEN the active text-generation model or a prompt version changes, existing statements SHALL remain visible and labeled with their producer. They SHALL be regenerated only on user request or when their inputs change.
@@ -467,7 +476,7 @@ Synthesis is fact-first. The LLM extracts grounded facts from deep-read pages, a
 
 1. **Extract text:** Readability output is cleaned (`extractor_version`) and stored as a snapshot (section 9).
 2. **Chunk:** a sentence-aware chunker (`chunker@1`) targets about 220 words with 1-sentence overlap. It is model-independent; token limits are checked per model and oversize chunks are split.
-3. **Embed:** document-role embeddings into the active space.
+3. **Embed:** document-role embeddings into the active space. Steps 2 and 3 run as an idempotent `embedSnapshot` job per snapshot and space, one at a time in the background, checkpointed per batch of 8. Chunks are stored as character ranges of the encrypted snapshot, never as text. An oversize chunk is split at word boundaries by an estimate of 1.4 tokens per word (OpenSpec change `add-snapshot-embeddings`).
 4. **Extract facts:** the LLM receives chunks and returns JSON matching `FactExtraction@1`.
 5. **Ground:** each fact's `quote` must appear in the source chunk (exact or whitespace-normalized match). Ungrounded facts are dropped and counted in the run log.
 6. **Resolve entities:** merge entity mentions by normalized name, then by embedding similarity of at least 0.85 in the active space with the same `entity_type`. Merges are reversible by the user.

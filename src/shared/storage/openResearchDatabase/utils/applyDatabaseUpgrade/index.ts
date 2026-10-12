@@ -1,6 +1,7 @@
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import {
+  CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
@@ -11,6 +12,8 @@ import {
   NODE_STORE,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  SPACE_STORE,
+  VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
 
@@ -115,6 +118,15 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
   },
   10: (database) => {
     database.createObjectStore(CLUSTERING_STORE, { keyPath: "sessionId" });
+  },
+  11: (database) => {
+    database.createObjectStore(SPACE_STORE, { keyPath: "id" });
+
+    const chunks = database.createObjectStore(CHUNK_STORE, { keyPath: "id" });
+
+    chunks.createIndex("snapshotId", "snapshotId");
+    // One key range per space: a query reads exactly one partition (REQ-LIN-001).
+    database.createObjectStore(VECTOR_STORE, { keyPath: ["spaceId", "chunkId", "part"] });
   },
 };
 

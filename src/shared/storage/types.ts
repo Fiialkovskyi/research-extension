@@ -2,6 +2,7 @@ import type { DBSchema } from "idb";
 
 import type { InferenceDevice, ModelManifest } from "../modelManifest";
 import type {
+  CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
@@ -12,6 +13,8 @@ import type {
   NODE_STORE,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  SPACE_STORE,
+  VECTOR_STORE,
 } from "./constants";
 
 /** Outcome of the family conformance suite, which gates activation. */
@@ -110,6 +113,11 @@ export interface StoredSession {
    * first, from which co-attention is counted. Absent until the first move.
    */
   recentSwitches?: StoredFocusSwitch[];
+  /**
+   * The embedding space the session's similarity work uses (REQ-LIN-002),
+   * taken from its first vectors. Absent until then.
+   */
+  activeEmbeddingSpaceId?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -248,6 +256,8 @@ export interface StoredJob {
   checkpoint?: unknown;
   /** Why the last attempt failed, shown when the job has failed for good. */
   failureReason?: string;
+  /** What the job works on, beyond its identity; its type validates it. */
+  payload?: unknown;
   createdAt: number;
   updatedAt: number;
 }
@@ -317,6 +327,54 @@ export interface StoredClustering {
   clusters: StoredCluster[];
 }
 
+/**
+ * Everything that decides what a vector means (target spec §7). Vectors are
+ * comparable only within one space; its id is the hash of these fields.
+ */
+export interface StoredSpace {
+  /** Hex SHA-256 of the canonical JSON of the fields below. */
+  id: string;
+  model: { repository: string; revision: string };
+  dims: number;
+  pooling: string;
+  normalize: boolean;
+  similarity: "cosine" | "dot";
+  prefixes: { query: string; document: string };
+  chunkerVersion: string;
+  extractorVersion: string;
+  /** The weights' quantization, such as `q8`, or `null` when the manifest names none. */
+  quantization: string | null;
+  createdAt: number;
+}
+
+/**
+ * A chunk of a snapshot's text, by its character range: the text itself stays
+ * only in the encrypted snapshot.
+ */
+export interface StoredChunk {
+  /** `<snapshotId>:<index>`. */
+  id: string;
+  snapshotId: string;
+  nodeId: string;
+  sessionId: string;
+  chunkerVersion: string;
+  index: number;
+  /** UTF-16 offsets into the snapshot's text, end exclusive. */
+  start: number;
+  end: number;
+}
+
+/** One vector: a part of a chunk, embedded in one space. */
+export interface StoredVector {
+  spaceId: string;
+  chunkId: string;
+  /** Which part of the chunk, when it had to be split to fit the model; 0 otherwise. */
+  part: number;
+  nodeId: string;
+  sessionId: string;
+  vector: Float32Array;
+}
+
 export interface ResearchDatabaseSchema extends DBSchema {
   [MODEL_STORE]: {
     key: string;
@@ -364,5 +422,18 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [CLUSTERING_STORE]: {
     key: string;
     value: StoredClustering;
+  };
+  [SPACE_STORE]: {
+    key: string;
+    value: StoredSpace;
+  };
+  [CHUNK_STORE]: {
+    key: string;
+    value: StoredChunk;
+    indexes: { snapshotId: string };
+  };
+  [VECTOR_STORE]: {
+    key: [string, string, number];
+    value: StoredVector;
   };
 }

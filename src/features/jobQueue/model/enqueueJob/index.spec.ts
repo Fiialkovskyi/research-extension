@@ -62,6 +62,15 @@ describe("enqueueJob", () => {
     },
   );
 
+  it("keeps the job's payload, which is not part of its identity", async () => {
+    const queued = await enqueueJob(database, { ...work, payload: { snapshotId: "snapshot-1" } });
+    const again = await enqueueJob(database, { ...work, payload: { snapshotId: "other" } });
+
+    expect(queued.payload).toEqual({ snapshotId: "snapshot-1" });
+    expect(again.id).toBe(queued.id);
+    expect(again.payload).toEqual({ snapshotId: "snapshot-1" });
+  });
+
   it("queues a failed job again, attempts reset and checkpoint kept", async () => {
     const id = await buildJobId(work);
     await database.put(

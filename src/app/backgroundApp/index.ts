@@ -22,6 +22,12 @@ import {
   RECLUSTER_DELAY_MS,
 } from "@/features/researchClusters";
 import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
+import {
+  type EmbeddingSession,
+  enqueueSnapshotEmbeddings,
+  runNextEmbeddingJob,
+} from "@/features/snapshotEmbeddings";
+import { requeueRunningJobs } from "@/features/jobQueue";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
 import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
 import {
@@ -57,7 +63,7 @@ import {
   type RpcMessage,
   RpcMessageError,
 } from "@/shared/rpc";
-import { MODEL_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
+import { MODEL_STORE, type ResearchDatabaseSchema, type StoredModel } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
 import { requestSchemas } from "./schemas";
 import type { PageSender } from "@/features/pageSignals";
@@ -141,10 +147,15 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   };
 
   /** Discards the worker, so the next attempt starts from a clean runtime. */
+  /** Embedding models loaded in the worker for jobs, by model ref. */
+  const embeddingSessions = new Map<string, Promise<EmbeddingSession>>();
+
   const discardWorker = (): void => {
     worker?.terminate();
     worker = undefined;
     workerDevice = undefined;
+    // Their models lived in that worker.
+    embeddingSessions.clear();
   };
 
   const getDatabase = async (): Promise<IDBPDatabase<ResearchDatabaseSchema>> => {
@@ -361,6 +372,76 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       await followFocus(openedDatabase, { discardOpen: true });
     });
 
+  /**
+   * Loads the embedding model for jobs once, on the software path the
+   * add-on's minimum Firefox has, and keeps it while the worker lives.
+   */
+  const loadEmbeddingSession =
+    dependencies.loadEmbeddingSession ??
+    ((model: StoredModel): Promise<EmbeddingSession> => {
+      const cached = embeddingSessions.get(model.ref);
+
+      if (cached !== undefined) {
+        return cached;
+      }
+
+      const loading = getDatabase().then((openedDatabase) =>
+        loadModelIntoWorker({
+          model,
+          database: openedDatabase,
+          worker: getWorkerForDevice("wasm"),
+          device: "wasm",
+        }),
+      );
+
+      embeddingSessions.set(model.ref, loading);
+      loading.catch(() => {
+        embeddingSessions.delete(model.ref);
+      });
+
+      return loading;
+    });
+
+  let isRunningJobs = false;
+  let isJobRunRequested = false;
+
+  /**
+   * Runs due jobs one at a time until none is left (REQ-MOD-008: one embedding
+   * batch at a time). Single-flight: a request while running makes the running
+   * loop look again rather than starting a second. Off the capture queue —
+   * embedding takes seconds, and capture must not wait for it.
+   */
+  const runJobs = async (): Promise<void> => {
+    if (isRunningJobs) {
+      isJobRunRequested = true;
+      return;
+    }
+
+    isRunningJobs = true;
+
+    try {
+      do {
+        isJobRunRequested = false;
+
+        const openedDatabase = await getDatabase();
+
+        while (await runNextEmbeddingJob(openedDatabase, loadEmbeddingSession)) {
+          // Each pass claims, runs and settles one job.
+        }
+      } while (isJobRunRequested);
+    } catch (error) {
+      dependencies.reportError(error);
+    } finally {
+      isRunningJobs = false;
+    }
+  };
+
+  /** Queues embedding for the session's snapshots, then runs what is due. */
+  const embedSnapshots = async (): Promise<void> => {
+    await enqueueCapture((openedDatabase) => enqueueSnapshotEmbeddings(openedDatabase, getNow()));
+    await runJobs();
+  };
+
   /** Answers a session page's observer. Runs on the capture queue. */
   const handleContentMessage = async (
     candidate: unknown,
@@ -375,6 +456,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     }
 
     let answer: RpcMessage<string, unknown> | undefined;
+    let isSnapshotStored = false;
 
     await captureAndPush(async (openedDatabase) => {
       switch (request.type) {
@@ -413,10 +495,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             capturedAt: getNow(),
           });
           answer = buildRpcMessage("content.stored", {});
+          isSnapshotStored = true;
           return;
         }
       }
     });
+
+    // Not awaited into the answer: embedding takes seconds, the page needs none of it.
+    if (isSnapshotStored) {
+      void embedSnapshots();
+    }
 
     return (
       answer ??
@@ -551,6 +639,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
                 return outcome;
               },
             });
+
+            if (recorded.active) {
+              void embedSnapshots();
+            }
 
             return buildRpcMessage("model.activated", {
               ref: recorded.ref,
@@ -824,6 +916,9 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       });
       await reconcileTabs();
       await recluster();
+      // A job the last run was in the middle of is handed back, then resumed.
+      await enqueueCapture(requeueRunningJobs);
+      void embedSnapshots();
     },
     handleNavigationCommitted: (navigation) =>
       captureAndPush(async (openedDatabase) => {

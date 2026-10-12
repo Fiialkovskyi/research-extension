@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { openResearchDatabase } from ".";
 import {
+  CHUNK_STORE,
   CLUSTERING_STORE,
   DATABASE_VERSION,
   EDGE_STORE,
@@ -15,6 +16,8 @@ import {
   NODE_STORE,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  SPACE_STORE,
+  VECTOR_STORE,
 } from "../constants";
 
 describe("openResearchDatabase", () => {
@@ -34,6 +37,9 @@ describe("openResearchDatabase", () => {
         SNAPSHOT_STORE,
         KEY_STORE,
         CLUSTERING_STORE,
+        SPACE_STORE,
+        CHUNK_STORE,
+        VECTOR_STORE,
       ].toSorted(),
     );
 

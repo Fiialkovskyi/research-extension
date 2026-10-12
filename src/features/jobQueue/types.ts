@@ -12,4 +12,6 @@ export interface NewJob extends JobIdentity {
   sessionId?: string;
   /** Higher runs first. Defaults to 0. */
   priority?: number;
+  /** What the job works on beyond its identity, such as a record id; its type validates it. */
+  payload?: unknown;
 }
