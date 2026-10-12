@@ -10,6 +10,7 @@ describe("readCaptureTab", () => {
       title: "Example",
       groupId: 42,
       openerTabId: 3,
+      windowId: 1,
       incognito: false,
       active: true,
       index: 2,
@@ -21,6 +22,7 @@ describe("readCaptureTab", () => {
       title: "Example",
       groupId: 42,
       openerTabId: 3,
+      windowId: 1,
       incognito: false,
     });
   });

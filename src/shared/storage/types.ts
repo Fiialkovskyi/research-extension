@@ -118,8 +118,31 @@ export interface StoredSession {
    * taken from its first vectors. Absent until then.
    */
   activeEmbeddingSpaceId?: string;
+  /** The session's tabs, in order, as they were when it was saved; what resuming reopens. */
+  savedTabs?: StoredSavedTab[];
+  /**
+   * The page the user was on when the session was saved, and how far it was
+   * read; shown after resuming until the user moves on to another page.
+   */
+  lastPosition?: StoredLastPosition;
+  /** When the session was last saved. */
+  savedAt?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** A tab of a saved session: the page it showed, to reopen it on. */
+export interface StoredSavedTab {
+  nodeId: string;
+  url: string;
+  title: string;
+}
+
+/** Where the user left off: a page, and how much of it was read, from 0 to 1. */
+export interface StoredLastPosition {
+  nodeId: string;
+  title: string;
+  readFraction: number;
 }
 
 /** Focus moving from one node to another, and when. */

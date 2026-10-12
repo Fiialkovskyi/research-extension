@@ -11,6 +11,8 @@ import {
 export interface SessionFocus {
   focus: StoredFocusVisit;
   recentSwitches: StoredFocusSwitch[];
+  /** The user moved on from where they left off: stop saying where that was. */
+  clearLastPosition?: boolean;
 }
 
 /**
@@ -25,7 +27,7 @@ export interface SessionFocus {
 export const setSessionFocus = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
   sessionId: string,
-  { focus, recentSwitches }: SessionFocus,
+  { focus, recentSwitches, clearLastPosition = false }: SessionFocus,
 ): Promise<boolean> => {
   const transaction = database.transaction(SESSION_STORE, "readwrite");
   const session = await transaction.store.get(sessionId);
@@ -35,7 +37,14 @@ export const setSessionFocus = async (
     return false;
   }
 
-  await transaction.store.put({ ...session, focus, recentSwitches });
+  const { lastPosition, ...rest } = session;
+
+  await transaction.store.put({
+    ...rest,
+    ...(clearLastPosition || lastPosition === undefined ? {} : { lastPosition }),
+    focus,
+    recentSwitches,
+  });
   await transaction.done;
 
   return true;

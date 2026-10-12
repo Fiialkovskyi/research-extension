@@ -22,4 +22,6 @@ export interface PageSignalsApi {
   executeScript: (injection: PageInjection) => Promise<unknown>;
   /** Asks a tab's observer for its page's text. Rejects when nothing listens. */
   requestPageText: (tabId: number) => Promise<unknown>;
+  /** Asks a tab's observer to send what it holds now. Rejects when nothing listens. */
+  requestFlush: (tabId: number) => Promise<unknown>;
 }

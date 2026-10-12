@@ -284,6 +284,32 @@ describe("observePage", () => {
     expect(sent.filter((message) => message.type === "content.extracted")).toEqual([]);
   });
 
+  it("sends what it holds when asked to flush, and answers once it is sent", async () => {
+    observe();
+    paint();
+    scrollTo(2400);
+    paint();
+
+    const flushed = await requestListener?.(buildRpcMessage("content.flush", {}));
+
+    expect(sent.at(-1)).toMatchObject({ type: "signal.batch", payload: { maxScroll: 0.8 } });
+    expect(flushed).toMatchObject({ type: "content.flushed" });
+    expect(timers.size).toBe(0);
+  });
+
+  it("answers a flush at once when it holds nothing new", async () => {
+    observe();
+    paint();
+    elapse();
+
+    const count = sent.length;
+
+    expect(await requestListener?.(buildRpcMessage("content.flush", {}))).toMatchObject({
+      type: "content.flushed",
+    });
+    expect(sent).toHaveLength(count);
+  });
+
   it("leaves messages meant for something else unanswered", () => {
     observe();
 

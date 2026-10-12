@@ -51,6 +51,23 @@ describe("setSessionFocus", () => {
     });
   });
 
+  it("forgets where the user left off when asked, and keeps it otherwise", async () => {
+    const lastPosition = { nodeId: "node-0", title: "B", readFraction: 0.4 };
+
+    await database.put(SESSION_STORE, { ...buildSession("active"), lastPosition });
+    await setSessionFocus(database, "session-1", { focus: VISIT, recentSwitches: [] });
+
+    expect((await database.get(SESSION_STORE, "session-1"))?.lastPosition).toEqual(lastPosition);
+
+    await setSessionFocus(database, "session-1", {
+      focus: VISIT,
+      recentSwitches: [],
+      clearLastPosition: true,
+    });
+
+    expect((await database.get(SESSION_STORE, "session-1"))?.lastPosition).toBeUndefined();
+  });
+
   it("leaves a session that is no longer active as it was", async () => {
     await database.put(SESSION_STORE, buildSession("closed"));
 

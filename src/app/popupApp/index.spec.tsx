@@ -118,6 +118,68 @@ const snapshot = (...nodes: ReturnType<typeof node>[]) =>
     clusters: [],
   });
 
+/** A background with one saved session, and an active one until saved. */
+const createLibraryClient = ({ isActive = true, lastPosition = undefined as unknown }) => {
+  let active = isActive;
+  const client: PopupClient = {
+    request: vi.fn((message: RpcMessage<string, unknown>) => {
+      switch (message.type) {
+        case "session.getActive":
+          return Promise.resolve(
+            buildRpcMessage("session.active", {
+              session: active
+                ? {
+                    id: "session-1",
+                    title: "E-bike motors",
+                    groupId: 42,
+                    pageCount: 2,
+                    ...(lastPosition === undefined ? {} : { lastPosition }),
+                  }
+                : null,
+              closedSession: null,
+            }),
+          );
+        case "session.save":
+          active = false;
+          return Promise.resolve(
+            buildRpcMessage("session.saved", {
+              sessionId: "session-1",
+              title: "E-bike motors",
+            }),
+          );
+        case "library.list":
+          return Promise.resolve(
+            buildRpcMessage("library.listed", {
+              sessions: active
+                ? []
+                : [
+                    {
+                      id: "session-1",
+                      title: "E-bike motors",
+                      savedAt: 1,
+                      pageCount: 2,
+                      lastPosition: { title: "Page B", readFraction: 0.4 },
+                    },
+                  ],
+            }),
+          );
+        case "session.resume":
+          active = true;
+          return Promise.resolve(
+            buildRpcMessage("session.resumed", {
+              sessionId: "session-1",
+              title: "E-bike motors",
+            }),
+          );
+        default:
+          return Promise.resolve(buildRpcMessage("map.opened", {}));
+      }
+    }),
+  };
+
+  return client;
+};
+
 describe("PopupApp", () => {
   it("shows the greeting inside the popup panel", () => {
     render(
@@ -533,6 +595,46 @@ describe("PopupApp", () => {
       await screen.findByLabelText("Session title");
 
       expect(screen.queryByTestId("open-recorded")).toBeNull();
+    });
+  });
+
+  describe("saving and resuming", () => {
+    it("saves the session, then offers it in the library", async () => {
+      const client = createLibraryClient({});
+
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
+      fireEvent.click(await screen.findByTestId("save-session"));
+
+      expect(await screen.findByTestId("saved-session")).toHaveTextContent(
+        "You left off at Page B (40% read)",
+      );
+      expect(screen.getByLabelText("Session title")).toBeInTheDocument();
+    });
+
+    it("resumes a saved session and shows it as active", async () => {
+      const client = createLibraryClient({ isActive: false });
+
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
+      fireEvent.click(await screen.findByTestId("resume-session"));
+
+      expect(await screen.findByTestId("session-active")).toHaveTextContent("E-bike motors");
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "session.resume", payload: { sessionId: "session-1" } }),
+      );
+    });
+
+    it("says where the user left off in a resumed session", async () => {
+      render(
+        <PopupApp
+          graph={buildGraph()}
+          client={createLibraryClient({ lastPosition: { title: "Page B", readFraction: 0.4 } })}
+          pageAccess={buildPageAccess()}
+        />,
+      );
+
+      expect(await screen.findByTestId("left-off")).toHaveTextContent(
+        "You left off at Page B (40% read)",
+      );
     });
   });
 });

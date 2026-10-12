@@ -120,7 +120,15 @@ export const trackActiveDwell = async ({
   }
 
   if (visit !== undefined) {
-    await setSessionFocus(database, session.id, { focus: visit, recentSwitches });
+    await setSessionFocus(database, session.id, {
+      focus: visit,
+      recentSwitches,
+      // Resumed where the user left off; reading another page means they moved on.
+      clearLastPosition:
+        session.lastPosition !== undefined &&
+        target !== undefined &&
+        target.id !== session.lastPosition.nodeId,
+    });
   }
 
   return { dwelledNodeId };

@@ -232,4 +232,20 @@ describe("trackActiveDwell", () => {
 
     expect((await readNode("https://example.org/result")).signals.quickReturnCount).toBe(1);
   });
+
+  it("forgets where the user left off once they read another page", async () => {
+    const left = await readNode("https://example.org/a");
+
+    await database.put(SESSION_STORE, {
+      ...(await database.get(SESSION_STORE, "session-1"))!,
+      lastPosition: { nodeId: left.id, title: "A", readFraction: 0.4 },
+    });
+    await track(7, 1_000);
+
+    expect((await database.get(SESSION_STORE, "session-1"))?.lastPosition).toBeDefined();
+
+    await track(8, 2_000);
+
+    expect((await database.get(SESSION_STORE, "session-1"))?.lastPosition).toBeUndefined();
+  });
 });

@@ -159,6 +159,22 @@ describe("recordNavigation", () => {
     expect(await readNodes()).toHaveLength(0);
   });
 
+  it("records nothing when the tab loads the page it already shows, whatever the transition", async () => {
+    const api = createApi(sessionTab());
+    const node = await recordNavigation({ database, api, navigation: commit() });
+
+    expect(
+      await recordNavigation({
+        database,
+        api,
+        navigation: commit({ url: "https://example.org/a#specs", transitionType: "auto_bookmark" }),
+      }),
+    ).toBeUndefined();
+    expect(await readNodes()).toEqual([
+      expect.objectContaining({ id: node?.id, tabState: "open" }),
+    ]);
+  });
+
   it("closes the page a session tab leaves for a browser page", async () => {
     const api = createApi(sessionTab());
     const node = await recordNavigation({ database, api, navigation: commit() });

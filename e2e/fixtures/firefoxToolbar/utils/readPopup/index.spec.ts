@@ -32,6 +32,8 @@ const SNAPSHOT = JSON.stringify({
   treeRows: [],
   unreadCount: null,
   unreadPages: [],
+  savedSessions: [],
+  leftOff: null,
 });
 
 describe("readPopup", () => {

@@ -9,8 +9,16 @@ import type { SessionSummary } from "../../types";
  * record for the background's own use does not leak into the protocol.
  */
 export const buildSessionSummary = (
-  { id, title, groupId }: StoredSession,
+  { id, title, groupId, lastPosition }: StoredSession,
   pageCount: number,
 ): SessionSummary => {
-  return { id, title, groupId, pageCount };
+  return {
+    id,
+    title,
+    groupId,
+    pageCount,
+    ...(lastPosition === undefined
+      ? {}
+      : { lastPosition: { title: lastPosition.title, readFraction: lastPosition.readFraction } }),
+  };
 };

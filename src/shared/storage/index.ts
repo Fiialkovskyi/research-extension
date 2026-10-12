@@ -50,6 +50,8 @@ export type {
   StoredNode,
   StoredNodeSignals,
   StoredFocusSwitch,
+  StoredLastPosition,
+  StoredSavedTab,
   StoredFocusVisit,
   StoredSession,
   StoredSnapshot,

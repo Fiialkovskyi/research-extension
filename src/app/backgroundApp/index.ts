@@ -29,6 +29,13 @@ import {
 } from "@/features/recordedData";
 import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
 import {
+  closeTabsKeepingWindow,
+  listSavedSessions,
+  resumeSession,
+  SAVE_FLUSH_TIMEOUT_MS,
+  saveActiveSession,
+} from "@/features/researchLibrary";
+import {
   type EmbeddingSession,
   enqueueSnapshotEmbeddings,
   runNextEmbeddingJob,
@@ -784,6 +791,97 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("map.opened", {});
         }
 
+        case "session.save": {
+          const openedDatabase = await getDatabase();
+          const active = await getActiveSession(openedDatabase);
+
+          if (active === undefined) {
+            return buildRpcMessage("session.saveFailed", { reason: "No session is active." });
+          }
+
+          // The open pages send what they hold first; their batches reach the
+          // capture queue before the save below, so nothing read is lost.
+          const { nodes } = await readSessionGraph(openedDatabase, active.id);
+          const tabIds = [
+            ...new Set(nodes.filter((node) => node.tabState === "open").map((node) => node.tabId)),
+          ];
+
+          await Promise.allSettled(
+            tabIds.map((tabId) =>
+              Promise.race([
+                dependencies.pageSignals.requestFlush(tabId),
+                new Promise((resolve) => {
+                  setTimer(() => {
+                    resolve(undefined);
+                  }, SAVE_FLUSH_TIMEOUT_MS);
+                }),
+              ]),
+            ),
+          );
+
+          let saved: Awaited<ReturnType<typeof saveActiveSession>>;
+
+          await captureAndPush(async (databaseInQueue) => {
+            await trackActiveDwell({
+              database: databaseInQueue,
+              focusedTabId: undefined,
+              now: getNow(),
+            });
+            saved = await saveActiveSession({
+              database: databaseInQueue,
+              queryGroupTabs: dependencies.tabCapture.queryGroupTabs,
+              now: getNow(),
+            });
+          });
+
+          if (saved === undefined) {
+            return buildRpcMessage("session.saveFailed", {
+              reason: "The session could not be saved.",
+            });
+          }
+
+          // The session is saved already: closing its tabs changes nothing recorded.
+          await closeTabsKeepingWindow(dependencies.closeTabs, saved.tabs).catch(
+            dependencies.reportError,
+          );
+
+          return buildRpcMessage("session.saved", {
+            sessionId: saved.session.id,
+            title: saved.session.title,
+          });
+        }
+
+        case "library.list": {
+          return buildRpcMessage("library.listed", {
+            sessions: await listSavedSessions(await getDatabase()),
+          });
+        }
+
+        case "session.resume": {
+          try {
+            const resumed = await serializeWork(async () =>
+              resumeSession({
+                database: await getDatabase(),
+                sessionId: request.payload.sessionId,
+                api: dependencies.resumeApi,
+                now: getNow(),
+              }),
+            );
+
+            pushGraphSnapshot();
+            void enqueueCapture((openedDatabase) =>
+              injectSessionTabs(openedDatabase, dependencies.pageSignals),
+            );
+
+            return buildRpcMessage("session.resumed", {
+              sessionId: resumed.id,
+              title: resumed.title,
+            });
+          } catch (error) {
+            return buildRpcMessage("session.resumeFailed", { reason: getErrorMessage(error) });
+          }
+        }
+
         case "recorded.open": {
           await dependencies.openRecordedPage();
 
@@ -989,6 +1087,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         if (node !== undefined) {
           observeTab(node.tabId);
+        } else if (navigation.frameId === 0) {
+          // A page the tab's node already had, loaded again — a resumed tab
+          // loading when shown — is observed like a new one.
+          await observeIfCaptured(openedDatabase, navigation.tabId);
         }
 
         // The tab being read may now show another node.

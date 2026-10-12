@@ -66,21 +66,23 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
     return height > 0 ? Math.min(1, (window.scrollY + window.innerHeight) / height) : 0;
   };
 
-  const flush = (): void => {
+  /** Sends what is held now; resolves once it has been sent, or at once with nothing to send. */
+  const flush = (): Promise<void> => {
     if (timer !== undefined) {
       clearTimer(timer);
       timer = undefined;
     }
 
     if (maxScroll <= sentScroll && copyEvents === 0) {
-      return;
+      return Promise.resolve();
     }
 
     const batch = { maxScroll, copyEvents };
 
     sentScroll = maxScroll;
     copyEvents = 0;
-    send(buildRpcMessage("signal.batch", batch)).then(
+
+    return send(buildRpcMessage("signal.batch", batch)).then(
       (answer) => {
         try {
           const parsed = parseRpcMessage(answer, pageContentResponseSchemas);
@@ -100,7 +102,9 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
   };
 
   const schedule = (): void => {
-    timer ??= setTimer(flush, SIGNAL_FLUSH_INTERVAL_MS);
+    timer ??= setTimer(() => {
+      void flush();
+    }, SIGNAL_FLUSH_INTERVAL_MS);
   };
 
   const measure = (): void => {
@@ -130,8 +134,12 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
 
   const handleVisibilityChange = (): void => {
     if (document.visibilityState === "hidden") {
-      flush();
+      void flush();
     }
+  };
+
+  const handlePageHide = (): void => {
+    void flush();
   };
 
   const extractOnce = (): void => {
@@ -151,11 +159,17 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
   };
 
   const stopListening = dependencies.onRequest((message) => {
+    let request;
+
     try {
-      parseRpcMessage(message, pageObserverRequestSchemas);
+      request = parseRpcMessage(message, pageObserverRequestSchemas);
     } catch {
       // Not for this observer.
       return undefined;
+    }
+
+    if (request.type === "content.flush") {
+      return flush().then(() => buildRpcMessage("content.flushed", {}));
     }
 
     extractOnce();
@@ -166,13 +180,13 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
   // Capture phase for copy, so a page that stops the event still has it counted.
   window.addEventListener("scroll", handleScroll, { passive: true });
   window.addEventListener("copy", handleCopy, true);
-  window.addEventListener("pagehide", flush);
+  window.addEventListener("pagehide", handlePageHide);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   const stop = (): void => {
     window.removeEventListener("scroll", handleScroll);
     window.removeEventListener("copy", handleCopy, true);
-    window.removeEventListener("pagehide", flush);
+    window.removeEventListener("pagehide", handlePageHide);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     stopListening();
 

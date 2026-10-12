@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import "fake-indexeddb/auto";
 
-import { createBackgroundApp, type BackgroundDependencies } from ".";
+import { type BackgroundApp, createBackgroundApp, type BackgroundDependencies } from ".";
 import type { InferenceWorker } from "@/features/inference";
 import { SESSION_TAB_VALUE_KEY, type SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, TabCaptureApi } from "@/features/tabCapture";
@@ -114,8 +114,22 @@ const buildDependencies = (
     pageSignals: {
       executeScript: () => Promise.resolve([]),
       requestPageText: () => Promise.resolve(undefined),
+      requestFlush: () => Promise.resolve(undefined),
     },
     readFocusedTab: () => Promise.resolve(undefined),
+    resumeApi: {
+      createTab: () => Promise.reject(new Error("no tabs in this test")),
+      groupTabs: () => Promise.reject(new Error("no groups in this test")),
+      updateGroup: () => Promise.resolve(),
+      getGroup: () => Promise.reject(new Error("no groups in this test")),
+      activateTab: () => Promise.resolve(),
+      removeTab: () => Promise.resolve(),
+    },
+    closeTabs: {
+      queryWindowTabIds: () => Promise.resolve([]),
+      createTabIn: () => Promise.resolve(),
+      removeTabs: () => Promise.resolve(),
+    },
     // No recompute of clusters unless a test drives the timer itself.
     setTimer: () => undefined,
     clearTimer: () => {},
@@ -1305,9 +1319,10 @@ const createSignalsApp = async (overrides: Partial<BackgroundDependencies> = {})
   const clock = { now: 1_000, focusedTabId: undefined as number | undefined };
   const executeScript = vi.fn((_injection: unknown) => Promise.resolve([]));
   const requestPageText = vi.fn((_tabId: number) => Promise.resolve(undefined));
+  const requestFlush = vi.fn((_tabId: number) => Promise.resolve(undefined));
   const { app, database } = await createSessionApp({
     tabCapture: createTabCapture(sessionTab(), sessionTab({ id: 8, url: "https://example.org/c" })),
-    pageSignals: { executeScript, requestPageText },
+    pageSignals: { executeScript, requestPageText, requestFlush },
     readFocusedTab: () => Promise.resolve(clock.focusedTabId),
     now: () => clock.now,
     ...overrides,
@@ -1315,7 +1330,7 @@ const createSignalsApp = async (overrides: Partial<BackgroundDependencies> = {})
 
   await database.put(SESSION_STORE, activeSession);
 
-  return { app, database, clock, executeScript, requestPageText };
+  return { app, database, clock, executeScript, requestPageText, requestFlush };
 };
 
 const readNodeByUrl = async (
@@ -1888,5 +1903,138 @@ describe("what was recorded, through the background", () => {
       type: "recorded.opened",
     });
     expect(openRecordedPage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("saving and resuming through the background", () => {
+  it("saves the session with the scroll its page sends when asked, and closes its tabs", async () => {
+    const holder: { app?: BackgroundApp } = {};
+    const removeTabs = vi.fn((_ids: number[]) => Promise.resolve());
+    const signals = await createSignalsApp({
+      tabCapture: {
+        ...createTabCapture(sessionTab(), sessionTab({ id: 8, url: "https://example.org/c" })),
+        queryGroupTabs: vi.fn(async () => [
+          { ...sessionTab(), windowId: 1 },
+          { ...sessionTab({ id: 8, url: "https://example.org/c" }), windowId: 1 },
+        ]),
+      },
+      closeTabs: {
+        queryWindowTabIds: () => Promise.resolve([1, 7, 8]),
+        createTabIn: () => Promise.resolve(),
+        removeTabs,
+      },
+    });
+    const { app, database, clock } = signals;
+
+    holder.app = app;
+    signals.requestFlush.mockImplementation(async (tabId: number) => {
+      if (tabId === 7) {
+        await holder.app?.handleContentMessage(batch(0.9), FROM_PAGE_A);
+      }
+    });
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+
+    expect(await app.handleMessage(buildRpcMessage("session.save", {}))).toMatchObject({
+      type: "session.saved",
+      payload: { sessionId: "session-1" },
+    });
+
+    const session = await database.get(SESSION_STORE, "session-1");
+    const nodeA = await readNodeByUrl(database, "https://example.org/a");
+
+    expect(session).toMatchObject({
+      status: "saved",
+      savedTabs: [
+        expect.objectContaining({ url: "https://example.org/a" }),
+        expect.objectContaining({ url: "https://example.org/c" }),
+      ],
+      lastPosition: expect.objectContaining({ nodeId: nodeA?.id, readFraction: 0.9 }),
+    });
+    expect(nodeA?.signals.maxScroll).toBe(0.9);
+    expect(removeTabs).toHaveBeenCalledWith([7, 8]);
+    expect(await app.handleMessage(buildRpcMessage("library.list", {}))).toMatchObject({
+      payload: { sessions: [expect.objectContaining({ id: "session-1", pageCount: 2 })] },
+    });
+  });
+
+  it("resumes a saved session onto new tabs, reopening its pages without recording new ones", async () => {
+    let next = 100;
+    const resumeApi = {
+      createTab: vi.fn(() => Promise.resolve({ id: next++ })),
+      groupTabs: vi.fn(() => Promise.resolve(77)),
+      updateGroup: vi.fn(() => Promise.resolve()),
+      getGroup: vi.fn(() => Promise.reject(new Error("No group"))),
+      activateTab: vi.fn(() => Promise.resolve()),
+      removeTab: vi.fn(() => Promise.resolve()),
+    };
+    const { app, database } = await createSignalsApp({
+      resumeApi,
+      tabCapture: createTabCapture(
+        sessionTab(),
+        sessionTab({ id: 8, url: "https://example.org/c" }),
+        sessionTab({ id: 100, groupId: 77 }),
+        sessionTab({ id: 101, groupId: 77, url: "https://example.org/c" }),
+      ),
+    });
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
+    await database.put(SESSION_STORE, {
+      ...(await database.get(SESSION_STORE, "session-1"))!,
+      status: "saved",
+      // In tab-strip order: A, then C.
+      savedTabs: (await database.getAll(NODE_STORE))
+        .toSorted((first, second) => first.url.localeCompare(second.url))
+        .map(({ id, url, title }) => ({
+          nodeId: id,
+          url,
+          title,
+        })),
+    });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("session.resume", { sessionId: "session-1" })),
+    ).toMatchObject({ type: "session.resumed" });
+
+    // The left-off page loads its URL in its new tab: still the same page.
+    await app.handleNavigationCommitted({ ...commit("https://example.org/a"), tabId: 100 });
+
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      status: "active",
+      groupId: 77,
+    });
+    expect(
+      (await database.getAll(NODE_STORE))
+        .map(({ tabId, tabState }) => [tabId, tabState])
+        .toSorted(),
+    ).toEqual([
+      [100, "open"],
+      [101, "open"],
+    ]);
+  });
+
+  it("refuses to resume while a session is active", async () => {
+    const { app, database } = await createSignalsApp({
+      resumeApi: {
+        createTab: vi.fn(() => Promise.resolve({ id: 1 })),
+        groupTabs: vi.fn(() => Promise.resolve(77)),
+        updateGroup: vi.fn(() => Promise.resolve()),
+        getGroup: vi.fn(() => Promise.resolve({ color: "blue" })),
+        activateTab: vi.fn(() => Promise.resolve()),
+        removeTab: vi.fn(() => Promise.resolve()),
+      },
+    });
+
+    await database.put(SESSION_STORE, { ...activeSession, id: "session-0", status: "saved" });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("session.resume", { sessionId: "session-0" })),
+    ).toMatchObject({
+      type: "session.resumeFailed",
+      payload: { reason: expect.stringContaining("already active") },
+    });
   });
 });

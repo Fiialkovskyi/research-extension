@@ -7,6 +7,8 @@ export const sessionSummarySchema = v.object({
   groupId: v.number(),
   /** Pages recorded in the session so far, closed ones included. */
   pageCount: v.number(),
+  /** Where the user left off before saving, until they move on; absent otherwise. */
+  lastPosition: v.optional(v.object({ title: v.string(), readFraction: v.number() })),
 });
 
 /** Messages about the session. Starting one is still `tabGroup.create`. */

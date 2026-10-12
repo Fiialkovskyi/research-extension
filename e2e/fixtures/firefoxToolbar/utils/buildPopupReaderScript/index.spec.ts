@@ -13,6 +13,8 @@ describe("POPUP_SNAPSHOT_SCRIPT", () => {
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[role="treeitem"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="unread-count"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="unread-page"]');
+    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="saved-session"]');
+    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="left-off"]');
   });
 
   // Only simple values survive the actor boundary reliably.

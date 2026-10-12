@@ -114,6 +114,26 @@ export default defineBackground(() => {
         browser.scripting.executeScript({ target, files: files as ScriptPublicPath[] }),
       requestPageText: (tabId) =>
         browser.tabs.sendMessage(tabId, buildRpcMessage("content.extract", {}), { frameId: 0 }),
+      requestFlush: (tabId) =>
+        browser.tabs.sendMessage(tabId, buildRpcMessage("content.flush", {}), { frameId: 0 }),
+    },
+    resumeApi: {
+      // `discarded` opens a tab without loading its page; `title` is what it
+      // shows meanwhile. Firefox takes both on `tabs.create`.
+      createTab: (properties) => browser.tabs.create(properties),
+      groupTabs: (options) => browser.tabs.group(options),
+      updateGroup: (groupId, properties) => browser.tabGroups.update(groupId, properties),
+      getGroup: (groupId) => browser.tabGroups.get(groupId),
+      activateTab: (tabId) => browser.tabs.update(tabId, { active: true }),
+      removeTab: (tabId) => browser.tabs.remove(tabId),
+    },
+    closeTabs: {
+      queryWindowTabIds: async (windowId) =>
+        (await browser.tabs.query({ windowId })).flatMap(({ id }) =>
+          id === undefined ? [] : [id],
+        ),
+      createTabIn: (windowId) => browser.tabs.create({ windowId }),
+      removeTabs: (tabIds) => browser.tabs.remove(tabIds),
     },
     readFocusedTab: () =>
       readFocusedTab({

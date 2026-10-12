@@ -42,10 +42,14 @@ export const pageContentResponseSchemas = {
 export const pageObserverRequestSchemas = {
   /** The page's node became deep read: send its readable text, once. */
   "content.extract": v.object({}),
+  /** The session is being saved: send what is held now, without waiting for the timer. */
+  "content.flush": v.object({}),
 } as const;
 
 /** The observer's answers to the background. */
 export const pageObserverResponseSchemas = {
   /** The request was taken; the text, if any, follows as `content.extracted`. */
   "content.extracting": v.object({}),
+  /** What the page held has been sent, or there was nothing to send. */
+  "content.flushed": v.object({}),
 } as const;

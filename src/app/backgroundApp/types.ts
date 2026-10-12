@@ -3,6 +3,7 @@ import type { IDBPDatabase } from "idb";
 import type { InferenceWorker } from "@/features/inference";
 import type { PageSender, PageSignalsApi } from "@/features/pageSignals";
 import type { EmbeddingSession } from "@/features/snapshotEmbeddings";
+import type { CloseTabsApi, ResumeApi } from "@/features/researchLibrary";
 import type { SessionTab, SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, CommittedNavigation, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
@@ -58,6 +59,10 @@ export interface BackgroundDependencies {
   openMap: () => Promise<void>;
   /** Selects the "What was recorded" tab, opening one outside any tab group if none is open. */
   openRecordedPage: () => Promise<void>;
+  /** The browser calls resuming a saved session uses: opening, grouping and selecting tabs. */
+  resumeApi: ResumeApi;
+  /** The browser calls closing a saved session's tabs uses, keeping their window open. */
+  closeTabs: CloseTabsApi;
   /** Injects the page observer and asks it for a page's text. */
   pageSignals: PageSignalsApi;
   /**

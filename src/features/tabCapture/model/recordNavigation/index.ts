@@ -11,6 +11,9 @@ import { isCapturableUrl } from "../isCapturableUrl";
 import { linkRefinement } from "../linkRefinement";
 import { readTabTitle } from "../readTabTitle";
 
+/** A URL without its fragment, which names a place on the page rather than a page. */
+const withoutFragment = (url: string): string => url.split("#")[0] ?? url;
+
 export interface RecordNavigationOptions {
   database: IDBPDatabase<ResearchDatabaseSchema>;
   api: TabCaptureApi;
@@ -24,7 +27,8 @@ export interface RecordNavigationOptions {
  * group count, and a reload is not a new page (CAP-002). The new node follows
  * the tab's previous one, which is closed: a tab shows one page at a time, so
  * it has at most one open node. A tab's first node is linked to the page of the
- * tab that opened it (CAP-001).
+ * tab that opened it (CAP-001). A commit of the URL the tab's node already has
+ * is the same page loaded again, and records nothing.
  *
  * A non-web page in a session tab records nothing but still closes the node
  * the tab was showing, since the tab no longer shows it.
@@ -55,6 +59,12 @@ export const recordNavigation = async ({
   }
 
   const parent = await readTabNode(database, session.id, tabId);
+
+  // The page the tab already shows, loaded again: an unloaded tab loading when
+  // selected, or a link to itself. Not a new page, whatever the transition.
+  if (parent !== undefined && withoutFragment(parent.url) === withoutFragment(url)) {
+    return undefined;
+  }
 
   if (!isCapturableUrl(url)) {
     if (parent !== undefined) {

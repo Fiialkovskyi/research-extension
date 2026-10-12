@@ -5,6 +5,12 @@ import { type GraphSnapshot, researchMapResponseSchemas } from "@/features/resea
 import { buildResearchTree, listUnreadPages, type TreeFocus } from "@/features/researchTree";
 import { ResearchTree } from "@/features/researchTree/ui/researchTree";
 import { UnreadQueue } from "@/features/researchTree/ui/unreadQueue";
+import {
+  researchLibraryResponseSchemas,
+  type SavedSessionSummary,
+} from "@/features/researchLibrary";
+import { formatLeftOff, LibraryList } from "@/features/researchLibrary/ui/libraryList";
+import { recordedDataResponseSchemas } from "@/features/recordedData";
 import { researchSessionResponseSchemas } from "@/features/researchSession";
 import { tabGroupResponseSchemas } from "@/features/tabGroups";
 import { GroupForm } from "@/features/tabGroups/ui/groupForm";
@@ -73,7 +79,12 @@ const responseSchemas = {
 type PopupState =
   | { status: "loading" }
   | { status: "ready"; pending: boolean; failure?: string; closedTitle?: string }
-  | { status: "active"; title: string; pageCount: number };
+  | {
+      status: "active";
+      title: string;
+      pageCount: number;
+      lastPosition?: { title: string; readFraction: number };
+    };
 
 /** Turns the background's answer into what the popup shows. */
 const readAnswer = (answer: unknown): PopupState => {
@@ -86,6 +97,9 @@ const readAnswer = (answer: unknown): PopupState => {
           status: "active",
           title: response.payload.session.title,
           pageCount: response.payload.session.pageCount,
+          ...(response.payload.session.lastPosition === undefined
+            ? {}
+            : { lastPosition: response.payload.session.lastPosition }),
         };
       }
 
@@ -129,6 +143,35 @@ const graphResponseSchemas = {
   ...rpcResponseSchemas,
 } as const;
 
+/** Every answer the background may send about saved research. */
+const libraryResponseSchemas = {
+  ...researchLibraryResponseSchemas,
+  ...recordedDataResponseSchemas,
+  ...rpcResponseSchemas,
+} as const;
+
+/** The saved sessions an answer lists, or none when it lists none. */
+const readLibrary = (answer: unknown): SavedSessionSummary[] => {
+  const response = parseRpcMessage(answer, libraryResponseSchemas);
+
+  return response.type === "library.listed" ? response.payload.sessions : [];
+};
+
+/** Why a save, resume or delete failed, or `undefined` when it did not. */
+const readLibraryFailure = (answer: unknown): string | undefined => {
+  const response = parseRpcMessage(answer, libraryResponseSchemas);
+
+  switch (response.type) {
+    case "session.saveFailed":
+    case "session.resumeFailed":
+    case "rpc.refused":
+    case "rpc.failed":
+      return response.payload.reason;
+    default:
+      return undefined;
+  }
+};
+
 /** A request that failed or was answered with nothing this surface reads. */
 const readFailure = (error: unknown): PopupState => {
   return { status: "ready", pending: false, failure: getErrorMessage(error) };
@@ -144,6 +187,33 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
     collapsed: new Set(),
   });
   const isActive = state.status === "active";
+  const isReady = state.status === "ready" && !state.pending;
+  const [library, setLibrary] = useState<SavedSessionSummary[]>([]);
+
+  // The saved sessions, whenever the popup offers to start one.
+  useEffect(() => {
+    if (!isReady) {
+      return undefined;
+    }
+
+    let isCurrent = true;
+
+    client
+      .request(buildRpcMessage("library.list", {}))
+      .then(readLibrary)
+      .then(
+        (sessions) => {
+          if (isCurrent) {
+            setLibrary(sessions);
+          }
+        },
+        () => undefined,
+      );
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [client, isReady]);
 
   // The tree follows the graph for as long as the popup is open.
   useEffect(() => {
@@ -264,6 +334,60 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
     [client, hasPageAccess, requestPageAccess],
   );
 
+  /** Saves the session: the background closes its tabs once it is recorded. */
+  const saveSession = useCallback(() => {
+    client
+      .request(buildRpcMessage("session.save", {}))
+      .then((answer) => {
+        const failure = readLibraryFailure(answer);
+
+        if (failure === undefined) {
+          setState({ status: "ready", pending: false });
+        } else {
+          setMapFailure(failure);
+        }
+      })
+      .catch((error: unknown) => {
+        setMapFailure(getErrorMessage(error));
+      });
+  }, [client]);
+
+  /** Resumes a saved session, then shows it as the active one. */
+  const resume = useCallback(
+    (sessionId: string) => {
+      setState({ status: "ready", pending: true });
+      client
+        .request(buildRpcMessage("session.resume", { sessionId }))
+        .then(async (answer) => {
+          const failure = readLibraryFailure(answer);
+
+          if (failure !== undefined) {
+            setState({ status: "ready", pending: false, failure });
+            return;
+          }
+
+          setState(readAnswer(await client.request(buildRpcMessage("session.getActive", {}))));
+        })
+        .catch((error: unknown) => {
+          setState(readFailure(error));
+        });
+    },
+    [client],
+  );
+
+  /** Deletes a saved session, then lists the library again. */
+  const deleteSaved = useCallback(
+    (sessionId: string) => {
+      client
+        .request(buildRpcMessage("session.delete", { sessionId }))
+        .then(() => client.request(buildRpcMessage("library.list", {})))
+        .then(readLibrary)
+        .then(setLibrary)
+        .catch(() => undefined);
+    },
+    [client],
+  );
+
   // Opened like the map: the background finds its tab or opens one outside groups.
   const openRecorded = useCallback(() => {
     client.request(buildRpcMessage("recorded.open", {})).catch((error: unknown) => {
@@ -298,6 +422,7 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
         </div>
       )}
       {state.status === "ready" && <GroupForm pending={state.pending} onSubmit={startSession} />}
+      {isReady && <LibraryList sessions={library} onResume={resume} onDelete={deleteSaved} />}
       {state.status === "ready" && state.failure !== undefined && (
         <p
           data-testid="group-error"
@@ -315,6 +440,11 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
           </span>
         </p>
       )}
+      {state.status === "active" && state.lastPosition !== undefined && (
+        <p data-testid="left-off" className="mt-1 text-sm">
+          {formatLeftOff(state.lastPosition)}
+        </p>
+      )}
       {state.status === "active" && (
         <div className="mt-3">
           <Button data-testid="open-map" onClick={openMap}>
@@ -322,6 +452,9 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
           </Button>{" "}
           <Button data-testid="open-recorded" onClick={openRecorded}>
             What was recorded
+          </Button>{" "}
+          <Button data-testid="save-session" onClick={saveSession}>
+            Save research
           </Button>
         </div>
       )}

@@ -43,4 +43,8 @@ export const popupSnapshotSchema = v.object({
   unreadCount: v.nullable(v.string()),
   /** The unread queue's entries, oldest first. */
   unreadPages: v.array(v.string()),
+  /** The library's saved sessions, as their entries read. */
+  savedSessions: v.array(v.string()),
+  /** "You left off at …", or null when the popup does not say it. */
+  leftOff: v.nullable(v.string()),
 });

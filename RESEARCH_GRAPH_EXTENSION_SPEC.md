@@ -548,6 +548,13 @@ All research data lives in one IndexedDB database in the extension's origin. Sma
 - **REQ-STO-003 (save):** WHEN the user chooses Save research, the system SHALL flush pending signals, mark the session `saved`, record `last_position` (the most recent focused node and its scroll), store the tab list in order, and close the session's tabs. The flow SHALL complete in under 2 s for 100 nodes.
 - **REQ-STO-004 (library):** The Research library SHALL list saved sessions with title, last-updated date, page count, deep-read count and a one-line status from the latest summary.
 - **REQ-STO-005 (resume):** WHEN a saved session is opened, the graph and synthesis SHALL render within 1 s. Tabs SHALL be restored lazily (created with `discarded: true`) or on click, and the sidebar SHALL show "You left off at \<title> (\<n>% read)".
+
+  **Built so far (OpenSpec change `add-save-and-resume`).**
+
+  - **Save.** It asks each open page to flush, settles reading time, records `last_position` as the focused (or last focused) page and its read fraction, and stores the ordered tabs. It closes the session's nodes and tabs, keeping the window open.
+  - **The library.** It lives in the popup when no session is active. Each entry shows title, saved date, page count and the left-off page. Deep-read counts and summary status wait for synthesis.
+  - **Resume.** It reopens the tabs in a new group, every tab but the left-off page `discarded`. It reopens the same nodes rather than recording new ones; a commit of a tab's current URL is not a new page. The popup shows "You left off at …" until the user moves on.
+
 - **REQ-STO-006 (reattach):** WHEN the user starts a session whose root query embeds within 0.8 cosine of a saved session's root (same space), or shares at least 60% of normalized query terms, the system SHALL offer to continue that session instead.
 - **REQ-STO-007 (export and import):** A session SHALL export to a single `.rgsession` file: a zip with JSON stores, snapshots, model and space manifests, and optionally vectors, encrypted with a user passphrase (AES-GCM, PBKDF2 with at least 600,000 iterations or Argon2id via WASM). Import SHALL validate schemas and apply REQ-LIN-009.
 - **REQ-STO-008 (deletion):** Deleting a session SHALL remove every record keyed by its `session_id`, including vectors, snapshots and jobs, in one transaction. Deleting a node SHALL cascade to its snapshots, chunks, vectors and facts, and mark dependent statements stale. Both cascades are built, each as one transaction, through `sessionId` and `nodeId` indexes. Embedding spaces are kept as shared definitions. A deleted active session leaves its tab group open and unfollowed (OpenSpec change `add-recorded-data-view`).

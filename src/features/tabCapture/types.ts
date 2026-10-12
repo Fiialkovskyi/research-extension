@@ -7,6 +7,8 @@ export interface CaptureTab {
   /** `-1` or absent when the tab is in no group. */
   groupId?: number;
   openerTabId?: number;
+  /** The window holding the tab; saving a session keeps that window open. */
+  windowId?: number;
   incognito: boolean;
 }
 

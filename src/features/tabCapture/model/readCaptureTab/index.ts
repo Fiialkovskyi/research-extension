@@ -7,6 +7,7 @@ interface BrowserTab {
   title?: string;
   groupId?: number;
   openerTabId?: number;
+  windowId?: number;
   incognito: boolean;
 }
 
@@ -25,6 +26,7 @@ export const readCaptureTab = ({
   title,
   groupId,
   openerTabId,
+  windowId,
   incognito,
 }: BrowserTab): CaptureTab => {
   if (id === undefined) {
@@ -38,5 +40,6 @@ export const readCaptureTab = ({
     ...(title === undefined ? {} : { title }),
     ...(groupId === undefined ? {} : { groupId }),
     ...(openerTabId === undefined ? {} : { openerTabId }),
+    ...(windowId === undefined ? {} : { windowId }),
   };
 };
