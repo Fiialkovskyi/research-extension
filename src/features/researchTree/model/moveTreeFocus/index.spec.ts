@@ -6,6 +6,8 @@ import type { TreeRow } from "../buildResearchTree";
 import { listVisibleRows } from "../listVisibleRows";
 
 const row = (id: string, children: TreeRow[] = []): TreeRow => ({
+  kind: "page",
+  id,
   node: { id } as MapNode,
   children,
 });

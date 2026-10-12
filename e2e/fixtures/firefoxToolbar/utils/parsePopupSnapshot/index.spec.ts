@@ -44,13 +44,29 @@ describe("parsePopupSnapshot", () => {
       ...JSON.parse(SNAPSHOT),
       treeRows: [
         {
-          text: "●Page Adeep read",
+          kind: "cluster",
+          text: "motors · 2",
           level: 1,
+          expanded: "true",
+          engagement: null,
+          tabState: null,
+        },
+        {
+          kind: "page",
+          text: "●Page Adeep read",
+          level: 2,
           expanded: "true",
           engagement: "deep_read",
           tabState: "open",
         },
-        { text: "○Page Bunread", level: 2, expanded: null, engagement: "unread", tabState: "open" },
+        {
+          kind: "page",
+          text: "○Page Bunread",
+          level: 3,
+          expanded: null,
+          engagement: "unread",
+          tabState: "open",
+        },
       ],
       unreadCount: "Unread: 1",
       unreadPages: ["Page B"],
@@ -58,8 +74,9 @@ describe("parsePopupSnapshot", () => {
 
     expect(parsePopupSnapshot(raw)).toMatchObject({
       treeRows: [
-        expect.objectContaining({ level: 1, expanded: "true" }),
-        expect.objectContaining({ level: 2, expanded: null }),
+        expect.objectContaining({ kind: "cluster", level: 1, engagement: null }),
+        expect.objectContaining({ kind: "page", level: 2, expanded: "true" }),
+        expect.objectContaining({ kind: "page", level: 3, expanded: null }),
       ],
       unreadCount: "Unread: 1",
       unreadPages: ["Page B"],

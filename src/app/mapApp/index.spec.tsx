@@ -74,6 +74,7 @@ const buildSnapshot = (...titles: string[]): GraphSnapshot => ({
     createdAt: index,
   })),
   edges: [],
+  clusters: [],
 });
 
 describe("MapApp", () => {
@@ -90,7 +91,7 @@ describe("MapApp", () => {
     const { client, push } = createStubClient();
     render(<MapApp client={client} />);
 
-    push("graph.snapshot", { session: null, nodes: [], edges: [] });
+    push("graph.snapshot", { session: null, nodes: [], edges: [], clusters: [] });
 
     expect(screen.getByTestId("map-empty")).toHaveTextContent("No active research session.");
     expect(screen.queryByTestId("research-map")).not.toBeInTheDocument();

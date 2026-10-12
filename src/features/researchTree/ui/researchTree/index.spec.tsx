@@ -131,4 +131,44 @@ describe("ResearchTree", () => {
 
     expect(onFocusTab.mock.calls).toEqual([[2], [2]]);
   });
+
+  it("draws a cluster as a row named by its label and size, which selects no tab", () => {
+    const onFocusTab = vi.fn();
+    const clusters = [
+      { id: "k1", label: "e-bike motors", memberIds: ["s", "a", "b"] },
+      { id: "k2", label: "Page C", memberIds: ["c"] },
+    ];
+
+    function Clustered() {
+      const [focus, setFocus] = useState<TreeFocus>({ focusedId: undefined, collapsed: new Set() });
+
+      return (
+        <ResearchTree
+          forest={buildResearchTree(NODES, clusters)}
+          focus={focus}
+          onFocusChange={setFocus}
+          onFocusTab={onFocusTab}
+        />
+      );
+    }
+
+    render(<Clustered />);
+
+    const motors = screen.getByRole("treeitem", { name: "e-bike motors · 3" });
+
+    expect(motors).toHaveAttribute("data-row-kind", "cluster");
+    expect(motors).toHaveAttribute("aria-level", "1");
+    expect(readRow(/search · e-bike motors/)).toHaveAttribute("aria-level", "2");
+    expect(screen.getByRole("treeitem", { name: "Unclustered · 1" })).toBeInTheDocument();
+
+    fireEvent.click(motors);
+    fireEvent.keyDown(screen.getByRole("tree"), { key: "Enter" });
+
+    expect(onFocusTab).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByRole("tree"), { key: "ArrowLeft" });
+
+    expect(motors).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("treeitem", { name: /Page A/ })).toBeNull();
+  });
 });

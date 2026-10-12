@@ -81,6 +81,7 @@ const snapshot: GraphSnapshot = {
   session: { id: "session-1", title: "E-bike motors" },
   nodes: [buildNode("a", { tabState: "closed" }), buildNode("b", { tabId: 7, parentNodeId: "a" })],
   edges: [{ id: "a|b|sameTab", from: "a", to: "b", kind: "sameTab" }],
+  clusters: [],
 };
 
 const findNode = (id: string) => {

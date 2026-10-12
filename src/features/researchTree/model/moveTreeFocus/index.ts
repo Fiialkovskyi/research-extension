@@ -20,10 +20,10 @@ export const moveTreeFocus = (
   { focusedId, collapsed }: TreeFocus,
   key: TreeKey,
 ): TreeFocus => {
-  const index = rows.findIndex((row) => row.node.id === focusedId);
+  const index = rows.findIndex(({ row }) => row.id === focusedId);
   const current = rows[index];
   const focusAt = (at: number): TreeFocus => ({
-    focusedId: rows[Math.min(Math.max(at, 0), rows.length - 1)]?.node.id,
+    focusedId: rows[Math.min(Math.max(at, 0), rows.length - 1)]?.row.id,
     collapsed,
   });
 
@@ -45,10 +45,10 @@ export const moveTreeFocus = (
         return { focusedId, collapsed };
       }
 
-      if (collapsed.has(current.node.id)) {
+      if (collapsed.has(current.row.id)) {
         const expanded = new Set(collapsed);
 
-        expanded.delete(current.node.id);
+        expanded.delete(current.row.id);
 
         return { focusedId, collapsed: expanded };
       }
@@ -56,8 +56,8 @@ export const moveTreeFocus = (
       return focusAt(index + 1);
     }
     case "ArrowLeft": {
-      if (current.hasChildren && !collapsed.has(current.node.id)) {
-        return { focusedId, collapsed: new Set([...collapsed, current.node.id]) };
+      if (current.hasChildren && !collapsed.has(current.row.id)) {
+        return { focusedId, collapsed: new Set([...collapsed, current.row.id]) };
       }
 
       return { focusedId: current.parentId ?? focusedId, collapsed };

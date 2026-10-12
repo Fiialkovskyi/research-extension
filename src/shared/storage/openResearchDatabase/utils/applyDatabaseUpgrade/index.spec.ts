@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
 import {
+  CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
@@ -254,6 +255,15 @@ describe("applyDatabaseUpgrade", () => {
     });
 
     after.close();
+  });
+
+  it("adds a clusterings store keyed by session", async () => {
+    const database = await openAt(getNextDatabaseName(), 10);
+
+    expect(database.version).toBe(10);
+    expect(database.transaction(CLUSTERING_STORE).store.keyPath).toBe("sessionId");
+
+    database.close();
   });
 
   it("keys model files by model and path together, so one model holds many files", async () => {

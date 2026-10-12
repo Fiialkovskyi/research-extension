@@ -27,13 +27,16 @@ export const popupSnapshotSchema = v.object({
   /** The research tree's rows, top to bottom, as the popup shows them. */
   treeRows: v.array(
     v.object({
+      /** A page, or a cluster grouping pages. */
+      kind: v.picklist(["page", "cluster"]),
       text: v.string(),
       /** `aria-level`: 1 for a root. */
       level: v.number(),
       /** `aria-expanded`, or null for a row without children. */
       expanded: v.nullable(v.picklist(["true", "false"])),
-      engagement: v.string(),
-      tabState: v.picklist(["open", "closed"]),
+      /** A page's engagement; null on a cluster row. */
+      engagement: v.nullable(v.string()),
+      tabState: v.nullable(v.picklist(["open", "closed"])),
     }),
   ),
   /** The unread queue's heading, or null when the popup shows no queue. */

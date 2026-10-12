@@ -72,7 +72,16 @@ describe("buildGraphSnapshot", () => {
         },
       ],
       edges: [{ id: "node-a|node-b|sameTab", from: "node-a", to: "node-b", kind: "sameTab" }],
+      clusters: [],
     });
+  });
+
+  it("carries the session's clusters", () => {
+    const clusters = [{ id: "k", label: "e-bike motors", memberIds: ["node-a"] }];
+
+    expect(buildGraphSnapshot(session, { nodes: [node], edges: [] }, clusters).clusters).toEqual(
+      clusters,
+    );
   });
 
   it("carries a SERP's kind and query", () => {
@@ -126,6 +135,7 @@ describe("buildGraphSnapshot", () => {
       session: null,
       nodes: [],
       edges: [],
+      clusters: [],
     });
   });
 

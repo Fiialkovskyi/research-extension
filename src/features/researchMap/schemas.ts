@@ -32,11 +32,20 @@ export const mapEdgeSchema = v.object({
   kind: v.string(),
 });
 
+/** A group of pages clustering found, by the ids of its pages. */
+export const mapClusterSchema = v.object({
+  id: v.string(),
+  label: v.string(),
+  memberIds: v.array(v.string()),
+});
+
 /** The active session's graph at one moment, or no session and nothing to draw. */
 export const graphSnapshotSchema = v.object({
   session: v.nullable(v.object({ id: v.string(), title: v.string() })),
   nodes: v.array(mapNodeSchema),
   edges: v.array(mapEdgeSchema),
+  /** The session's latest clusters; empty before it is first clustered. */
+  clusters: v.array(mapClusterSchema),
 });
 
 export const researchMapRequestSchemas = {

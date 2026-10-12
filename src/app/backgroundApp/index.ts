@@ -16,6 +16,11 @@ import {
   recordSnapshot,
   sealPlaintextSnapshots,
 } from "@/features/pageSnapshots";
+import {
+  readClustering,
+  reclusterActiveSession,
+  RECLUSTER_DELAY_MS,
+} from "@/features/researchClusters";
 import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
 import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
@@ -87,12 +92,16 @@ const readGraphSnapshot = async (
 ): Promise<GraphSnapshot> => {
   const session = await getActiveSession(openedDatabase);
 
-  return buildGraphSnapshot(
-    session,
-    session === undefined
-      ? { nodes: [], edges: [] }
-      : await readSessionGraph(openedDatabase, session.id),
-  );
+  if (session === undefined) {
+    return buildGraphSnapshot(undefined, { nodes: [], edges: [] });
+  }
+
+  const [graph, clustering] = await Promise.all([
+    readSessionGraph(openedDatabase, session.id),
+    readClustering(openedDatabase, session.id),
+  ]);
+
+  return buildGraphSnapshot(session, graph, clustering?.clusters);
 };
 
 export const createBackgroundApp = (dependencies: BackgroundDependencies): BackgroundApp => {
@@ -235,6 +244,39 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     }
   };
 
+  const setTimer =
+    dependencies.setTimer ??
+    ((callback: () => void, delayMs: number) => setTimeout(callback, delayMs));
+  const clearTimer =
+    dependencies.clearTimer ??
+    ((handle: unknown) => {
+      clearTimeout(handle as ReturnType<typeof setTimeout>);
+    });
+  let reclusterTimer: unknown;
+
+  /** Clusters the active session again, then pushes the graph with its clusters. */
+  const recluster = async (): Promise<void> => {
+    await enqueueCapture((openedDatabase) => reclusterActiveSession(openedDatabase, getNow()));
+    pushGraphSnapshot();
+  };
+
+  /**
+   * (Re)arms the recompute of clusters for when the graph has been quiet for
+   * the debounce delay (REQ-CLU-003): a burst of navigation clusters once.
+   * Kept in memory: if the event page unloads first, the next capture event
+   * arms it again, and start-up reconciliation reclusters regardless.
+   */
+  const scheduleRecluster = (): void => {
+    if (reclusterTimer !== undefined) {
+      clearTimer(reclusterTimer);
+    }
+
+    reclusterTimer = setTimer(() => {
+      reclusterTimer = undefined;
+      void recluster();
+    }, RECLUSTER_DELAY_MS);
+  };
+
   /** Runs capture work, then tells the map pages the graph may have changed. */
   const captureAndPush = (
     work: (openedDatabase: IDBPDatabase<ResearchDatabaseSchema>) => Promise<unknown>,
@@ -244,6 +286,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     const captured = enqueueCapture(work);
 
     pushGraphSnapshot();
+    scheduleRecluster();
 
     return captured;
   };
@@ -780,6 +823,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         });
       });
       await reconcileTabs();
+      await recluster();
     },
     handleNavigationCommitted: (navigation) =>
       captureAndPush(async (openedDatabase) => {

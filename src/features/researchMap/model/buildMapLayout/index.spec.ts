@@ -33,6 +33,7 @@ const snapshot: GraphSnapshot = {
     { id: "a|b|sameTab", from: "a", to: "b", kind: "sameTab" },
     { id: "b|c|opener", from: "b", to: "c", kind: "opener" },
   ],
+  clusters: [],
 };
 
 const readPosition = (layout: ReturnType<typeof buildMapLayout>, id: string) => {
@@ -161,7 +162,7 @@ describe("buildMapLayout", () => {
   });
 
   it("lays out nothing for an empty snapshot", () => {
-    expect(buildMapLayout({ session: null, nodes: [], edges: [] })).toEqual({
+    expect(buildMapLayout({ session: null, nodes: [], edges: [], clusters: [] })).toEqual({
       nodes: [],
       edges: [],
     });

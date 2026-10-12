@@ -1,6 +1,7 @@
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import {
+  CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
@@ -111,6 +112,9 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     };
 
     void rewrite();
+  },
+  10: (database) => {
+    database.createObjectStore(CLUSTERING_STORE, { keyPath: "sessionId" });
   },
 };
 

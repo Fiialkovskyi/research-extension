@@ -1,5 +1,5 @@
 import { getNodeEngagement, type SessionGraph } from "@/features/researchGraph";
-import type { StoredSession } from "@/shared/storage";
+import type { StoredCluster, StoredSession } from "@/shared/storage";
 
 import type { GraphSnapshot } from "../../types";
 
@@ -14,9 +14,10 @@ import type { GraphSnapshot } from "../../types";
 export const buildGraphSnapshot = (
   session: StoredSession | undefined,
   graph: SessionGraph,
+  clusters: readonly StoredCluster[] = [],
 ): GraphSnapshot => {
   if (session === undefined) {
-    return { session: null, nodes: [], edges: [] };
+    return { session: null, nodes: [], edges: [], clusters: [] };
   }
 
   return {
@@ -38,5 +39,10 @@ export const buildGraphSnapshot = (
       createdAt: node.createdAt,
     })),
     edges: graph.edges.map(({ id, from, to, kind }) => ({ id, from, to, kind })),
+    clusters: clusters.map(({ id, label, memberIds }) => ({
+      id,
+      label,
+      memberIds: [...memberIds],
+    })),
   };
 };

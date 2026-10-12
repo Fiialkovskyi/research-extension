@@ -66,6 +66,13 @@ export interface BackgroundDependencies {
   readFocusedTab: () => Promise<number | undefined>;
   /** The current time. Injected so reading time is exercised without waiting. */
   now?: () => number;
+  /**
+   * Runs a callback after a delay, and cancels one. Injected so the debounced
+   * recompute of clusters is exercised without waiting; the timers default to
+   * the page's own, which an unloaded event page simply loses.
+   */
+  setTimer?: (callback: () => void, delayMs: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
 }
 
 /** What the browser reports about the user's activity. */

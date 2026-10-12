@@ -325,7 +325,7 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
         <div className="mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto">
           <UnreadQueue pages={listUnreadPages(snapshot.nodes)} onFocusTab={focusTab} />
           <ResearchTree
-            forest={buildResearchTree(snapshot.nodes)}
+            forest={buildResearchTree(snapshot.nodes, snapshot.clusters)}
             focus={treeFocus}
             onFocusChange={setTreeFocus}
             onFocusTab={focusTab}

@@ -5,6 +5,8 @@ import type { MapNode } from "@/features/researchMap";
 import type { TreeRow } from "../buildResearchTree";
 
 const row = (id: string, children: TreeRow[] = []): TreeRow => ({
+  kind: "page",
+  id,
   node: { id } as MapNode,
   children,
 });
@@ -15,8 +17,8 @@ describe("listVisibleRows", () => {
   it("lists every row depth-first, with its level, place among siblings and children", () => {
     expect(
       listVisibleRows(forest, new Set()).map(
-        ({ node, level, positionInSet, setSize, parentId, hasChildren }) => [
-          node.id,
+        ({ row: { id }, level, positionInSet, setSize, parentId, hasChildren }) => [
+          id,
           level,
           positionInSet,
           setSize,
@@ -34,7 +36,7 @@ describe("listVisibleRows", () => {
   });
 
   it("leaves out the children of a collapsed row, but keeps the row", () => {
-    expect(listVisibleRows(forest, new Set(["a"])).map(({ node }) => node.id)).toEqual([
+    expect(listVisibleRows(forest, new Set(["a"])).map(({ row: { id } }) => id)).toEqual([
       "search",
       "a",
       "c",

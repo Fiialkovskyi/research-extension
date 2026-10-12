@@ -115,6 +115,7 @@ const snapshot = (...nodes: ReturnType<typeof node>[]) =>
     session: { id: "session-1", title: "E-bike motors" },
     nodes,
     edges: [],
+    clusters: [],
   });
 
 describe("PopupApp", () => {

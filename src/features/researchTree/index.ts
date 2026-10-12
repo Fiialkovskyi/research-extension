@@ -7,7 +7,7 @@
  * path, so nothing that imports this barrel bundles React.
  */
 
-export { buildResearchTree } from "./model/buildResearchTree";
+export { buildResearchTree, UNCLUSTERED_ROW_ID } from "./model/buildResearchTree";
 export type { TreeRow } from "./model/buildResearchTree";
 export { listUnreadPages } from "./model/listUnreadPages";
 export { listVisibleRows } from "./model/listVisibleRows";

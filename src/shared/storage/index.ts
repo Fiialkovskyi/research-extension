@@ -14,6 +14,7 @@
  */
 
 export {
+  CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
@@ -28,6 +29,8 @@ export {
 } from "./constants";
 export type {
   ConformanceStatus,
+  StoredCluster,
+  StoredClustering,
   EdgeKind,
   InferenceOutcome,
   JobStatus,

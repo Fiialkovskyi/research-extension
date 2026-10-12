@@ -11,6 +11,7 @@ import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/ut
 import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import {
+  CLUSTERING_STORE,
   EDGE_STORE,
   KEY_STORE,
   MODEL_FILE_STORE,
@@ -110,6 +111,9 @@ const buildDependencies = (
       requestPageText: () => Promise.resolve(undefined),
     },
     readFocusedTab: () => Promise.resolve(undefined),
+    // No recompute of clusters unless a test drives the timer itself.
+    setTimer: () => undefined,
+    clearTimer: () => {},
     ...overrides,
   };
 };
@@ -138,6 +142,7 @@ const createFreshDatabase = async () => {
   await database.clear(EDGE_STORE);
   await database.clear(SNAPSHOT_STORE);
   await database.clear(KEY_STORE);
+  await database.clear(CLUSTERING_STORE);
 
   return database;
 };
@@ -1081,6 +1086,7 @@ describe("the research map through the background", () => {
       session: { id: "session-1", title: "E-bike motors" },
       nodes: [],
       edges: [],
+      clusters: [],
     });
   });
 
@@ -1147,7 +1153,12 @@ describe("the research map through the background", () => {
     await app.handleGroupRemoved({ id: 42 });
     await vi.waitFor(() => expect(readSnapshots(map.posted)).toHaveLength(2));
 
-    expect(readSnapshots(map.posted)[1]?.payload).toEqual({ session: null, nodes: [], edges: [] });
+    expect(readSnapshots(map.posted)[1]?.payload).toEqual({
+      session: null,
+      nodes: [],
+      edges: [],
+      clusters: [],
+    });
   });
 
   it("pushes a rename of the session", async () => {
@@ -1560,5 +1571,76 @@ describe("page signals and reading time through the background", () => {
         expect.objectContaining({ engagement: "deep_read" }),
       ]),
     );
+  });
+});
+
+/** A timer the test fires by hand, recording how often it was armed. */
+const createTimer = () => {
+  const pending = new Map<number, () => void>();
+  let next = 0;
+
+  return {
+    armed: () => next,
+    pending: () => pending.size,
+    fire: () => {
+      const due = [...pending.values()];
+
+      pending.clear();
+      due.forEach((callback) => {
+        callback();
+      });
+    },
+    setTimer: (callback: () => void) => {
+      next += 1;
+      pending.set(next, callback);
+      return next;
+    },
+    clearTimer: (handle: unknown) => {
+      pending.delete(handle as number);
+    },
+  };
+};
+
+describe("clustering through the background", () => {
+  it("clusters once after a burst of navigation, and pushes the clusters", async () => {
+    const timer = createTimer();
+    const { app, database, map } = await createSubscribedApp({
+      tabCapture: createTabCapture(sessionTab(), sessionTab({ id: 8, openerTabId: 7 })),
+      setTimer: timer.setTimer,
+      clearTimer: timer.clearTimer,
+    });
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
+    await app.handleNavigationCommitted(commit("https://example.org/b"));
+
+    expect(timer.pending()).toBe(1);
+    expect(await database.count(CLUSTERING_STORE)).toBe(0);
+
+    timer.fire();
+
+    await vi.waitFor(async () => expect(await database.count(CLUSTERING_STORE)).toBe(1));
+    await vi.waitFor(() => {
+      const latest = readSnapshots(map.posted).at(-1)?.payload as unknown as
+        | { clusters: unknown[] }
+        | undefined;
+
+      expect(latest?.clusters).not.toHaveLength(0);
+    });
+  });
+
+  it("clusters the session when the background starts", async () => {
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab()),
+    });
+
+    await database.put(SESSION_STORE, activeSession);
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.reconcileSession();
+
+    expect(await database.get(CLUSTERING_STORE, "session-1")).toMatchObject({
+      algorithmVersion: "louvain@1",
+      clusters: [expect.objectContaining({ memberIds: [expect.any(String)] })],
+    });
   });
 });

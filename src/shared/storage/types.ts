@@ -2,6 +2,7 @@ import type { DBSchema } from "idb";
 
 import type { InferenceDevice, ModelManifest } from "../modelManifest";
 import type {
+  CLUSTERING_STORE,
   EDGE_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
@@ -293,6 +294,29 @@ export interface StoredDataKey {
   createdAt: number;
 }
 
+/** One group of a session's pages, as clustering found it. */
+export interface StoredCluster {
+  /** Kept across recomputes while the cluster keeps most of its pages. */
+  id: string;
+  /** The query of its earliest search, or the title of its earliest page. */
+  label: string;
+  memberIds: string[];
+}
+
+/**
+ * A session's latest clustering, replaced whole on every recompute so a reader
+ * never sees half of one. Derived: it can always be computed again.
+ */
+export interface StoredClustering {
+  sessionId: string;
+  /** The algorithm that produced it, such as `louvain@1` (REQ-CLU-006). */
+  algorithmVersion: string;
+  /** The edge weights and options it used, such as `cluster_config@1`. */
+  configVersion: string;
+  computedAt: number;
+  clusters: StoredCluster[];
+}
+
 export interface ResearchDatabaseSchema extends DBSchema {
   [MODEL_STORE]: {
     key: string;
@@ -336,5 +360,9 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [KEY_STORE]: {
     key: string;
     value: StoredDataKey;
+  };
+  [CLUSTERING_STORE]: {
+    key: string;
+    value: StoredClustering;
   };
 }

@@ -73,7 +73,7 @@ describe("the research tree in the popup", () => {
     await leaveBrowserChrome();
   });
 
-  it("draws each page under the page it was reached from, and queues the unread one", async () => {
+  it("groups the pages by cluster, each under the page it was reached from, and queues the unread one", async () => {
     const port = new URL(readOrigin()).port;
 
     await clickToolbarAction();
@@ -96,20 +96,28 @@ describe("the research tree in the popup", () => {
     // Set aside: opened in the group without ever being selected.
     await openPageInGroup(title, `${readOrigin()}/c.html`);
 
+    // Clustering runs once the graph has been quiet for 5 s: the search's
+    // thread becomes a cluster, and C, related to nothing, is pooled.
     const popup = await waitForPopup(
-      (snapshot) => snapshot.treeRows.length === 4 && snapshot.unreadPages.length === 1,
-      "four rows and one unread page",
+      (snapshot) =>
+        snapshot.treeRows.some((row) => row.kind === "cluster") &&
+        snapshot.unreadPages.length === 1,
+      "the clustered tree and one unread page",
     );
 
-    expect(popup.treeRows.map(({ text, level }) => [text.replace(/^\W+/u, ""), level])).toEqual([
-      [expect.stringContaining("search · e-bike motors"), 1],
-      [expect.stringContaining("Page A"), 2],
-      [expect.stringContaining("Page B"), 3],
-      [expect.stringContaining("Page C"), 1],
+    expect(
+      popup.treeRows.map(({ kind, text, level }) => [kind, text.replace(/^\W+/u, ""), level]),
+    ).toEqual([
+      ["cluster", "e-bike motors · 3", 1],
+      ["page", expect.stringContaining("search · e-bike motors"), 2],
+      ["page", expect.stringContaining("Page A"), 3],
+      ["page", expect.stringContaining("Page B"), 4],
+      ["cluster", "Unclustered · 1", 1],
+      ["page", expect.stringContaining("Page C"), 2],
     ]);
-    expect(popup.treeRows[0]?.expanded).toBe("true");
-    expect(popup.treeRows[1]).toMatchObject({ tabState: "closed", expanded: "true" });
-    expect(popup.treeRows[3]).toMatchObject({ engagement: "unread", expanded: null });
+    expect(popup.treeRows[1]?.expanded).toBe("true");
+    expect(popup.treeRows[2]).toMatchObject({ tabState: "closed", expanded: "true" });
+    expect(popup.treeRows[5]).toMatchObject({ engagement: "unread", expanded: null });
     expect(popup.unreadCount).toBe("Unread: 1");
     expect(popup.unreadPages).toEqual(["Page C"]);
   });
