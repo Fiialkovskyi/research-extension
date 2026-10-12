@@ -12,9 +12,15 @@
  * public surface and holds no logic.
  */
 
+export {
+  type FirefoxCapabilityOptions,
+  RESTART_PREFERENCES,
+  buildFirefoxCapabilities,
+} from "./buildFirefoxCapabilities";
 export { isCanonicalUuid } from "./isCanonicalUuid";
 export { getExtensionUrl } from "./getExtensionUrl";
 export { type ProfilePreferences, buildProfilePreferences } from "./buildProfilePreferences";
 export { type ReadPackageOptions, readFirefoxZipAsBase64 } from "./readFirefoxZipAsBase64";
 export { type ResolveFirefoxZipOptions, resolveFirefoxZip } from "./resolveFirefoxZip";
+export { restartFirefox } from "./restartFirefox";
 export { selectFirefoxPackage } from "./selectFirefoxPackage";

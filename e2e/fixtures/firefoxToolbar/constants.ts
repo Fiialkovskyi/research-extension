@@ -41,3 +41,11 @@ export const DARK_THEME_PREF = "ui.systemUsesDarkTheme";
 
 /** How long any wait on the browser's UI may take before it is a failure. */
 export const UI_TIMEOUT_MS = 10_000;
+
+/**
+ * Module that flushes tab state to the session store. Saving a group reads
+ * that state, and in a test it is still pending moments after a page loads,
+ * so the group would be saved empty without a flush first.
+ */
+export const TAB_STATE_FLUSHER_MODULE =
+  "moz-src:///browser/components/sessionstore/TabStateFlusher.sys.mjs";

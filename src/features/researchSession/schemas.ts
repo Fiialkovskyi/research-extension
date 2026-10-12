@@ -5,6 +5,8 @@ export const sessionSummarySchema = v.object({
   id: v.string(),
   title: v.string(),
   groupId: v.number(),
+  /** Pages recorded in the session so far, closed ones included. */
+  pageCount: v.number(),
 });
 
 /** Messages about the session. Starting one is still `tabGroup.create`. */

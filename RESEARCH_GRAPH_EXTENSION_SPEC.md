@@ -188,6 +188,7 @@ interface Session {
 interface GraphNode {
   id: NodeId;
   session_id: SessionId;
+  tab_id: number; // the tab that showed it; with tab_state, how a woken background finds a tab's node
   kind: NodeKind;
   url: string;
   url_pattern: string;
@@ -207,7 +208,7 @@ interface GraphNode {
     children_count: number;
   };
   engagement: "unread" | "skimmed" | "deep_read" | "dead_end";
-  tab_state: "open" | "closed" | "never_focused";
+  tab_state: "open" | "closed" | "never_focused"; // a node closes when its tab closes, leaves the group, or navigates on
   content_hash?: string;
   snapshot_id?: SnapshotId;
   cluster_id?: ClusterId;

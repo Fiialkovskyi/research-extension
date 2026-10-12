@@ -4,6 +4,7 @@ import { type InferenceWorker, loadModelIntoWorker } from "@/features/inference"
 import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
 import { runEmbeddingConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
+import { countSessionNodes } from "@/features/researchGraph";
 import { activateModel, listInstalledModels } from "@/features/modelRegistry";
 import {
   buildSessionSummary,
@@ -12,6 +13,14 @@ import {
   renameSessionForGroup,
   startSession,
 } from "@/features/researchSession";
+import {
+  closeTabNode,
+  followTabMembership,
+  reconcileSessionTabs,
+  recordNavigation,
+  recordTabFocus,
+  updateTabTitle,
+} from "@/features/tabCapture";
 import { BUNDLED_MODEL_PROFILES } from "@/shared/config";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
 import type { InferenceDevice } from "@/shared/modelManifest";
@@ -33,6 +42,7 @@ export type {
   BackgroundDependencies,
   BackgroundPort,
   GroupEventDetails,
+  TabChanges,
 } from "./types";
 
 /** Answers a request that could not be trusted, saying which check it failed. */
@@ -95,6 +105,29 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   const getDatabase = async (): Promise<IDBPDatabase<ResearchDatabaseSchema>> => {
     database ??= await dependencies.openDatabase();
     return database;
+  };
+
+  /** The tail of the capture queue; each capture event runs after the one before. */
+  let captureQueue: Promise<void> = Promise.resolve();
+
+  /**
+   * Runs capture work in the order its events arrived.
+   *
+   * The browser reports a commit, the page's title and a focus change within
+   * milliseconds, and each handler awaits the database; run side by side, a
+   * title could be written before the node it belongs to exists. A failure is
+   * reported and does not stop the work queued behind it.
+   */
+  const enqueueCapture = (
+    work: (openedDatabase: IDBPDatabase<ResearchDatabaseSchema>) => Promise<unknown>,
+  ) => {
+    captureQueue = captureQueue
+      .then(async () => {
+        await work(await getDatabase());
+      })
+      .catch(dependencies.reportError);
+
+    return captureQueue;
   };
 
   // The switch below is exhaustive over the parsed message union, and the
@@ -259,13 +292,17 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "session.getActive": {
+          const openedDatabase = await getDatabase();
           const session = await reconcileActiveSession({
-            database: await getDatabase(),
+            database: openedDatabase,
             getGroup: dependencies.tabGroups.getGroup,
           });
 
           return buildRpcMessage("session.active", {
-            session: session === undefined ? null : buildSessionSummary(session),
+            session:
+              session === undefined
+                ? null
+                : buildSessionSummary(session, await countSessionNodes(openedDatabase, session.id)),
           });
         }
 
@@ -344,6 +381,30 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         database: await getDatabase(),
         getGroup: dependencies.tabGroups.getGroup,
       });
+      await enqueueCapture((openedDatabase) =>
+        reconcileSessionTabs({ database: openedDatabase, api: dependencies.tabCapture }),
+      );
+    },
+    handleNavigationCommitted: (navigation) =>
+      enqueueCapture((openedDatabase) =>
+        recordNavigation({ database: openedDatabase, api: dependencies.tabCapture, navigation }),
+      ),
+    handleTabUpdated: (tab, changes) =>
+      enqueueCapture(async (openedDatabase) => {
+        if (changes.groupId !== undefined) {
+          await followTabMembership({ database: openedDatabase, tab });
+        }
+
+        if (changes.title !== undefined) {
+          await updateTabTitle(openedDatabase, tab.id, changes.title);
+        }
+      }),
+    handleTabActivated: (tabId) =>
+      enqueueCapture((openedDatabase) => recordTabFocus(openedDatabase, tabId)),
+    handleTabRemoved: async (tabId, { isWindowClosing }) => {
+      if (!isWindowClosing) {
+        await enqueueCapture((openedDatabase) => closeTabNode(openedDatabase, tabId));
+      }
     },
     shutdown: () => {
       discardWorker();

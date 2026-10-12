@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-graph-store. Update Purpose after archive.
+Defines how a research session's graph is stored: one node per page with its observed signals, one edge per relation between two nodes, and what is kept when a tab closes.
 
 ## Requirements
 

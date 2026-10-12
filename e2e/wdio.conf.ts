@@ -1,27 +1,21 @@
 import { browser } from "@wdio/globals";
 
-import { buildProfilePreferences, readFirefoxZipAsBase64 } from "./fixtures/firefoxExtension/utils";
+import { HEADLESS } from "./fixtures/firefoxExtension/constants";
+import {
+  buildFirefoxCapabilities,
+  readFirefoxZipAsBase64,
+} from "./fixtures/firefoxExtension/utils";
+import { PAGE_ORIGIN_VARIABLE, PAGES_DIRECTORY } from "./fixtures/pageServer/constants";
+import { type PageServer, startPageServer } from "./fixtures/pageServer/utils";
 
-const headless = process.env.E2E_HEADED !== "true";
+/** The offline page server, started once for the whole run. */
+let pageServer: PageServer | undefined;
 
 export const config: WebdriverIO.Config = {
   runner: "local",
   specs: ["./specs/**/*.e2e.ts"],
   maxInstances: 1,
-  capabilities: [
-    {
-      browserName: "firefox",
-      // `allowSystemAccess` is not in the typed geckodriver options, but the
-      // wrapper turns any camelCase key into a CLI flag, so this becomes
-      // `--allow-system-access`, without which Marionette refuses to enter the
-      // chrome context where the toolbar lives.
-      "wdio:geckodriverOptions": { allowSystemAccess: true } as never,
-      "moz:firefoxOptions": {
-        args: headless ? ["-headless"] : [],
-        prefs: { ...buildProfilePreferences() },
-      },
-    },
-  ],
+  capabilities: [buildFirefoxCapabilities({ headless: HEADLESS })],
   logLevel: "error",
   waitforTimeout: 10_000,
   connectionRetryTimeout: 120_000,
@@ -35,6 +29,20 @@ export const config: WebdriverIO.Config = {
     // single thread, so it needs room without slowing failure detection for
     // everything else.
     timeout: process.env["E2E_NETWORK"] === "true" ? 900_000 : 60_000,
+  },
+
+  /**
+   * Starts the offline page server the capture suite browses. Its origin
+   * reaches the workers through the environment, which they inherit from this
+   * launcher process.
+   */
+  onPrepare: async () => {
+    pageServer = await startPageServer(PAGES_DIRECTORY);
+    process.env[PAGE_ORIGIN_VARIABLE] = pageServer.origin;
+  },
+
+  onComplete: async () => {
+    await pageServer?.close();
   },
 
   /**

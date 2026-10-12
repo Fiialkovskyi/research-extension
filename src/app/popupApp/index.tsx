@@ -41,7 +41,7 @@ const responseSchemas = {
 type PopupState =
   | { status: "loading" }
   | { status: "ready"; pending: boolean; failure?: string }
-  | { status: "active"; title: string };
+  | { status: "active"; title: string; pageCount: number };
 
 /** Turns the background's answer into what the popup shows. */
 const readAnswer = (answer: unknown): PopupState => {
@@ -51,9 +51,14 @@ const readAnswer = (answer: unknown): PopupState => {
     case "session.active":
       return response.payload.session === null
         ? { status: "ready", pending: false }
-        : { status: "active", title: response.payload.session.title };
+        : {
+            status: "active",
+            title: response.payload.session.title,
+            pageCount: response.payload.session.pageCount,
+          };
     case "tabGroup.created":
-      return { status: "active", title: response.payload.title };
+      // A session that has just started has recorded nothing yet.
+      return { status: "active", title: response.payload.title, pageCount: 0 };
     case "tabGroup.failed":
     case "rpc.refused":
     case "rpc.failed":
@@ -130,8 +135,11 @@ export function PopupApp({ client }: PopupAppProps) {
         </p>
       )}
       {state.status === "active" && (
-        <p data-testid="session-active" className="mt-2 text-sm">
-          Session “{state.title}” is active.
+        <p className="mt-2 text-sm">
+          <span data-testid="session-active">Session “{state.title}” is active.</span>{" "}
+          <span data-testid="session-page-count">
+            {state.pageCount === 1 ? "1 page recorded" : `${state.pageCount} pages recorded`}
+          </span>
         </p>
       )}
     </Panel>

@@ -31,3 +31,9 @@ export const OUTPUT_DIR = resolve(import.meta.dirname, "../../../.output");
  * the one in `OUTPUT_DIR` — the escape hatch for driving the dev-server build.
  */
 export const PACKAGE_OVERRIDE_ENV = "E2E_EXTENSION_ZIP";
+
+/**
+ * Whether Firefox runs without a window. `E2E_HEADED=true` shows it, to watch a
+ * run; every session of the run, a restarted one included, follows it.
+ */
+export const HEADLESS = process.env["E2E_HEADED"] !== "true";

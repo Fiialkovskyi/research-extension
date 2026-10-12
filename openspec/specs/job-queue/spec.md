@@ -1,7 +1,8 @@
 # job-queue Specification
 
 ## Purpose
-TBD - created by archiving change add-job-queue. Update Purpose after archive.
+
+Defines the durable background job queue: jobs identified by their work so duplicates are skipped, claimed by priority, checkpointed, retried with backoff, and resumed after the background event page is unloaded.
 
 ## Requirements
 

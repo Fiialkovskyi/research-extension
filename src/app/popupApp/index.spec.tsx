@@ -7,17 +7,24 @@ import { PopupApp, type PopupClient } from "./index";
 interface ClientAnswers {
   /** The active session's title, or `null` for none. */
   active?: string | null;
+  /** Pages the active session has recorded. */
+  pageCount?: number;
   /** The answer to a start; a rejection when it is an `Error`. */
   start?: unknown;
 }
 
 /** A background that reports `active` when asked, and answers a start with `start`. */
-const createClient = ({ active = null, start }: ClientAnswers = {}): PopupClient => ({
+const createClient = ({
+  active = null,
+  pageCount = 0,
+  start,
+}: ClientAnswers = {}): PopupClient => ({
   request: vi.fn((message: RpcMessage<string, unknown>) => {
     if (message.type === "session.getActive") {
       return Promise.resolve(
         buildRpcMessage("session.active", {
-          session: active === null ? null : { id: "session-1", title: active, groupId: 42 },
+          session:
+            active === null ? null : { id: "session-1", title: active, groupId: 42, pageCount },
         }),
       );
     }
@@ -53,6 +60,18 @@ describe("PopupApp", () => {
 
     expect(await screen.findByTestId("session-active")).toHaveTextContent("E-bike motors");
     expect(screen.queryByLabelText("Session title")).not.toBeInTheDocument();
+  });
+
+  it("says how many pages the active session has recorded", async () => {
+    render(<PopupApp client={createClient({ active: "E-bike motors", pageCount: 2 })} />);
+
+    expect(await screen.findByTestId("session-page-count")).toHaveTextContent("2 pages recorded");
+  });
+
+  it("says a single page in the singular", async () => {
+    render(<PopupApp client={createClient({ active: "E-bike motors", pageCount: 1 })} />);
+
+    expect(await screen.findByTestId("session-page-count")).toHaveTextContent("1 page recorded");
   });
 
   it("asks the background to start a session, then shows it as active", async () => {

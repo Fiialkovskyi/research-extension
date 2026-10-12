@@ -38,6 +38,12 @@
       }
     },
     {
+      "files": ["src/entrypoints/background/index.ts"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
       "files": ["scripts/**/*.ts"],
       "rules": {
         "no-console": "off"

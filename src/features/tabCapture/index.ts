@@ -1,0 +1,22 @@
+/**
+ * Capture: turns what happens in the session's tabs into the research graph.
+ *
+ * A tab is in the session if and only if it is in the session's tab group. A
+ * page committed in such a tab becomes a node, linked to the tab's previous
+ * page and, for a tab's first page, to the page that opened it. Leaving the
+ * group or closing the tab closes the node; it is never deleted for that.
+ *
+ * Every function reads the active session itself, so nothing about capture
+ * lives only in the memory of an event page that may be unloaded.
+ */
+
+export { CAPTURE_EDGE_WEIGHTS } from "./constants";
+export type { CaptureTab, CommittedNavigation, TabCaptureApi } from "./types";
+export { closeTabNode } from "./model/closeTabNode";
+export { followTabMembership } from "./model/followTabMembership";
+export { isCapturableUrl } from "./model/isCapturableUrl";
+export { readCaptureTab } from "./model/readCaptureTab";
+export { reconcileSessionTabs } from "./model/reconcileSessionTabs";
+export { recordNavigation } from "./model/recordNavigation";
+export { recordTabFocus } from "./model/recordTabFocus";
+export { updateTabTitle } from "./model/updateTabTitle";

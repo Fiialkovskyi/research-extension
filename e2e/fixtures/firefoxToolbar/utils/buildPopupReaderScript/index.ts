@@ -20,6 +20,7 @@ export const POPUP_SNAPSHOT_SCRIPT = `
       textColor: greeting ? getComputedStyle(greeting).color : "",
       activeSession: session?.textContent ?? null,
       hasSessionForm: !!document.querySelector('[data-testid="group-form"]'),
+      pageCount: document.querySelector('[data-testid="session-page-count"]')?.textContent ?? null,
     });
   `;
 

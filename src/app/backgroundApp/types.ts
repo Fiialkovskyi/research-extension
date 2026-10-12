@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import type { InferenceWorker } from "@/features/inference";
+import type { CaptureTab, CommittedNavigation, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
 import type { PolicyViolationLog } from "@/shared/collectPolicyViolations";
 import type { RpcMessage } from "@/shared/rpc";
@@ -38,6 +39,20 @@ export interface BackgroundDependencies {
    * (REQ-STO-009). The browser may decline; a session starts either way.
    */
   persistStorage: () => Promise<boolean>;
+  /** The browser's tab lookups, used to capture the session's pages. */
+  tabCapture: TabCaptureApi;
+  /**
+   * Reports a failure no surface asked about, such as a capture event that
+   * could not be recorded. Nothing waits on these, so without a report they
+   * would vanish.
+   */
+  reportError: (error: unknown) => void;
+}
+
+/** The changes of a tab update that capture follows. */
+export interface TabChanges {
+  groupId?: number;
+  title?: string;
 }
 
 /** What a tab group event reports about the group. */
@@ -90,8 +105,22 @@ export interface BackgroundApp {
     group: GroupEventDetails,
     removeInfo: { isWindowClosing: boolean },
   ) => Promise<void>;
-  /** Checks the recorded session against the browser, as on browser start-up. */
+  /**
+   * Checks the recorded session against the browser, as on browser start-up,
+   * then the session's captured tabs against the tabs that came back.
+   */
   reconcileSession: () => Promise<void>;
+  /** Records a page committed in a session tab. */
+  handleNavigationCommitted: (navigation: CommittedNavigation) => Promise<void>;
+  /** Follows a tab joining or leaving the session's group, or reporting a new title. */
+  handleTabUpdated: (tab: CaptureTab, changes: TabChanges) => Promise<void>;
+  /** Counts a switch to a session tab. */
+  handleTabActivated: (tabId: number) => Promise<void>;
+  /**
+   * Closes a closed session tab's node. A tab closing with its window is left
+   * to start-up reconciliation: session restore may bring it back.
+   */
+  handleTabRemoved: (tabId: number, removeInfo: { isWindowClosing: boolean }) => Promise<void>;
   /** Releases the worker, if one was ever started. */
   shutdown: () => void;
 }

@@ -4,13 +4,16 @@ import "fake-indexeddb/auto";
 
 import { createBackgroundApp, type BackgroundDependencies } from ".";
 import type { InferenceWorker } from "@/features/inference";
+import type { CaptureTab, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
 import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/utils/getFileDigest";
 import { MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import {
+  EDGE_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
+  NODE_STORE,
   openResearchDatabase,
   SESSION_STORE,
   type StoredSession,
@@ -50,6 +53,11 @@ const buildDependencies = (
     policyViolations: { read: () => [] },
     tabGroups: createStubTabGroups(),
     persistStorage: () => Promise.resolve(true),
+    tabCapture: {
+      getTab: () => Promise.reject(new Error("no tabs in this test")),
+      queryGroupTabs: () => Promise.resolve([]),
+    },
+    reportError: () => {},
     ...overrides,
   };
 };
@@ -74,6 +82,8 @@ const createFreshDatabase = async () => {
   await database.clear(MODEL_STORE);
   await database.clear(MODEL_FILE_STORE);
   await database.clear(SESSION_STORE);
+  await database.clear(NODE_STORE);
+  await database.clear(EDGE_STORE);
 
   return database;
 };
@@ -665,7 +675,9 @@ describe("a research session through the background", () => {
 
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
       type: "session.active",
-      payload: { session: { id: "session-1", title: "E-bike motors", groupId: 42 } },
+      payload: {
+        session: { id: "session-1", title: "E-bike motors", groupId: 42, pageCount: 0 },
+      },
     });
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
       type: "session.active",
@@ -713,5 +725,147 @@ describe("a research session through the background", () => {
     await app.reconcileSession();
 
     expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "saved" });
+  });
+});
+
+/** A non-private tab of the session's group (42), showing `url`. */
+const sessionTab = (overrides: Partial<CaptureTab> = {}): CaptureTab => ({
+  id: 7,
+  url: "https://example.org/a",
+  title: "A",
+  groupId: 42,
+  incognito: false,
+  ...overrides,
+});
+
+/** Tab lookups that report `tabs` by id. */
+const createTabCapture = (...tabs: CaptureTab[]): TabCaptureApi => ({
+  getTab: vi.fn(async (tabId: number) => {
+    const tab = tabs.find((candidate) => candidate.id === tabId);
+
+    if (tab === undefined) {
+      throw new Error(`Invalid tab ID: ${tabId}`);
+    }
+
+    return tab;
+  }),
+  queryGroupTabs: vi.fn(async () => tabs),
+});
+
+const commit = (url: string) => ({ tabId: 7, frameId: 0, url, transitionType: "link" });
+
+describe("capturing the session's tabs through the background", () => {
+  it("records pages committed in a session tab and counts them for the popup", async () => {
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab({ url: "https://example.org/b" })),
+      tabGroups: createStubTabGroups({
+        getGroup: vi.fn().mockResolvedValue({ color: "blue", title: "E-bike motors" }),
+      }),
+    });
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted(commit("https://example.org/b"));
+
+    expect(await database.count(NODE_STORE)).toBe(2);
+    expect(await database.count(EDGE_STORE)).toBe(1);
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      payload: { session: { pageCount: 2 } },
+    });
+  });
+
+  it("writes a title only after the commit it arrived behind", async () => {
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab({ url: "https://example.org/old", title: "Old" })),
+    });
+    await database.put(SESSION_STORE, activeSession);
+
+    // Not awaited one by one: the browser fires both before either is handled.
+    await Promise.all([
+      app.handleNavigationCommitted(commit("https://example.org/a")),
+      app.handleTabUpdated(sessionTab(), { title: "Mid-drive motors" }),
+    ]);
+
+    expect(await database.getAll(NODE_STORE)).toEqual([
+      expect.objectContaining({ title: "Mid-drive motors" }),
+    ]);
+  });
+
+  it("reports a failed capture and goes on with the next event", async () => {
+    const reportError = vi.fn();
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab()),
+      reportError,
+    });
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.handleNavigationCommitted({ ...commit("https://example.org/x"), tabId: 99 });
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+    expect(reportError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Invalid tab ID: 99" }),
+    );
+    expect(await database.count(NODE_STORE)).toBe(1);
+  });
+
+  it("follows a tab into and out of the group", async () => {
+    const { app, database } = await createSessionApp();
+    await database.put(SESSION_STORE, activeSession);
+
+    await app.handleTabUpdated(sessionTab(), { groupId: 42 });
+    await app.handleTabUpdated(sessionTab({ groupId: -1 }), { groupId: -1 });
+
+    expect(await database.getAll(NODE_STORE)).toEqual([
+      expect.objectContaining({ transitionType: "joined", tabState: "closed" }),
+    ]);
+  });
+
+  it("counts a switch to a session tab", async () => {
+    const { app, database } = await createSessionApp();
+    await database.put(SESSION_STORE, activeSession);
+    await app.handleTabUpdated(sessionTab(), { groupId: 42 });
+
+    await app.handleTabActivated(7);
+
+    expect(await database.getAll(NODE_STORE)).toEqual([
+      expect.objectContaining({ signals: expect.objectContaining({ focusCount: 1 }) }),
+    ]);
+  });
+
+  it("closes a closed tab's node, but not when its window is closing", async () => {
+    const { app, database } = await createSessionApp();
+    await database.put(SESSION_STORE, activeSession);
+    await app.handleTabUpdated(sessionTab(), { groupId: 42 });
+
+    await app.handleTabRemoved(7, { isWindowClosing: true });
+
+    expect(await database.getAll(NODE_STORE)).toEqual([
+      expect.objectContaining({ tabState: "open" }),
+    ]);
+
+    await app.handleTabRemoved(7, { isWindowClosing: false });
+
+    expect(await database.getAll(NODE_STORE)).toEqual([
+      expect.objectContaining({ tabState: "closed" }),
+    ]);
+  });
+
+  it("reconciles the session's tabs after a restart", async () => {
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab({ id: 12, url: "https://example.org/a" })),
+      tabGroups: createStubTabGroups({
+        getGroup: vi.fn().mockResolvedValue({ color: "blue", title: "E-bike motors" }),
+      }),
+    });
+    await database.put(SESSION_STORE, activeSession);
+    await app.handleTabUpdated(sessionTab(), { groupId: 42 });
+
+    await app.reconcileSession();
+
+    const nodes = await database.getAll(NODE_STORE);
+
+    expect(nodes.filter((node) => node.tabState === "open")).toEqual([
+      expect.objectContaining({ tabId: 12, transitionType: "restored" }),
+    ]);
   });
 });

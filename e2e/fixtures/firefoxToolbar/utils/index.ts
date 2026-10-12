@@ -19,16 +19,23 @@
  */
 
 export { clearSystemColorScheme } from "./clearSystemColorScheme";
+export { clickInTabShowing } from "./clickInTabShowing";
 export { clickToolbarAction } from "./clickToolbarAction";
 export { closePopup } from "./closePopup";
 export { closeTabGroup } from "./closeTabGroup";
 export { enterBrowserChrome } from "./enterBrowserChrome";
 export { leaveBrowserChrome } from "./leaveBrowserChrome";
+export { moveTabToGroup } from "./moveTabToGroup";
+export { openTabOutsideGroups } from "./openTabOutsideGroups";
+export { loadUrlInSelectedTab } from "./loadUrlInSelectedTab";
 export { placeToolbarAction } from "./placeToolbarAction";
 export { type PopupPanelState, getPopupPanelState } from "./getPopupPanelState";
 export { type PopupSnapshot, readPopup } from "./readPopup";
 export { type TabGroupSnapshot, readTabGroups } from "./readTabGroups";
+export { reopenSavedTabGroup } from "./reopenSavedTabGroup";
+export { saveAndCloseTabGroup } from "./saveAndCloseTabGroup";
 export { type SystemColorScheme, setSystemColorScheme } from "./setSystemColorScheme";
 export { getToolbarWidgetId } from "./getToolbarWidgetId";
 export { submitPopupGroupTitle } from "./submitPopupGroupTitle";
+export { ungroupTab } from "./ungroupTab";
 export { waitForPopupPanel } from "./waitForPopupPanel";

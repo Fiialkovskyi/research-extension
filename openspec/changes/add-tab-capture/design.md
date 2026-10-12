@@ -103,4 +103,26 @@ The suite stays offline. `wdio.conf.ts` starts a static server on `127.0.0.1` in
 
 ## Open Questions
 
-- Whether a navigation committed before `tabs.get` reports the new `groupId` can be missed for a tab created from a grouped tab. The spike saw `onCreated` already carrying the `groupId`, so it is expected not to; the e2e opener scenario checks it by hand during apply.
+None left; see Findings.
+
+## Implementation notes
+
+Decided while applying, beyond what is written above:
+
+- **Provisional title.** At commit a node takes the tab's title only if the tab already reports the committed URL; otherwise the URL stands in until `tabs.onUpdated` reports the real title (`readTabTitle`). Taking the tab's title unconditionally would record the previous page's.
+- **Leaving for a browser page.** A session tab that navigates to a non-web page (`about:blank`, say) records nothing but closes the node it was showing, since the tab no longer shows it.
+- **Failure reporting.** The serial queue reports a failed handler through a `reportError` dependency. The background entrypoint passes `console.error`, and `.oxlintrc.json` allows `no-console` for that one file: it is where a developer inspecting the background looks.
+- **`readCaptureTab`.** The browser types every tab id as optional; this narrows a browser tab to `CaptureTab` once, in the entrypoint, instead of every rule checking for a missing id.
+- **No `onUpdated` filter.** The shared typings do not declare Firefox's `extraParameters`, so the entrypoint forwards an update only when it changed `groupId` or `title`.
+- **Reconciling on install.** `runtime.onInstalled` also runs `reconcileSession`: during an install or update the extension heard none of the tab events, so its nodes may not match the tabs. It is also the path the restart e2e exercises, because a temporary add-on is installed anew after a restart.
+
+## Findings
+
+Observed in Firefox 157.0.1 on macOS, by the e2e specs that replaced the planned manual checks.
+
+- **A tab opened from a session page joins the group before its page commits.** Its node is recorded by the navigation itself (`transitionType: "link"`), with `openerNodeId` set and an `opener` edge, not on joining. This answers the open question.
+- **Moving a tab into the group** (the group's `addTabs`, where drag and drop ends) fires `tabs.onUpdated` with the new `groupId`; the tab is recorded as `joined`. `gBrowser.ungroupTab` fires it with `-1`, and the node is closed.
+- **"Save and close group"** fires `tabs.onRemoved` and then `tabGroups.onRemoved` with `{ isWindowClosing: false }`, so the session ends, as designed.
+- **A group reopened from the saved list keeps its id.** Its internal id (`1791794608191-65`) is unchanged, and `tabGroups` reports the same number the session recorded (`1791794608191065`). Reattaching a session to its reopened group is therefore possible; it is not implemented here.
+- **Saving needs flushed tab state.** Firefox saves a group from the session store's record of its tabs. A page loaded a moment earlier is not in it yet, and the group is saved as nothing; the tab groups spike could not reproduce saved groups for this reason. The e2e fixture flushes first (`TabStateFlusher.flushWindow`).
+- **Restart.** With a kept profile, `browser.startup.page = 3` and `extensions.webextensions.keepStorageOnUninstall`/`keepUuidOnUninstall`, the group comes back with its id and the database survives the temporary add-on being removed at quit. The session is active afterwards, and reconciliation leaves the restored tab's page as the one open node.

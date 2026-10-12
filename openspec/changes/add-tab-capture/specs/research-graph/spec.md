@@ -75,7 +75,7 @@ WHEN a session tab's title changes, the title of its current node SHALL change t
 
 ### Requirement: Capture is reconciled after a restart
 
-WHEN the browser starts with a session active, nodes whose tab did not come back SHALL be marked closed, and tabs of the session's group without a current node SHALL be recorded.
+WHEN the browser starts, or the extension is installed or updated, with a session active, nodes whose tab is no longer in the session's group showing the same page SHALL be marked closed, and tabs of the session's group without a current node SHALL be recorded.
 
 #### Scenario: Restart with session restore
 
