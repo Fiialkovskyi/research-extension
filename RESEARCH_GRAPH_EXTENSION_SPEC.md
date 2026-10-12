@@ -573,7 +573,7 @@ UI pages are thin views over background state. They subscribe to `graph.patch` s
 | Surface          | Implementation                                    | Key elements                                                                                                                                        |
 | ---------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Toolbar action   | `action` button with a badge                      | Start research or Save; badge shows the unread count of the active session                                                                          |
-| Sidebar          | `sidebar_action` page, virtualized tree           | Root query, clusters (collapsible, renameable), page rows with engagement dot, unread badge and copy marker; a "Prune dead ends" action per cluster |
+| Research tree    | The toolbar popup²                                | Root query, clusters (collapsible, renameable), page rows with engagement dot, unread badge and copy marker; a "Prune dead ends" action per cluster |
 | Synthesis panel  | A sidebar tab                                     | Cluster summary with citations, comparison table, gaps and open questions, freshness and stale markers                                              |
 | Research map     | `map.html` in a tab; React Flow with dagre (DOM)¹ | Radial layout, cluster bubbles sized by total active dwell, co-attention edges dashed, click to focus tab                                           |
 | Research library | A sidebar view and `library.html`                 | Saved sessions, resume, rename, export, delete                                                                                                      |
@@ -581,15 +581,17 @@ UI pages are thin views over background state. They subscribe to `graph.patch` s
 
 **Requirements**
 
-- **REQ-UI-001:** The sidebar SHALL render the first paint of a 300-node session within 300 ms and apply patches within 100 ms.
+- **REQ-UI-001:** The research tree SHALL render the first paint of a 300-node session within 300 ms and apply patches within 100 ms.
 - **REQ-UI-002:** All actions SHALL be keyboard accessible, and the tree SHALL follow the WAI-ARIA tree pattern. Color is never the only carrier of engagement state.
-- **REQ-UI-003:** Destructive actions (prune, delete session, delete node) SHALL be undoable for 10 s or confirmed with a dialog.
+- **REQ-UI-003:** Destructive actions (prune, delete session, delete node) SHALL be undoable for 10 s or confirmed with a dialog. No destructive action exists yet; this applies to the first change that adds one.
 - **REQ-UI-004:** Every generated statement and table cell SHALL expose its provenance (source page, quote, model, date) on hover or focus.
 - **REQ-UI-005:** The UI SHALL show the inference state honestly: "No model installed", "Running on CPU, synthesis is slower", "Waiting for idle", "Re-embedding: 40%".
 - **REQ-UI-006:** The UI SHALL follow the Firefox light and dark theme (`prefers-color-scheme`) and system font settings.
 - **REQ-UI-007:** The framework SHALL be lightweight (Preact or Svelte), and the bundle per UI page SHALL stay under 300 KB gzipped, excluding the map's graph library.
 
 ¹ The first map (OpenSpec change `add-research-map`) is drawn with React Flow and laid out top-down with dagre, instead of graphology with sigma.js. React Flow renders each node as a DOM element. That gives every node keyboard focus (REQ-UI-002), lets unit and end-to-end tests read the map from the DOM, and lets a node carry rich content such as the engagement dot and the unread badge. React Flow's group nodes also cover the cluster bubbles. A session's graph is a few hundred nodes (REQ-UI-001), which DOM rendering handles. Move to sigma.js when the map has to show thousands of nodes at once, for example across the whole library. Only the map component would change: the snapshot message and the layout input stay the same.
+
+² The research tree lives in the toolbar popup rather than a `sidebar_action` (OpenSpec change `add-popup-research-tree`), so the user has one surface to learn and no sidebar takes width from the pages being read. It shows the session's pages nested by how they were reached, each row's engagement in words and by marker shape, a copy marker and the closed state, an unread queue above it, and follows the WAI-ARIA tree pattern. It updates live over the same `graph.subscribe` stream as the map. Clusters, renaming and pruning wait for M2. The sidebar rows of the execution-context table and the "left off at" line of REQ-STO-005 read as the popup until a sidebar is reconsidered.
 
 ## 12. Non-functional requirements (NFR)
 
@@ -643,7 +645,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 - [ ] Session lifecycle, explicit start, permission request, dynamic content-script registration. (RT-001 to RT-003)
 - [ ] Tab, navigation and SERP capture; active dwell; engagement rules; co-attention edges. (CAP-001 to CAP-008, CAP-010)
 - [ ] IndexedDB schema v1, migrations framework, job queue. (STO-001, STO-010)
-- [ ] Sidebar tree with live patches and the unread queue. (UI-001 to UI-003)
+- [ ] Research tree in the popup, with live updates and the unread queue. (UI-001 to UI-003)
 
 **M2: Clustering and embeddings**
 

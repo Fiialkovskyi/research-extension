@@ -29,6 +29,9 @@ const SNAPSHOT = JSON.stringify({
   hasSessionForm: true,
   hasOpenMap: false,
   pageCount: null,
+  treeRows: [],
+  unreadCount: null,
+  unreadPages: [],
 });
 
 describe("readPopup", () => {

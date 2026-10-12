@@ -2,7 +2,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildRpcMessage, type RpcMessage } from "@/shared/rpc";
-import { type PageAccess, PopupApp, type PopupClient } from "./index";
+import { act } from "react";
+
+import { type GraphStream, type PageAccess, PopupApp, type PopupClient } from "./index";
 
 interface ClientAnswers {
   /** The active session's title, or `null` for none. */
@@ -45,6 +47,35 @@ const createClient = ({
   }),
 });
 
+/** A graph stream the test pushes snapshots through, recording what the popup sends. */
+const buildGraph = (): GraphStream & {
+  sent: RpcMessage<string, unknown>[];
+  push: (message: unknown) => void;
+} => {
+  const listeners = new Set<(message: unknown) => void>();
+  const sent: RpcMessage<string, unknown>[] = [];
+
+  return {
+    sent,
+    send: (message) => {
+      sent.push(message);
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    push: (message) => {
+      act(() => {
+        for (const listener of listeners) {
+          listener(message);
+        }
+      });
+    },
+  };
+};
+
 /** Page access as the browser reports it; granted unless a test says otherwise. */
 const buildPageAccess = ({
   isGranted = true,
@@ -61,9 +92,36 @@ const startSession = async (title: string) => {
   fireEvent.click(screen.getByTestId("group-submit"));
 };
 
+/** A page as the graph stream reports it. */
+const node = (id: string, overrides: Record<string, unknown> = {}) => ({
+  id,
+  title: `Page ${id.toUpperCase()}`,
+  url: `https://example.org/${id}`,
+  domain: "example.org",
+  kind: "page",
+  tabId: 7,
+  tabState: "open",
+  engagement: "skimmed",
+  copyEvents: 0,
+  parentNodeId: null,
+  openerNodeId: null,
+  transitionType: "link",
+  createdAt: 1,
+  ...overrides,
+});
+/** The active session's graph with these pages. */
+const snapshot = (...nodes: ReturnType<typeof node>[]) =>
+  buildRpcMessage("graph.snapshot", {
+    session: { id: "session-1", title: "E-bike motors" },
+    nodes,
+    edges: [],
+  });
+
 describe("PopupApp", () => {
   it("shows the greeting inside the popup panel", () => {
-    render(<PopupApp client={createClient()} pageAccess={buildPageAccess()} />);
+    render(
+      <PopupApp graph={buildGraph()} client={createClient()} pageAccess={buildPageAccess()} />,
+    );
 
     const panel = screen.getByTestId("popup-panel");
 
@@ -72,7 +130,9 @@ describe("PopupApp", () => {
   });
 
   it("offers the title form when no session is active", async () => {
-    render(<PopupApp client={createClient()} pageAccess={buildPageAccess()} />);
+    render(
+      <PopupApp graph={buildGraph()} client={createClient()} pageAccess={buildPageAccess()} />,
+    );
 
     expect(await screen.findByLabelText("Session title")).toBeInTheDocument();
     expect(screen.queryByTestId("session-active")).not.toBeInTheDocument();
@@ -81,6 +141,7 @@ describe("PopupApp", () => {
   it("shows the active session instead of the form", async () => {
     render(
       <PopupApp
+        graph={buildGraph()}
         client={createClient({ active: "E-bike motors" })}
         pageAccess={buildPageAccess()}
       />,
@@ -93,6 +154,7 @@ describe("PopupApp", () => {
   it("says how many pages the active session has recorded", async () => {
     render(
       <PopupApp
+        graph={buildGraph()}
         client={createClient({ active: "E-bike motors", pageCount: 2 })}
         pageAccess={buildPageAccess()}
       />,
@@ -102,7 +164,9 @@ describe("PopupApp", () => {
   });
 
   it("offers the map only while a session is active", async () => {
-    render(<PopupApp client={createClient()} pageAccess={buildPageAccess()} />);
+    render(
+      <PopupApp graph={buildGraph()} client={createClient()} pageAccess={buildPageAccess()} />,
+    );
 
     await screen.findByLabelText("Session title");
 
@@ -111,7 +175,7 @@ describe("PopupApp", () => {
 
   it("asks the background to open the map", async () => {
     const client = createClient({ active: "E-bike motors" });
-    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
+    render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
 
     fireEvent.click(await screen.findByTestId("open-map"));
 
@@ -125,7 +189,7 @@ describe("PopupApp", () => {
       active: "E-bike motors",
       map: buildRpcMessage("rpc.failed", { requestType: "map.open", reason: "No window." }),
     });
-    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
+    render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
 
     fireEvent.click(await screen.findByTestId("open-map"));
 
@@ -135,6 +199,7 @@ describe("PopupApp", () => {
   it("says a single page in the singular", async () => {
     render(
       <PopupApp
+        graph={buildGraph()}
         client={createClient({ active: "E-bike motors", pageCount: 1 })}
         pageAccess={buildPageAccess()}
       />,
@@ -146,6 +211,7 @@ describe("PopupApp", () => {
   it("names a closed session beside the form, saying a new start ends it", async () => {
     render(
       <PopupApp
+        graph={buildGraph()}
         client={createClient({ closed: "E-bike motors" })}
         pageAccess={buildPageAccess()}
       />,
@@ -166,7 +232,7 @@ describe("PopupApp", () => {
         color: "blue",
       }),
     });
-    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
+    render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
 
     await startSession("Motors");
 
@@ -180,6 +246,7 @@ describe("PopupApp", () => {
   it("shows why the session could not be started, and keeps the form", async () => {
     render(
       <PopupApp
+        graph={buildGraph()}
         client={createClient({ start: buildRpcMessage("tabGroup.failed", { reason: "refused" }) })}
         pageAccess={buildPageAccess()}
       />,
@@ -196,7 +263,13 @@ describe("PopupApp", () => {
       rejection: "invalid-payload",
       reason: "bad title",
     });
-    render(<PopupApp client={createClient({ start })} pageAccess={buildPageAccess()} />);
+    render(
+      <PopupApp
+        graph={buildGraph()}
+        client={createClient({ start })}
+        pageAccess={buildPageAccess()}
+      />,
+    );
 
     await startSession("Motors");
 
@@ -206,6 +279,7 @@ describe("PopupApp", () => {
   it("shows a failure when the background cannot be reached", async () => {
     render(
       <PopupApp
+        graph={buildGraph()}
         client={createClient({ start: new Error("no receiver") })}
         pageAccess={buildPageAccess()}
       />,
@@ -219,6 +293,7 @@ describe("PopupApp", () => {
   it("shows a reply it cannot understand as a failure", async () => {
     render(
       <PopupApp
+        graph={buildGraph()}
         client={createClient({ start: "not an envelope" })}
         pageAccess={buildPageAccess()}
       />,
@@ -231,7 +306,7 @@ describe("PopupApp", () => {
 
   it("still offers the form when the active session cannot be read", async () => {
     const client: PopupClient = { request: vi.fn().mockRejectedValue(new Error("no receiver")) };
-    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
+    render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
 
     expect(await screen.findByLabelText("Session title")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("no receiver");
@@ -260,7 +335,7 @@ describe("PopupApp", () => {
           buildRpcMessage("session.active", { session: null, closedSession: null }),
         );
       });
-      render(<PopupApp client={client} pageAccess={pageAccess} />);
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={pageAccess} />);
       await screen.findByLabelText("Session title");
       await vi.waitFor(() => expect(calls).toEqual(["session.getActive"]));
 
@@ -283,7 +358,7 @@ describe("PopupApp", () => {
     it("does not ask again when page access is already granted", async () => {
       const pageAccess = buildPageAccess();
 
-      render(<PopupApp client={createClient()} pageAccess={pageAccess} />);
+      render(<PopupApp graph={buildGraph()} client={createClient()} pageAccess={pageAccess} />);
       await vi.waitFor(() => expect(screen.getByLabelText("Session title")).toBeInTheDocument());
       // Let the granted state arrive before the click.
       await Promise.resolve();
@@ -299,7 +374,7 @@ describe("PopupApp", () => {
       });
       const client = createClient();
 
-      render(<PopupApp client={client} pageAccess={pageAccess} />);
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={pageAccess} />);
       await startSession("E-bike motors");
 
       expect(client.request).toHaveBeenCalledWith(
@@ -311,7 +386,11 @@ describe("PopupApp", () => {
       const pageAccess = buildPageAccess({ isGranted: false });
 
       render(
-        <PopupApp client={createClient({ active: "E-bike motors" })} pageAccess={pageAccess} />,
+        <PopupApp
+          graph={buildGraph()}
+          client={createClient({ active: "E-bike motors" })}
+          pageAccess={pageAccess}
+        />,
       );
 
       expect(await screen.findByTestId("page-access-missing")).toHaveTextContent(
@@ -329,6 +408,7 @@ describe("PopupApp", () => {
     it("shows no notice when page access is granted", async () => {
       render(
         <PopupApp
+          graph={buildGraph()}
           client={createClient({ active: "E-bike motors" })}
           pageAccess={buildPageAccess()}
         />,
@@ -338,6 +418,80 @@ describe("PopupApp", () => {
       await Promise.resolve();
 
       expect(screen.queryByTestId("page-access-missing")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("research tree", () => {
+    it("subscribes while a session is active, and draws the tree and the unread queue", async () => {
+      const graph = buildGraph();
+
+      render(
+        <PopupApp
+          graph={graph}
+          client={createClient({ active: "E-bike motors" })}
+          pageAccess={buildPageAccess()}
+        />,
+      );
+      await screen.findByTestId("session-active");
+
+      expect(graph.sent.map(({ type }) => type)).toEqual(["graph.subscribe"]);
+
+      graph.push(
+        snapshot(
+          node("a"),
+          node("b", { parentNodeId: "a", createdAt: 2 }),
+          node("c", { openerNodeId: "a", engagement: "unread", tabId: 9, createdAt: 3 }),
+        ),
+      );
+
+      expect(screen.getByRole("treeitem", { name: /Page B/ })).toHaveAttribute("aria-level", "2");
+      expect(screen.getByTestId("unread-count")).toHaveTextContent("Unread: 1");
+
+      fireEvent.click(screen.getByTestId("unread-page"));
+
+      expect(graph.sent.at(-1)).toMatchObject({ type: "tab.focus", payload: { tabId: 9 } });
+    });
+
+    it("keeps a collapsed row collapsed when a new snapshot arrives", async () => {
+      const graph = buildGraph();
+
+      render(
+        <PopupApp
+          graph={graph}
+          client={createClient({ active: "E-bike motors" })}
+          pageAccess={buildPageAccess()}
+        />,
+      );
+      await screen.findByTestId("session-active");
+      graph.push(snapshot(node("a"), node("b", { parentNodeId: "a", createdAt: 2 })));
+
+      const tree = screen.getByRole("tree");
+
+      screen.getByRole("treeitem", { name: /Page A/ }).focus();
+      fireEvent.keyDown(tree, { key: "ArrowLeft" });
+      graph.push(
+        snapshot(
+          node("a"),
+          node("b", { parentNodeId: "a", createdAt: 2 }),
+          node("c", { parentNodeId: "a", createdAt: 3 }),
+        ),
+      );
+
+      expect(screen.getByRole("treeitem", { name: /Page A/ })).toHaveAttribute(
+        "aria-expanded",
+        "false",
+      );
+      expect(screen.queryByRole("treeitem", { name: /Page C/ })).toBeNull();
+    });
+
+    it("neither subscribes nor draws a tree without an active session", async () => {
+      const graph = buildGraph();
+
+      render(<PopupApp graph={graph} client={createClient()} pageAccess={buildPageAccess()} />);
+      await screen.findByLabelText("Session title");
+
+      expect(graph.sent).toEqual([]);
+      expect(screen.queryByRole("tree")).toBeNull();
     });
   });
 });

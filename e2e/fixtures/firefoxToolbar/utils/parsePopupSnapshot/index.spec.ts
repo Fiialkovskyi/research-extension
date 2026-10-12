@@ -14,6 +14,9 @@ const SNAPSHOT = JSON.stringify({
   hasSessionForm: true,
   hasOpenMap: false,
   pageCount: null,
+  treeRows: [],
+  unreadCount: null,
+  unreadPages: [],
 });
 
 describe("parsePopupSnapshot", () => {
@@ -30,6 +33,36 @@ describe("parsePopupSnapshot", () => {
       hasSessionForm: true,
       hasOpenMap: false,
       pageCount: null,
+      treeRows: [],
+      unreadCount: null,
+      unreadPages: [],
+    });
+  });
+
+  it("reads the research tree and the unread queue", () => {
+    const raw = JSON.stringify({
+      ...JSON.parse(SNAPSHOT),
+      treeRows: [
+        {
+          text: "●Page Adeep read",
+          level: 1,
+          expanded: "true",
+          engagement: "deep_read",
+          tabState: "open",
+        },
+        { text: "○Page Bunread", level: 2, expanded: null, engagement: "unread", tabState: "open" },
+      ],
+      unreadCount: "Unread: 1",
+      unreadPages: ["Page B"],
+    });
+
+    expect(parsePopupSnapshot(raw)).toMatchObject({
+      treeRows: [
+        expect.objectContaining({ level: 1, expanded: "true" }),
+        expect.objectContaining({ level: 2, expanded: null }),
+      ],
+      unreadCount: "Unread: 1",
+      unreadPages: ["Page B"],
     });
   });
 

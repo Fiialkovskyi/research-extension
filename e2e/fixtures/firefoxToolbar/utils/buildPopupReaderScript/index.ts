@@ -24,6 +24,15 @@ export const POPUP_SNAPSHOT_SCRIPT = `
       hasSessionForm: !!document.querySelector('[data-testid="group-form"]'),
       hasOpenMap: !!document.querySelector('[data-testid="open-map"]'),
       pageCount: document.querySelector('[data-testid="session-page-count"]')?.textContent ?? null,
+      treeRows: Array.from(document.querySelectorAll('[role="treeitem"]'), (row) => ({
+        text: row.textContent,
+        level: Number(row.getAttribute("aria-level")),
+        expanded: row.getAttribute("aria-expanded"),
+        engagement: row.dataset.engagement,
+        tabState: row.dataset.tabState,
+      })),
+      unreadCount: document.querySelector('[data-testid="unread-count"]')?.textContent ?? null,
+      unreadPages: Array.from(document.querySelectorAll('[data-testid="unread-page"]'), (entry) => entry.textContent),
     });
   `;
 

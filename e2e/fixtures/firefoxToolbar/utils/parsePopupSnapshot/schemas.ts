@@ -24,4 +24,20 @@ export const popupSnapshotSchema = v.object({
   hasOpenMap: v.boolean(),
   /** Text giving the active session's recorded page count, or null without one. */
   pageCount: v.nullable(v.string()),
+  /** The research tree's rows, top to bottom, as the popup shows them. */
+  treeRows: v.array(
+    v.object({
+      text: v.string(),
+      /** `aria-level`: 1 for a root. */
+      level: v.number(),
+      /** `aria-expanded`, or null for a row without children. */
+      expanded: v.nullable(v.picklist(["true", "false"])),
+      engagement: v.string(),
+      tabState: v.picklist(["open", "closed"]),
+    }),
+  ),
+  /** The unread queue's heading, or null when the popup shows no queue. */
+  unreadCount: v.nullable(v.string()),
+  /** The unread queue's entries, oldest first. */
+  unreadPages: v.array(v.string()),
 });

@@ -15,6 +15,8 @@ export const mapNodeSchema = v.object({
   tabState: v.picklist(["open", "closed"]),
   /** Derived from the node's signals by `engagement_rules@1`; never stored. */
   engagement: v.picklist(ENGAGEMENT_STATES),
+  /** Copies the user made from the page: the sidebar marks a page copied from. */
+  copyEvents: v.number(),
   parentNodeId: v.nullable(v.string()),
   openerNodeId: v.nullable(v.string()),
   transitionType: v.string(),

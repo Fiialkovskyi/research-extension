@@ -13,6 +13,7 @@ const buildNode = (id: string, overrides: Partial<MapNode> = {}): MapNode => ({
   tabId: 1,
   tabState: "open",
   engagement: "skimmed",
+  copyEvents: 0,
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",

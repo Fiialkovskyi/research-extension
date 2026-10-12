@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Greeting } from "@/features/greeting/ui/greeting";
-import { researchMapResponseSchemas } from "@/features/researchMap";
+import { type GraphSnapshot, researchMapResponseSchemas } from "@/features/researchMap";
+import { buildResearchTree, listUnreadPages, type TreeFocus } from "@/features/researchTree";
+import { ResearchTree } from "@/features/researchTree/ui/researchTree";
+import { UnreadQueue } from "@/features/researchTree/ui/unreadQueue";
 import { researchSessionResponseSchemas } from "@/features/researchSession";
 import { tabGroupResponseSchemas } from "@/features/tabGroups";
 import { GroupForm } from "@/features/tabGroups/ui/groupForm";
@@ -10,6 +13,7 @@ import {
   buildRpcMessage,
   parseRpcMessage,
   type RpcMessage,
+  RpcMessageError,
   rpcResponseSchemas,
 } from "@/shared/rpc";
 import { Button, Panel } from "@/shared/ui";
@@ -37,9 +41,21 @@ export interface PageAccess {
   request: () => Promise<boolean>;
 }
 
+/**
+ * A long-lived connection for the research tree: the background answers a
+ * subscription with the graph and pushes it again after every change, until
+ * the popup closes and the connection with it.
+ */
+export interface GraphStream {
+  send: (message: RpcMessage<string, unknown>) => void;
+  /** Registers a listener and returns the function that removes it. */
+  subscribe: (listener: (message: unknown) => void) => () => void;
+}
+
 export interface PopupAppProps {
   client: PopupClient;
   pageAccess: PageAccess;
+  graph: GraphStream;
 }
 
 /** Every answer the background may send this surface. */
@@ -107,14 +123,65 @@ const readMapAnswer = (answer: unknown): string | undefined => {
   }
 };
 
+/** Every message the graph stream may carry to this surface. */
+const graphResponseSchemas = {
+  ...researchMapResponseSchemas,
+  ...rpcResponseSchemas,
+} as const;
+
 /** A request that failed or was answered with nothing this surface reads. */
 const readFailure = (error: unknown): PopupState => {
   return { status: "ready", pending: false, failure: getErrorMessage(error) };
 };
 
 /** Composition root of the toolbar popup surface. */
-export function PopupApp({ client, pageAccess }: PopupAppProps) {
+export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
   const [state, setState] = useState<PopupState>({ status: "loading" });
+  const [snapshot, setSnapshot] = useState<GraphSnapshot | undefined>();
+  /** Kept apart from the snapshot, so a new one leaves collapsed rows collapsed. */
+  const [treeFocus, setTreeFocus] = useState<TreeFocus>({
+    focusedId: undefined,
+    collapsed: new Set(),
+  });
+  const isActive = state.status === "active";
+
+  // The tree follows the graph for as long as the popup is open.
+  useEffect(() => {
+    if (!isActive) {
+      return undefined;
+    }
+
+    const unsubscribe = graph.subscribe((message) => {
+      let response;
+
+      try {
+        response = parseRpcMessage(message, graphResponseSchemas);
+      } catch (error) {
+        // A message this surface cannot validate is not its to render.
+        if (error instanceof RpcMessageError) {
+          return;
+        }
+
+        throw error;
+      }
+
+      if (response.type === "graph.snapshot") {
+        setSnapshot(response.payload.session === null ? undefined : response.payload);
+      }
+    });
+
+    // Sent after listening, so the first snapshot cannot arrive unheard.
+    graph.send(buildRpcMessage("graph.subscribe", {}));
+
+    return unsubscribe;
+  }, [graph, isActive]);
+
+  const focusTab = useCallback(
+    (tabId: number) => {
+      graph.send(buildRpcMessage("tab.focus", { tabId }));
+    },
+    [graph],
+  );
   const [mapFailure, setMapFailure] = useState<string | undefined>();
   /** `undefined` until the browser has said. */
   const [hasPageAccess, setHasPageAccess] = useState<boolean | undefined>();
@@ -252,6 +319,17 @@ export function PopupApp({ client, pageAccess }: PopupAppProps) {
               Allow page access
             </Button>
           </div>
+        </div>
+      )}
+      {state.status === "active" && snapshot !== undefined && (
+        <div className="mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto">
+          <UnreadQueue pages={listUnreadPages(snapshot.nodes)} onFocusTab={focusTab} />
+          <ResearchTree
+            forest={buildResearchTree(snapshot.nodes)}
+            focus={treeFocus}
+            onFocusChange={setTreeFocus}
+            onFocusTab={focusTab}
+          />
         </div>
       )}
       {state.status === "active" && mapFailure !== undefined && (

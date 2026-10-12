@@ -64,6 +64,7 @@ describe("buildGraphSnapshot", () => {
           tabId: 7,
           tabState: "closed",
           engagement: "deep_read",
+          copyEvents: 1,
           parentNodeId: null,
           openerNodeId: null,
           transitionType: "typed",

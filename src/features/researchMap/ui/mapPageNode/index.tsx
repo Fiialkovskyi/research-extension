@@ -1,19 +1,10 @@
 import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
 
+import { ENGAGEMENT_DISPLAY } from "@/shared/config";
+
 import type { MapNodeData } from "../../model/buildMapLayout";
 
 export type MapPageNodeProps = NodeProps<Node<MapNodeData, "page">>;
-
-/**
- * How each engagement state is shown: in words, and by a marker whose shape —
- * not only its colour — differs between states (REQ-UI-002).
- */
-const ENGAGEMENT_DISPLAY: Record<MapNodeData["engagement"], { words: string; marker: string }> = {
-  unread: { words: "unread", marker: "○" },
-  skimmed: { words: "skimmed", marker: "◐" },
-  deep_read: { words: "deep read", marker: "●" },
-  dead_end: { words: "dead end", marker: "✕" },
-};
 
 const BOX_CLASS =
   "flex h-full w-full flex-col justify-center gap-0.5 overflow-hidden rounded-md border px-3 py-1 text-left text-xs";

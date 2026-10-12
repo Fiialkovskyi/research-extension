@@ -31,6 +31,7 @@ export const buildGraphSnapshot = (
       tabId: node.tabId,
       tabState: node.tabState,
       engagement: getNodeEngagement(node, { isFocused: session.focus?.nodeId === node.id }),
+      copyEvents: node.signals.copyEvents,
       parentNodeId: node.parentNodeId,
       openerNodeId: node.openerNodeId,
       transitionType: node.transitionType,
