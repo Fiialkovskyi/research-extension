@@ -10,10 +10,15 @@ import {
   placeToolbarAction,
   readPopup,
   readTabGroups,
+  readTabs,
   submitPopupGroupTitle,
   waitForPopupPanel,
 } from "../fixtures/firefoxToolbar/utils";
-import { readSummariesPage, type SummariesSnapshot } from "../fixtures/summariesPage/utils";
+import {
+  clickSummariesButton,
+  readSummariesPage,
+  type SummariesSnapshot,
+} from "../fixtures/summariesPage/utils";
 
 // A new session, with nothing read deeply and no generation model in the suite.
 describe("summaries", () => {
@@ -70,5 +75,21 @@ describe("summaries", () => {
     expect(snapshot?.clusters.flatMap(({ statements }) => statements)).toEqual([]);
     // The comparison table follows, with nothing to compare yet.
     expect(snapshot?.tableEmpty).toBe(true);
+    // Nothing was read, so every kind of source is a gap.
+    expect(snapshot?.gaps).toContain("No reviews read yet");
+  });
+
+  it("opens a gap's search in a new tab of the session's group", async () => {
+    await clickSummariesButton("gap-search");
+
+    // The suite's page server speaks plain HTTP, so the https results page
+    // itself does not load; the tab opened, in the group, is what is checked.
+    await browser.waitUntil(
+      async () =>
+        (await readTabs()).some(
+          (tab) => tab.url.startsWith("https://duckduckgo.com/?q=") && tab.group === title,
+        ),
+      { timeout: UI_TIMEOUT_MS, timeoutMsg: "No search tab opened in the session's group." },
+    );
   });
 });

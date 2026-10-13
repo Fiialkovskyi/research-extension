@@ -19,6 +19,7 @@ describe("buildSummariesReaderScript", () => {
       title: null,
       needsModel: false,
       tableEmpty: false,
+      gaps: [],
       clusters: [],
     });
   });
@@ -33,13 +34,15 @@ describe("buildSummariesReaderScript", () => {
           <ul><li data-testid="summary-statement"><span>Volta is lighter.</span></li></ul>
         </li>
       </ul>
-      <p data-testid="table-empty">No entities with facts yet.</p>`;
+      <p data-testid="table-empty">No entities with facts yet.</p>
+      <ul><li data-testid="gap"><span>No reviews read yet</span><button>Search this</button></li></ul>`;
 
     expect(read()).toEqual({
       empty: false,
       title: "Summaries: E-bikes",
       needsModel: true,
       tableEmpty: true,
+      gaps: ["No reviews read yet"],
       clusters: [
         { label: "Motors", hasNoFacts: true, statements: [] },
         { label: "Bikes", hasNoFacts: false, statements: ["Volta is lighter."] },

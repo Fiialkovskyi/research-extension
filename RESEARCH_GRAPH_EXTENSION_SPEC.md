@@ -515,7 +515,10 @@ interface Fact {
 - **REQ-SYN-006:** Each cell SHALL show the selected value plus a count of alternatives. WHEN sources disagree beyond tolerance (numeric: more than 5% after unit normalization; text: not equal after normalization), the cell SHALL be flagged "conflict" and list every value with its source.
 - **REQ-SYN-007:** The table SHALL export to CSV with a provenance column per cell (source URLs), saved locally through a Blob download from an extension page (no extra permission). As built (`add-comparison-table`), the table is computed from facts when read, with no model. Two values agree when they are numbers in one base unit within 5% of the larger, or text equal after normalisation. A cell's facts are grouped greedily against each group's first value, so near values cannot drift. The value most facts state is shown, ties going to more pages, then to the earlier fact. The CSV has an `Entity` column, then a value column and a sources column per attribute. It is RFC 4180 quoted, a field a spreadsheet would evaluate gets a `'` prefix, and the file starts with a BOM and ends lines in CRLF.
 - **REQ-SYN-008 (gaps):** Rule-based gaps SHALL list empty cells for confirmed entities and source categories not yet visited (from `domain_category`). LLM-proposed open questions are optional, at most 5, and labeled as suggestions.
-- **REQ-SYN-009:** Each gap item SHALL offer "search this", which opens a SERP for a generated query in a new tab that joins the current session.
+- **REQ-SYN-009:** Each gap item SHALL offer "search this", which opens a SERP for a generated query in a new tab that joins the current session. As built (`add-research-gaps`):
+  - An entity is confirmed when facts about it come from at least two pages, and only the comparison table's shown columns are checked. At most 20 cell gaps are listed.
+  - `domain_category` comes from the bundled `domainCategories@1` host table, and manufacturer sites are not recognised.
+  - The search opens on the engine the session's searches used most, or DuckDuckGo, in a new tab added to the session's group. Each bundled engine carries a `searchUrl`, guarded to be one that capture recognises.
 - **REQ-SYN-010:** All prompts SHALL live in versioned files (`prompts/<id>@<version>.md`) with JSON schemas alongside. A prompt change SHALL bump the version, which appears in provenance.
 - **REQ-SYN-011:** Page text SHALL be passed to the model as delimited data with an instruction to ignore embedded instructions. Outputs are schema-validated, so injected text can at worst yield a wrong but grounded fact, never an action.
 
@@ -702,7 +705,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 - [x] Entity resolution and unit normalization. (SYN pipeline step 6)
 - [x] Cluster summaries with citations and staleness. (SYN-003, SYN-004, LIN-006) Shown on a "Summaries" extension page opened from the popup until the sidebar exists (`add-cluster-summaries`).
 - [x] Generic comparison table with conflicts and CSV export. (SYN-005 to SYN-007) On the Synthesis page, below the summaries (`add-comparison-table`).
-- [ ] Gaps and open questions with "search this". (SYN-008, SYN-009)
+- [ ] Gaps and open questions with "search this". (SYN-008, SYN-009) Rule-based gaps and "search this" are done (`add-research-gaps`), on the Synthesis page. The open questions the model may propose are still to do.
 - [ ] Rejections. (LIN-008)
 
 **M5: Native host and model swap**

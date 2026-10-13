@@ -16,4 +16,6 @@ export interface SearchEngine {
   resultPaths: readonly string[];
   /** URL parameters that carry the query, in order of preference. */
   queryParameters: readonly string[];
+  /** The results page for a query: an https URL with `{query}` where the encoded query goes. */
+  searchUrl: string;
 }

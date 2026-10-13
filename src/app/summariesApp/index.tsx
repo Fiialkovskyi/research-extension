@@ -8,6 +8,8 @@ import {
   comparisonTableResponseSchemas,
 } from "@/features/comparisonTable";
 import { ComparisonTable } from "@/features/comparisonTable/ui/comparisonTable";
+import { type ResearchGaps as Gaps, researchGapResponseSchemas } from "@/features/researchGaps";
+import { ResearchGaps } from "@/features/researchGaps/ui/researchGaps";
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import {
   buildRpcMessage,
@@ -32,6 +34,7 @@ export interface SummariesAppProps {
 const responseSchemas = {
   ...clusterSummaryResponseSchemas,
   ...comparisonTableResponseSchemas,
+  ...researchGapResponseSchemas,
   ...rpcResponseSchemas,
 } as const;
 
@@ -63,6 +66,7 @@ export function SummariesApp({
   const [state, setState] = useState<SummariesState>({ status: "loading" });
   const [table, setTable] = useState<Table>();
   const [entityType, setEntityType] = useState<string>();
+  const [gaps, setGaps] = useState<Gaps>();
   const [failure, setFailure] = useState<string>();
 
   /** Sends a request and returns its answer, or records why it failed. */
@@ -161,6 +165,15 @@ export function SummariesApp({
       if (answer?.type === "table.view") {
         setTable(answer.payload.table ?? undefined);
       }
+
+      // Gaps follow the table the page shows: its type and its columns.
+      const gapsAnswer = await ask(
+        buildRpcMessage("gaps.read", type === undefined ? {} : { entityType: type }),
+      );
+
+      if (gapsAnswer?.type === "gaps.view") {
+        setGaps(gapsAnswer.payload.gaps ?? undefined);
+      }
     },
     [ask],
   );
@@ -168,6 +181,26 @@ export function SummariesApp({
   useEffect(() => {
     let isCurrent = true;
 
+    client.request(buildRpcMessage("gaps.read", {})).then(
+      (answer) => {
+        try {
+          const response = parseRpcMessage(answer, responseSchemas);
+
+          if (isCurrent && response.type === "gaps.view") {
+            setGaps(response.payload.gaps ?? undefined);
+          }
+        } catch (error) {
+          if (isCurrent) {
+            setFailure(getErrorMessage(error));
+          }
+        }
+      },
+      (error: unknown) => {
+        if (isCurrent) {
+          setFailure(getErrorMessage(error));
+        }
+      },
+    );
     client.request(buildRpcMessage("table.read", {})).then(
       (answer) => {
         try {
@@ -218,6 +251,13 @@ export function SummariesApp({
     saveFile(`${state.view.title} — ${table.entityType ?? "table"}.csv`, buildComparisonCsv(table));
   }, [saveFile, state, table]);
 
+  const searchGap = useCallback(
+    async (query: string) => {
+      await ask(buildRpcMessage("gaps.search", { query }));
+    },
+    [ask],
+  );
+
   const summarize = useCallback(
     async (clusterId: string) => {
       await ask(buildRpcMessage("summaries.refresh", { clusterId }));
@@ -258,6 +298,9 @@ export function SummariesApp({
           onSetColumns={(type, columns) => void setColumns(type, columns)}
           onExport={exportTable}
         />
+      )}
+      {state.status === "ready" && gaps !== undefined && (
+        <ResearchGaps gaps={gaps} onSearch={(query) => void searchGap(query)} />
       )}
     </main>
   );

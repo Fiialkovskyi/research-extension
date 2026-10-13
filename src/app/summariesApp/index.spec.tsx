@@ -87,6 +87,22 @@ const createClient = (hasSession = true) => {
             }),
           );
         }
+        case "gaps.read":
+          return Promise.resolve(
+            buildRpcMessage("gaps.view", {
+              gaps: hasSession
+                ? {
+                    cellGaps: [],
+                    moreCellGaps: 0,
+                    categoryGaps: [
+                      { kind: "category", text: "No reviews read yet", query: "Volta review" },
+                    ],
+                  }
+                : null,
+            }),
+          );
+        case "gaps.search":
+          return Promise.resolve(buildRpcMessage("gaps.searchOpened", { url: "https://x" }));
         case "table.setColumns":
           return Promise.resolve(buildRpcMessage("table.columnsSaved", { entityType: "product" }));
         case "summaries.refresh":
@@ -156,6 +172,27 @@ describe("SummariesApp", () => {
       "E-bikes — product.csv",
       expect.stringContaining("Entity,weight,weight sources\r\nVolta E5,23.5 kg,https://a"),
     );
+  });
+
+  it("shows the gaps below the table, and searches one", async () => {
+    const { client, sent } = createClient();
+
+    render(<SummariesApp client={client} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Search this" }));
+
+    await vi.waitFor(() => expect(sent).toContain("gaps.search"));
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "gaps.search", payload: { query: "Volta review" } }),
+    );
+  });
+
+  it("reads the gaps again for another type", async () => {
+    const { client, sent } = createClient();
+
+    render(<SummariesApp client={client} />);
+    fireEvent.change(await screen.findByTestId("table-type"), { target: { value: "company" } });
+
+    await vi.waitFor(() => expect(sent.filter((type) => type === "gaps.read")).toHaveLength(2));
   });
 
   it("says there is nothing to show without a session", async () => {

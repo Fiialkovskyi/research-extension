@@ -92,6 +92,7 @@ import {
   SUMMARIZE_CLUSTER_JOB,
 } from "@/features/clusterSummaries";
 import { readComparisonTable, saveTableColumns } from "@/features/comparisonTable";
+import { openGapSearch, readResearchGaps } from "@/features/researchGaps";
 import {
   enqueueEntityResolutions,
   RESOLVE_ENTITIES_JOB,
@@ -1111,6 +1112,25 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("model.listed", {
             models: await listInstalledModels(await getDatabase()),
           });
+        }
+
+        case "gaps.read": {
+          return buildRpcMessage("gaps.view", {
+            gaps: (await readResearchGaps(await getDatabase(), request.payload.entityType)) ?? null,
+          });
+        }
+
+        case "gaps.search": {
+          const url = await openGapSearch(
+            await getDatabase(),
+            {
+              createTab: (properties) => dependencies.resumeApi.createTab(properties),
+              groupTabs: (options) => dependencies.sessionTabs.groupTabs(options),
+            },
+            request.payload.query,
+          );
+
+          return buildRpcMessage("gaps.searchOpened", { url });
         }
 
         case "table.read": {

@@ -1,7 +1,7 @@
 /**
  * Builds the script, evaluated in the Summaries page, that reports what it
  * shows: the empty state, the title, whether it asks for a generation model,
- * whether the comparison table says it has nothing yet,
+ * whether the comparison table says it has nothing yet, the gaps listed,
  * and each cluster with its label, whether it has facts, and its statements.
  */
 export const buildSummariesReaderScript = (): string => `
@@ -11,6 +11,10 @@ export const buildSummariesReaderScript = (): string => `
     title: document.querySelector('[data-testid="summaries-title"]')?.textContent ?? null,
     needsModel: has(document, "summaries-no-model"),
     tableEmpty: has(document, "table-empty"),
+    gaps: Array.from(
+      document.querySelectorAll('[data-testid="gap"] > span'),
+      (gap) => gap.textContent ?? "",
+    ),
     clusters: Array.from(document.querySelectorAll('[data-testid="summary-cluster"]'), (cluster) => ({
       label: cluster.querySelector("h2")?.textContent ?? "",
       hasNoFacts: has(cluster, "summary-no-facts"),

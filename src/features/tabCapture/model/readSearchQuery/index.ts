@@ -1,6 +1,4 @@
-import { SEARCH_ENGINES } from "@/shared/config";
-
-import { isEngineHost } from "../isEngineHost";
+import { readSearchEngine } from "../readSearchEngine";
 
 /**
  * Reads the search query from a search engine's results URL.
@@ -12,18 +10,15 @@ import { isEngineHost } from "../isEngineHost";
  *   the URL is not a results page of a bundled engine or carries no query.
  */
 export const readSearchQuery = (url: string): string | undefined => {
-  if (!URL.canParse(url)) {
+  const engine = readSearchEngine(url);
+
+  if (engine === undefined) {
     return undefined;
   }
 
-  const { hostname, pathname, searchParams } = new URL(url);
-  const engine = SEARCH_ENGINES.find(
-    (candidate) =>
-      candidate.hosts.some((host) => isEngineHost(hostname, host)) &&
-      candidate.resultPaths.includes(pathname),
-  );
+  const { searchParams } = new URL(url);
 
-  for (const parameter of engine?.queryParameters ?? []) {
+  for (const parameter of engine.queryParameters) {
     const query = searchParams.get(parameter)?.trim();
 
     if (query !== undefined && query !== "") {

@@ -1767,8 +1767,11 @@ describe("embedding deep-read pages through the background", () => {
 
     const [space] = await database.getAll(SPACE_STORE);
 
-    expect((await database.get(SESSION_STORE, "session-1"))?.activeEmbeddingSpaceId).toBe(
-      space?.id,
+    // The session takes the space at the end of the job, after its vectors.
+    await vi.waitFor(async () =>
+      expect((await database.get(SESSION_STORE, "session-1"))?.activeEmbeddingSpaceId).toBe(
+        space?.id,
+      ),
     );
     expect(await database.getAll(JOB_STORE)).toEqual([expect.objectContaining({ status: "done" })]);
   });
@@ -3465,6 +3468,49 @@ describe("fact extraction through the background", () => {
     expect(await read()).toMatchObject({
       payload: { table: { columns: [], otherColumns: [{ key: "placement" }] } },
     });
+  });
+
+  it("reads the session's gaps, and opens a gap's search in the session's group", async () => {
+    const createTab = vi.fn((_properties: { url?: string; active: boolean }) =>
+      Promise.resolve({ id: 31 }),
+    );
+    const sessionTabs = createStubSessionTabs();
+    const { app, clock } = await createExtractionApp({
+      resumeApi: {
+        createTab,
+        groupTabs: () => Promise.resolve(42),
+        updateGroup: () => Promise.resolve(),
+        getGroup: () => Promise.resolve({ color: "blue" }),
+        activateTab: () => Promise.resolve(),
+        removeTab: () => Promise.resolve(),
+      },
+      sessionTabs,
+    });
+
+    await readPageDeeply(app, clock);
+
+    expect(await app.handleMessage(buildRpcMessage("gaps.read", {}))).toMatchObject({
+      type: "gaps.view",
+      payload: {
+        gaps: {
+          cellGaps: [],
+          categoryGaps: expect.arrayContaining([
+            expect.objectContaining({ text: "No reviews read yet" }),
+          ]),
+        },
+      },
+    });
+    expect(
+      await app.handleMessage(buildRpcMessage("gaps.search", { query: "Motor review" })),
+    ).toMatchObject({
+      type: "gaps.searchOpened",
+      payload: { url: "https://duckduckgo.com/?q=Motor%20review" },
+    });
+    expect(createTab).toHaveBeenCalledWith({
+      url: "https://duckduckgo.com/?q=Motor%20review",
+      active: true,
+    });
+    expect(sessionTabs.groupTabs).toHaveBeenCalledWith({ tabIds: [31], groupId: 42 });
   });
 
   it("opens the Summaries page", async () => {

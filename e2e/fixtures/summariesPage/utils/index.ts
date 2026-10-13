@@ -3,5 +3,6 @@
  * surface and holds no logic.
  */
 
+export { clickSummariesButton } from "./clickSummariesButton";
 export { parseSummariesSnapshot, type SummariesSnapshot } from "./parseSummariesSnapshot";
 export { readSummariesPage } from "./readSummariesPage";

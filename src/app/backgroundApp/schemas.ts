@@ -1,5 +1,6 @@
 import { clusterSummaryRequestSchemas } from "@/features/clusterSummaries";
 import { comparisonTableRequestSchemas } from "@/features/comparisonTable";
+import { researchGapRequestSchemas } from "@/features/researchGaps";
 import { diagnosticsRequestSchemas } from "@/features/diagnostics";
 import { entityResolutionRequestSchemas } from "@/features/entityResolution";
 import { factExtractionRequestSchemas } from "@/features/factExtraction";
@@ -22,6 +23,7 @@ export const requestSchemas = {
   ...benchmarkRequestSchemas,
   ...clusterSummaryRequestSchemas,
   ...comparisonTableRequestSchemas,
+  ...researchGapRequestSchemas,
   ...diagnosticsRequestSchemas,
   ...entityResolutionRequestSchemas,
   ...factExtractionRequestSchemas,

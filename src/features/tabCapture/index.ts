@@ -23,6 +23,7 @@ export { readFocusedTab } from "./model/readFocusedTab";
 export type { FocusApi } from "./model/readFocusedTab";
 export { reconcileSessionTabs } from "./model/reconcileSessionTabs";
 export { recordNavigation } from "./model/recordNavigation";
+export { readSearchEngine } from "./model/readSearchEngine";
 export { readSearchQuery } from "./model/readSearchQuery";
 export { recordTabFocus } from "./model/recordTabFocus";
 export { trackActiveDwell } from "./model/trackActiveDwell";
