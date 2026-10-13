@@ -49,6 +49,8 @@ export const clusterSummaryViewSchema = v.object({
       isStale: v.boolean(),
       omittedFactCount: v.number(),
       generatedAt: v.number(),
+      /** The model that wrote it, by name (REQ-LIN-005). */
+      modelName: v.string(),
     }),
   ),
   /** A summary was asked for and has not been written yet. */

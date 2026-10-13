@@ -7,6 +7,7 @@ import { enqueueFactExtractions } from ".";
 import { completeJob } from "@/features/jobQueue";
 import { recordSnapshot } from "@/features/pageSnapshots";
 import {
+  EXTRACTION_STORE,
   JOB_STORE,
   KEY_STORE,
   MODEL_STORE,
@@ -68,9 +69,17 @@ const snapshotOf = (nodeId: string, text: string) =>
 beforeEach(async () => {
   database = await openResearchDatabase();
   await Promise.all(
-    ([SESSION_STORE, NODE_STORE, SNAPSHOT_STORE, KEY_STORE, MODEL_STORE, JOB_STORE] as const).map(
-      (store) => database.clear(store),
-    ),
+    (
+      [
+        SESSION_STORE,
+        NODE_STORE,
+        SNAPSHOT_STORE,
+        KEY_STORE,
+        MODEL_STORE,
+        JOB_STORE,
+        EXTRACTION_STORE,
+      ] as const
+    ).map((store) => database.clear(store)),
   );
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -131,7 +140,27 @@ describe("enqueueFactExtractions", () => {
     expect(await database.count(JOB_STORE)).toBe(2);
   });
 
-  it("queues the pages again for another model", async () => {
+  it("queues a page extracted by another model no more, keeping its facts (REQ-LIN-005)", async () => {
+    await database.put(MODEL_STORE, GENERATION_MODEL);
+
+    const [first] = await enqueueFactExtractions(database);
+    const snapshotId = (first!.payload as { snapshotId: string }).snapshotId;
+
+    await database.put(EXTRACTION_STORE, {
+      snapshotId,
+      sessionId: "session-1",
+      nodeId: "a",
+    } as never);
+    await database.put(MODEL_STORE, { ...GENERATION_MODEL, active: false });
+    await database.put(MODEL_STORE, { ...GENERATION_MODEL, ref: "ollama:qwen3:8b@def" });
+
+    const again = await enqueueFactExtractions(database);
+
+    expect(again.map(({ payload }) => payload)).not.toContainEqual({ snapshotId });
+    expect(again).toHaveLength(1);
+  });
+
+  it("queues the pages not yet extracted for another model", async () => {
     await database.put(MODEL_STORE, GENERATION_MODEL);
     await enqueueFactExtractions(database);
     await database.put(MODEL_STORE, { ...GENERATION_MODEL, active: false });

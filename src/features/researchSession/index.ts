@@ -21,6 +21,7 @@ export type {
 } from "./types";
 export { buildSessionSummary } from "./model/buildSessionSummary";
 export { claimSessionEmbeddingSpace } from "./model/claimSessionEmbeddingSpace";
+export { switchSessionSpace } from "./model/switchSessionSpace";
 export { closeSessionForGroup } from "./model/closeSessionForGroup";
 export { createSession } from "./model/createSession";
 export type { CreateSessionOptions } from "./model/createSession";

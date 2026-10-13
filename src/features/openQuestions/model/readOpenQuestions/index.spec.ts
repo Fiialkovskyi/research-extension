@@ -42,7 +42,10 @@ const seedSession = async () => {
   });
   await database.put(MODEL_STORE, {
     ref: MODEL,
-    manifest: { contract: { family: "text-generation" } },
+    manifest: {
+      reference: { repository: "qwen3:4b" },
+      contract: { family: "text-generation" },
+    },
     active: true,
     conformance: "passed",
     installedAt: 1,
@@ -114,6 +117,7 @@ describe("readOpenQuestions", () => {
       isStale: false,
       isPending: false,
       canSuggest: true,
+      modelName: "qwen3:4b",
     });
   });
 

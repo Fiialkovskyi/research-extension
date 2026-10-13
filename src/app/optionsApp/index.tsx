@@ -2,6 +2,7 @@ import { useEffect, useReducer } from "react";
 
 import { diagnosticsResponseSchemas } from "@/features/diagnostics";
 import { LifetimeProbeCard } from "@/features/diagnostics/ui/lifetimeProbeCard";
+import { EmbeddingSpacesCard } from "@/features/embeddingSpaces/ui/embeddingSpacesCard";
 import { PolicyReport } from "@/features/diagnostics/ui/policyReport";
 import { inferenceResponseSchemas } from "@/features/inference";
 import { benchmarkResponseSchemas } from "@/features/inferenceBenchmark";
@@ -337,6 +338,8 @@ export function OptionsApp({
           <InstallProgress state={state.install} />
         </div>
       </section>
+
+      <EmbeddingSpacesCard client={client} />
 
       <details data-testid="developer-section" className="mt-6">
         <summary className="cursor-pointer text-sm font-medium">Developer</summary>

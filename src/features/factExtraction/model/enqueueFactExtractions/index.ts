@@ -4,7 +4,12 @@ import { enqueueJob } from "@/features/jobQueue";
 import { getActiveModel } from "@/features/modelRegistry";
 import { readSessionGraph } from "@/features/researchGraph";
 import { getActiveSession } from "@/features/researchSession";
-import { type ResearchDatabaseSchema, SNAPSHOT_STORE, type StoredJob } from "@/shared/storage";
+import {
+  EXTRACTION_STORE,
+  type ResearchDatabaseSchema,
+  SNAPSHOT_STORE,
+  type StoredJob,
+} from "@/shared/storage";
 
 import { EXTRACT_FACTS_JOB, EXTRACT_FACTS_PRIORITY } from "../../constants";
 import type { ExtractFactsPayload } from "../../types";
@@ -17,6 +22,7 @@ import { getFactProducerVersion } from "../getFactProducerVersion";
  *
  * Idempotent: a job is identified by the snapshot, its content, the prompt
  * version and the model, so this can run whenever there may be something new.
+ * A page already extracted, by any model, is not queued again (REQ-LIN-005).
  *
  * @returns The jobs as the queue now holds them; none without an active
  *   session or an active text-generation model.
@@ -42,7 +48,12 @@ export const enqueueFactExtractions = async (
         ? undefined
         : await database.get(SNAPSHOT_STORE, node.snapshotId);
 
-    if (snapshot !== undefined) {
+    // A page extracted by any model keeps its facts through a model swap
+    // (REQ-LIN-005): only pages never extracted are queued.
+    const isExtracted =
+      snapshot !== undefined && (await database.get(EXTRACTION_STORE, snapshot.id)) !== undefined;
+
+    if (snapshot !== undefined && !isExtracted) {
       const payload: ExtractFactsPayload = { snapshotId: snapshot.id };
 
       jobs.push(

@@ -3,6 +3,7 @@ import { comparisonTableRequestSchemas } from "@/features/comparisonTable";
 import { researchGapRequestSchemas } from "@/features/researchGaps";
 import { factRejectionRequestSchemas } from "@/features/factRejections";
 import { openQuestionRequestSchemas } from "@/features/openQuestions";
+import { embeddingSpaceRequestSchemas } from "@/features/embeddingSpaces";
 import { diagnosticsRequestSchemas } from "@/features/diagnostics";
 import { entityResolutionRequestSchemas } from "@/features/entityResolution";
 import { factExtractionRequestSchemas } from "@/features/factExtraction";
@@ -28,6 +29,7 @@ export const requestSchemas = {
   ...researchGapRequestSchemas,
   ...factRejectionRequestSchemas,
   ...openQuestionRequestSchemas,
+  ...embeddingSpaceRequestSchemas,
   ...diagnosticsRequestSchemas,
   ...entityResolutionRequestSchemas,
   ...factExtractionRequestSchemas,

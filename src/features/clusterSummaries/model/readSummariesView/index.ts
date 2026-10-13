@@ -49,14 +49,17 @@ export const readSummariesView = async (
     return undefined;
   }
 
-  const [clustering, model, installed, jobs, rejectedKeys] = await Promise.all([
+  const [clustering, model, models, jobs, rejectedKeys] = await Promise.all([
     readClustering(database, session.id),
     getActiveModel(database, "text-generation"),
-    database.getAllKeys(MODEL_STORE),
+    database.getAll(MODEL_STORE),
     database.getAllFromIndex(JOB_STORE, "sessionId", session.id),
     readRejectedKeys(database, session.id),
   ]);
-  const installedRefs = new Set(installed);
+  const installedRefs = new Set(models.map(({ ref }) => ref));
+  const modelNames = new Map(
+    models.map(({ ref, manifest }) => [ref, manifest.reference.repository]),
+  );
   const pending = new Set(
     jobs.flatMap((job) => {
       const payload = v.safeParse(summarizeClusterPayloadSchema, job.payload);
@@ -135,6 +138,7 @@ export const readSummariesView = async (
                 isStale: isSummaryStale(summary, await getFactSetHash(factIds), installedRefs),
                 omittedFactCount: summary.omittedFactCount,
                 generatedAt: summary.generatedAt,
+                modelName: modelNames.get(summary.modelRef) ?? summary.modelRef,
               },
         isPending: pending.has(cluster.id),
       };

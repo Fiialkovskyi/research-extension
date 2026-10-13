@@ -44,7 +44,8 @@ export const enqueueOpenQuestions = async (
   const factSetHash = await getFactSetHash(factIds);
   const stored = await database.get(QUESTION_STORE, session.id);
 
-  if (stored?.factSetHash === factSetHash && stored.modelRef === model.ref) {
+  // Questions about these facts stay, whatever model wrote them (REQ-LIN-005).
+  if (stored?.factSetHash === factSetHash) {
     return undefined;
   }
 

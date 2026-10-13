@@ -36,7 +36,10 @@ beforeEach(async () => {
   });
   await database.put(MODEL_STORE, {
     ref: "ollama:qwen3:4b@abc",
-    manifest: { contract: { family: "text-generation" } },
+    manifest: {
+      reference: { repository: "qwen3:4b" },
+      contract: { family: "text-generation" },
+    },
     active: true,
     conformance: "passed",
     installedAt: 1,
@@ -76,6 +79,18 @@ describe("enqueueClusterSummaries", () => {
       id: "s:laptops",
       factSetHash: await getFactSetHash(["a:0:0", "b:0:0"]),
       modelRef: "ollama:qwen3:4b@abc",
+    } as never);
+
+    expect(await enqueueClusterSummaries(database, NOW)).toEqual([]);
+  });
+
+  it("queues nothing for a current summary written by another model (REQ-LIN-005)", async () => {
+    const database = await openResearchDatabase();
+
+    await database.put(SUMMARY_STORE, {
+      id: "s:laptops",
+      factSetHash: await getFactSetHash(["a:0:0", "b:0:0"]),
+      modelRef: "ollama:qwen3:8b@old",
     } as never);
 
     expect(await enqueueClusterSummaries(database, NOW)).toEqual([]);

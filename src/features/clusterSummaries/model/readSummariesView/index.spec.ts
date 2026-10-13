@@ -99,7 +99,10 @@ beforeEach(async () => {
   } as never);
   await database.put(MODEL_STORE, {
     ref: MODEL,
-    manifest: { contract: { family: "text-generation" } },
+    manifest: {
+      reference: { repository: "qwen3:4b" },
+      contract: { family: "text-generation" },
+    },
     active: true,
     conformance: "passed",
     installedAt: 1,
@@ -147,6 +150,7 @@ describe("readSummariesView", () => {
             isStale: false,
             omittedFactCount: 0,
             generatedAt: 9,
+            modelName: "qwen3:4b",
           },
         },
         { clusterId: "shops", label: "Shops", factCount: 0, isPending: false, summary: null },

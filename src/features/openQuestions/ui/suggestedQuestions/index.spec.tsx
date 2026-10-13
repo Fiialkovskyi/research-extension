@@ -10,6 +10,7 @@ const VIEW: OpenQuestionsView = {
   isStale: false,
   isPending: false,
   canSuggest: true,
+  modelName: "qwen3:4b",
 };
 
 const renderQuestions = (view: OpenQuestionsView = VIEW) => {
@@ -24,7 +25,7 @@ describe("SuggestedQuestions", () => {
   it("lists the questions, labelled as suggestions, and searches one", () => {
     const { onSearch } = renderQuestions();
 
-    expect(screen.getByText(/Suggested by the model/u)).toBeInTheDocument();
+    expect(screen.getByText(/Suggested by qwen3:4b/u)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Search this" }));
     expect(onSearch).toHaveBeenCalledWith("volta battery removable");
     expect(screen.queryByTestId("questions-suggest")).toBeNull();

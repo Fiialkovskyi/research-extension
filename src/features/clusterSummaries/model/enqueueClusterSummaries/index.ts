@@ -48,7 +48,8 @@ export const enqueueClusterSummaries = async (
       const factSetHash = await getFactSetHash(factIds);
       const summary = await database.get(SUMMARY_STORE, `${session.id}:${cluster.id}`);
 
-      if (summary?.factSetHash !== factSetHash || summary.modelRef !== model.ref) {
+      // A summary of these facts stays, whatever model wrote it (REQ-LIN-005).
+      if (summary?.factSetHash !== factSetHash) {
         const payload: SummarizeClusterPayload = { clusterId: cluster.id, factSetHash };
 
         jobs.push(

@@ -97,7 +97,7 @@ function Cluster({
             ))}
           </ul>
           <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-            Written {formatTime(summary.generatedAt)}
+            Written by {summary.modelName}, {formatTime(summary.generatedAt)}
             {summary.omittedFactCount > 0 &&
               `, from a selection of the facts (${summary.omittedFactCount} left out)`}
           </p>

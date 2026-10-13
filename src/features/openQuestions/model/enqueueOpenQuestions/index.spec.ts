@@ -42,7 +42,10 @@ const seedSession = async () => {
   });
   await database.put(MODEL_STORE, {
     ref: MODEL,
-    manifest: { contract: { family: "text-generation" } },
+    manifest: {
+      reference: { repository: "qwen3:4b" },
+      contract: { family: "text-generation" },
+    },
     active: true,
     conformance: "passed",
     installedAt: 1,
@@ -105,9 +108,10 @@ describe("enqueueOpenQuestions", () => {
     await database.put(QUESTION_STORE, {
       sessionId: "s",
       factSetHash: await getFactSetHash(["a:0:0", "a:0:1"]),
-      modelRef: MODEL,
+      modelRef: "ollama:other@1",
     } as never);
 
+    // Current facts, another model: kept (REQ-LIN-005).
     expect(await enqueueOpenQuestions(database)).toBeUndefined();
 
     await database.clear(QUESTION_STORE);

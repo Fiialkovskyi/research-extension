@@ -18,4 +18,5 @@ export type { SpacedVector } from "./model/compareVectors";
 export { enqueueSnapshotEmbeddings } from "./model/enqueueSnapshotEmbeddings";
 export { runEmbeddingJob } from "./model/runEmbeddingJob";
 export type { EmbeddingSession, RunEmbeddingJobOptions } from "./model/runEmbeddingJob";
+export { readSpaceCoverage } from "./model/readSpaceCoverage";
 export { splitChunkForModel } from "./model/splitChunkForModel";

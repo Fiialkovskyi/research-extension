@@ -1834,6 +1834,56 @@ describe("embedding deep-read pages through the background", () => {
     }
   });
 
+  it("switches the session to a new embedding model's space once it covers every chunk", async () => {
+    const embedding = createEmbeddingStub();
+    const { app, database, clock } = await createSignalsApp({
+      loadEmbeddingSession: embedding.load,
+    });
+
+    await database.put(MODEL_STORE, EMBEDDING_MODEL as never);
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+    await app.handleContentMessage(extracted("Mid-drive motors sit at the cranks."), FROM_PAGE_A);
+    await vi.waitFor(async () =>
+      expect(
+        (await database.get(SESSION_STORE, "session-1"))?.activeEmbeddingSpaceId,
+      ).toBeDefined(),
+    );
+
+    const first = (await database.get(SESSION_STORE, "session-1"))?.activeEmbeddingSpaceId;
+    const swapped = {
+      ...EMBEDDING_MODEL,
+      ref: "Xenova/other@bbbb",
+      manifest: {
+        ...EMBEDDING_MODEL.manifest,
+        reference: { ...EMBEDDING_MODEL.manifest.reference, revision: "b".repeat(40) },
+      },
+    };
+    await database.put(MODEL_STORE, { ...EMBEDDING_MODEL, active: false } as never);
+    await database.put(MODEL_STORE, { ...swapped, installedAt: 9 } as never);
+    await app.reconcileSession();
+
+    await vi.waitFor(async () =>
+      expect((await database.get(SESSION_STORE, "session-1"))?.activeEmbeddingSpaceId).not.toBe(
+        first,
+      ),
+    );
+    expect((await database.get(SPACE_STORE, first!))?.retiredAt).toBeDefined();
+    expect(await app.handleMessage(buildRpcMessage("spaces.list", {}))).toMatchObject({
+      type: "spaces.listed",
+      payload: {
+        spaces: expect.arrayContaining([
+          expect.objectContaining({ id: first, inUse: false, retiredAt: expect.any(Number) }),
+        ]),
+      },
+    });
+    expect(
+      await app.handleMessage(buildRpcMessage("spaces.remove", { spaceId: first! })),
+    ).toMatchObject({ payload: { removed: true } });
+  });
+
   it("queues nothing without an active embedding model", async () => {
     const embedding = createEmbeddingStub();
     const { app, database, clock } = await createSignalsApp({
@@ -3588,6 +3638,27 @@ describe("fact extraction through the background", () => {
       type: "questions.refreshing",
       payload: { queued: true },
     });
+  });
+
+  it("keeps a generation model's work through a swap to another model (REQ-LIN-005)", async () => {
+    const { app, database, clock, ref } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () =>
+      expect((await database.getAll(EXTRACTION_STORE))[0]?.finishedAt).toBeDefined(),
+    );
+
+    const first = await database.get(MODEL_STORE, ref);
+
+    await database.put(MODEL_STORE, { ...first!, active: false });
+    await database.put(MODEL_STORE, { ...first!, ref: "ollama:qwen3:8b@new", installedAt: 9 });
+    await app.reconcileSession();
+
+    expect((await extractionJobs(database)).map(({ producerVersion }) => producerVersion)).toEqual([
+      expect.stringContaining(ref),
+    ]);
   });
 
   it("opens the Summaries page", async () => {

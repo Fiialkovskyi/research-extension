@@ -17,6 +17,7 @@ const SUMMARY = {
   isStale: false,
   omittedFactCount: 0,
   generatedAt: 1,
+  modelName: "qwen3:4b",
 };
 
 /** A background holding one unsummarized cluster, summarized on the second read after asking. */
@@ -114,6 +115,7 @@ const createClient = (hasSession = true) => {
                     isStale: true,
                     isPending: false,
                     canSuggest: true,
+                    modelName: "qwen3:4b",
                   }
                 : null,
             }),

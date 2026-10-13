@@ -26,6 +26,7 @@ const SUMMARIZED: ClusterSummaryView = {
     isStale: false,
     omittedFactCount: 0,
     generatedAt: 1,
+    modelName: "qwen3:4b",
   },
 };
 
@@ -106,6 +107,12 @@ describe("ClusterSummaries", () => {
 
     expect(screen.getByTestId("summaries-no-model")).toBeInTheDocument();
     expect(screen.queryByTestId("summary-summarize")).toBeNull();
+  });
+
+  it("says which model wrote the summary", () => {
+    renderSummaries([SUMMARIZED]);
+
+    expect(screen.getByTestId("summary-cluster")).toHaveTextContent("Written by qwen3:4b");
   });
 
   it("notes when the summary was written from a selection of the facts", () => {

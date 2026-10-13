@@ -33,7 +33,10 @@ beforeEach(async () => {
   });
   await database.put(MODEL_STORE, {
     ref: "m",
-    manifest: { contract: { family: "text-generation" } },
+    manifest: {
+      reference: { repository: "qwen3:4b" },
+      contract: { family: "text-generation" },
+    },
     active: true,
     conformance: "passed",
     installedAt: 1,

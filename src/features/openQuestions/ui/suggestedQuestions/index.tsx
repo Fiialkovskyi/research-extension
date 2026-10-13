@@ -32,7 +32,7 @@ export function SuggestedQuestions({ view, onSearch, onSuggest }: SuggestedQuest
         )}
       </header>
       <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-        Suggested by the model — check before relying on them.
+        Suggested by {view.modelName ?? "the model"} — check before relying on them.
       </p>
       {!view.canSuggest && !view.hasQuestions && (
         <p data-testid="questions-no-model" className="mt-1 text-sm">

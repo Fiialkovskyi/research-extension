@@ -552,6 +552,10 @@ export interface StoredSpace {
   /** The weights' quantization, such as `q8`, or `null` when the manifest names none. */
   quantization: string | null;
   createdAt: number;
+  /** When no session used it any more after a switch; its vectors are kept 14 days (REQ-LIN-004). */
+  retiredAt?: number;
+  /** When its vectors were deleted, by the user or after 14 days retired. */
+  removedAt?: number;
 }
 
 /**

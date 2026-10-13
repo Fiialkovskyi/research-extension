@@ -679,19 +679,19 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 **M1: Capture and graph**
 
-- [ ] Project scaffold: TypeScript, Vite, `web-ext`, ESLint rules, CI matrix. (RT-006, RT-007)
-- [ ] Session lifecycle, explicit start, permission request, dynamic content-script registration. (RT-001 to RT-003)
-- [ ] Tab, navigation and SERP capture; active dwell; engagement rules; co-attention edges. (CAP-001 to CAP-008, CAP-010)
-- [ ] IndexedDB schema v1, migrations framework, job queue. (STO-001, STO-010)
-- [ ] Research tree in the popup, with live updates and the unread queue. (UI-001 to UI-003)
+- [x] Project scaffold: TypeScript, Vite, `web-ext`, ESLint rules, CI matrix. (RT-006, RT-007) Built as WXT with oxlint and oxfmt (`bootstrap-popup-scaffold`). There is no CI matrix yet; `npm run verify` is the gate.
+- [x] Session lifecycle, explicit start, permission request, dynamic content-script registration. (RT-001 to RT-003) (`add-session-store`, `add-session-restore`, `add-tab-capture`)
+- [x] Tab, navigation and SERP capture; active dwell; engagement rules; co-attention edges. (CAP-001 to CAP-008, CAP-010) (`add-tab-capture`, `add-serp-detection`, `add-engagement-signals`, `add-co-attention-edges`)
+- [x] IndexedDB schema v1, migrations framework, job queue. (STO-001, STO-010) (`add-graph-store`, `add-job-queue`)
+- [x] Research tree in the popup, with live updates and the unread queue. (UI-001 to UI-003) (`add-popup-research-tree`)
 
 **M2: Clustering and embeddings**
 
-- [ ] Fused graph and Louvain with warm start, identity matching and hysteresis. (CLU-001 to CLU-006)
-- [ ] Model registry, manifest derivation, download and verification, conformance suite. (MOD-001 to MOD-005)
-- [ ] `ext-ort` provider and inference worker. (MOD-006, MOD-008)
-- [ ] Embedding spaces, branded vectors, partitioned store. (LIN-001, LIN-002)
-- [ ] Readability extraction, snapshots, chunker, encryption at rest. (CAP-006, STO-002, SEC-005)
+- [x] Fused graph and Louvain with warm start, identity matching and hysteresis. (CLU-001 to CLU-006) (`add-structural-clustering`, `add-semantic-cluster-edges`)
+- [x] Model registry, manifest derivation, download and verification, conformance suite. (MOD-001 to MOD-005) (`spike-huggingface-inference`)
+- [x] `ext-ort` provider and inference worker. (MOD-006, MOD-008) (`spike-huggingface-inference`)
+- [x] Embedding spaces, branded vectors, partitioned store. (LIN-001, LIN-002) (`add-snapshot-embeddings`)
+- [x] Readability extraction, snapshots, chunker, encryption at rest. (CAP-006, STO-002, SEC-005) (`add-snapshot-embeddings`, `add-snapshot-encryption`)
 
 **M3: Save and resume**
 
@@ -711,10 +711,10 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 **M5: Native host and model swap**
 
-- [ ] Native host package for Linux and macOS (installer script, manifest placement, offline mode). (SEC-004)
-- [ ] `native` provider; capability handshake with protocol versioning. (MOD)
-- [ ] Embedding swap with re-embed migration and space retention; text-generation swap behavior. (LIN-003 to LIN-005, LIN-007)
-- [ ] Research map page. (UI)
+- Native host package for Linux and macOS (installer script, manifest placement, offline mode). (SEC-004) **Replaced by Ollama** as the local server (`spike-ollama-provider`). Reconsidered only if Ollama proves unsuitable.
+- `native` provider; capability handshake with protocol versioning. (MOD) **Replaced by the Ollama provider**, with its model status check standing in for the handshake.
+- [x] Embedding swap with re-embed migration and space retention; text-generation swap behavior. (LIN-003 to LIN-005, LIN-007) (`add-model-swap`) A session switches space when the new one covers all its chunks. Retired spaces keep their vectors 14 days or until removed on the options page. A generation swap keeps existing facts, summaries and questions, labelled with their producer.
+- [x] Research map page. (UI) (`add-research-map`)
 
 **M6: Hardening and beta**
 

@@ -34,10 +34,10 @@ export const readOpenQuestions = async (
     return undefined;
   }
 
-  const [stored, model, installed, jobs, factIds] = await Promise.all([
+  const [stored, model, models, jobs, factIds] = await Promise.all([
     database.get(QUESTION_STORE, session.id),
     getActiveModel(database, "text-generation"),
-    database.getAllKeys(MODEL_STORE),
+    database.getAll(MODEL_STORE),
     database.getAllFromIndex(JOB_STORE, "sessionId", session.id),
     readSessionFactIds(database, session.id),
   ]);
@@ -74,8 +74,13 @@ export const readOpenQuestions = async (
     isStale:
       stored !== undefined &&
       ((await getFactSetHash(factIds)) !== stored.factSetHash ||
-        !new Set(installed).has(stored.modelRef)),
+        !models.some(({ ref }) => ref === stored.modelRef)),
     isPending,
     canSuggest: model !== undefined && factIds.length > 0,
+    modelName:
+      stored === undefined
+        ? null
+        : (models.find(({ ref }) => ref === stored.modelRef)?.manifest.reference.repository ??
+          stored.modelRef),
   };
 };

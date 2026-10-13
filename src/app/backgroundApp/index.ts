@@ -33,6 +33,7 @@ import {
   recordSignalBatch,
 } from "@/features/pageSignals";
 import {
+  EXTRACTOR_VERSION,
   readSnapshotCandidate,
   recordSnapshot,
   sealPlaintextSnapshots,
@@ -66,9 +67,11 @@ import {
   saveActiveSession,
 } from "@/features/researchLibrary";
 import {
+  buildEmbeddingSpace,
   EMBED_SNAPSHOT_JOB,
   type EmbeddingSession,
   enqueueSnapshotEmbeddings,
+  readSpaceCoverage,
   runEmbeddingJob,
 } from "@/features/snapshotEmbeddings";
 import {
@@ -94,6 +97,7 @@ import {
 import { readComparisonTable, saveTableColumns } from "@/features/comparisonTable";
 import { openGapSearch, readResearchGaps } from "@/features/researchGaps";
 import { rejectFacts, restoreRejections } from "@/features/factRejections";
+import { purgeRetiredSpaces, readSpaceUsage, removeSpace } from "@/features/embeddingSpaces";
 import {
   enqueueOpenQuestions,
   getQuestionsProducer,
@@ -136,6 +140,7 @@ import {
   SESSION_TAB_VALUE_KEY,
   startSession,
   trackSessionTabMembership,
+  switchSessionSpace,
 } from "@/features/researchSession";
 import {
   closeTabNode,
@@ -809,6 +814,51 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     }
   };
 
+  /**
+   * Moves the active session to the active embedding model's space once that
+   * space covers every chunk (REQ-LIN-003); until then the session keeps the
+   * space it has. A session with no space claims one through its first job.
+   */
+  const maybeSwitchSpace = async (): Promise<void> => {
+    try {
+      await enqueueCapture(async (openedDatabase) => {
+        const [session, model] = await Promise.all([
+          getActiveSession(openedDatabase),
+          getActiveModel(openedDatabase, "embedding"),
+        ]);
+
+        if (
+          session?.activeEmbeddingSpaceId === undefined ||
+          model?.manifest.contract.family !== "embedding"
+        ) {
+          return;
+        }
+
+        const space = await buildEmbeddingSpace({
+          reference: model.manifest.reference,
+          contract: model.manifest.contract,
+          extractorVersion: EXTRACTOR_VERSION,
+          ...(model.manifest.quantization === undefined
+            ? {}
+            : { quantization: model.manifest.quantization }),
+          now: getNow(),
+        });
+
+        if (space.id === session.activeEmbeddingSpaceId) {
+          return;
+        }
+
+        const { covered, total } = await readSpaceCoverage(openedDatabase, session.id, space.id);
+
+        if (total > 0 && covered === total) {
+          await switchSessionSpace(openedDatabase, session.id, space.id, getNow());
+        }
+      });
+    } catch (error) {
+      dependencies.reportError(error);
+    }
+  };
+
   let isRunningJobs = false;
   let isJobRunRequested = false;
   let hasRequeuedJobs = false;
@@ -872,6 +922,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
     // New vectors can change the clusters: recompute once things are quiet.
     if (hasRunAny) {
+      await maybeSwitchSpace();
       scheduleRecluster();
     }
   };
@@ -961,6 +1012,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     // Snapshots wait for either family: embedding, and fact extraction.
     if (recorded.active) {
       void queueSnapshotWork();
+
+      if (recorded.manifest.contract.family === "embedding") {
+        void maybeSwitchSpace();
+      }
     }
 
     return { recorded, probes };
@@ -1185,6 +1240,21 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           void runJobs();
 
           return buildRpcMessage("facts.rejectionsRestored", { restoredCount });
+        }
+
+        case "spaces.list": {
+          return buildRpcMessage("spaces.listed", {
+            spaces: await readSpaceUsage(await getDatabase()),
+          });
+        }
+
+        case "spaces.remove": {
+          const { spaceId } = request.payload;
+          const removed = await serializeWork(async () =>
+            removeSpace(await getDatabase(), spaceId, getNow()),
+          );
+
+          return buildRpcMessage("spaces.removed", { spaceId, removed });
         }
 
         case "questions.read": {
@@ -2051,6 +2121,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       // Reported rather than thrown: a failure must not keep the session from
       // being reconciled, and the next start tries again.
       await enqueueCapture(sealPlaintextSnapshots);
+      // Spaces retired more than 14 days ago give their disk back (REQ-LIN-004).
+      await enqueueCapture((openedDatabase) => purgeRetiredSpaces(openedDatabase, getNow()));
       await serializeWork(async () => {
         await reconcileActiveSession({
           database: await getDatabase(),
@@ -2134,6 +2206,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       }),
     handleAlarm: async (name) => {
       if (name === JOB_WAKE_ALARM) {
+        await enqueueCapture((openedDatabase) => purgeRetiredSpaces(openedDatabase, getNow()));
         await runJobs();
       }
     },

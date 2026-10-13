@@ -29,6 +29,8 @@ export const openQuestionsViewSchema = v.object({
   isStale: v.boolean(),
   isPending: v.boolean(),
   canSuggest: v.boolean(),
+  /** The model that suggested them, by name, when there are any (REQ-LIN-005). */
+  modelName: v.nullable(v.string()),
 });
 
 export const openQuestionRequestSchemas = {

@@ -45,6 +45,7 @@ describe("OptionsApp", () => {
     expect(sent.map((message) => message.type)).toEqual([
       // Children's effects run first: the Ollama card, then the probe card.
       "ollama.status",
+      "spaces.list",
       "diagnostics.readProbes",
       "inference.probe",
       "model.list",
