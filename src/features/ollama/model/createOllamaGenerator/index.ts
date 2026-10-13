@@ -31,6 +31,8 @@ const readErrorText = async (response: Response): Promise<string> => {
  * then asks `/api/chat` for a streamed answer:
  *
  * - bounded by the caller's token limit (`num_predict`);
+ * - with the context the caller needs (`num_ctx`), when it says, rather than
+ *   whatever the model's own configuration sets;
  * - constrained to the request's JSON schema, when it has one (`format`);
  * - without the model's reasoning (`think: false`), which would spend the
  *   budget and the time on text nobody reads;
@@ -96,6 +98,7 @@ export const createOllamaGenerator = (
               options: {
                 num_predict: request.maxTokens,
                 ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
+                ...(request.contextTokens === undefined ? {} : { num_ctx: request.contextTokens }),
               },
               ...(request.responseSchema === undefined ? {} : { format: request.responseSchema }),
             }),

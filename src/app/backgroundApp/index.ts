@@ -1,4 +1,5 @@
 import type { IDBPDatabase } from "idb";
+import * as v from "valibot";
 
 import {
   type InferenceWorker,
@@ -83,6 +84,13 @@ import {
   runNextJob,
 } from "@/features/jobQueue";
 import {
+  enqueueFactExtractions,
+  EXTRACT_FACTS_JOB,
+  extractFactsPayloadSchema,
+  getFactProducerVersion,
+  runFactExtractionJob,
+} from "@/features/factExtraction";
+import {
   HOLD_PING_INTERVAL_MS,
   HOLD_PORT_NAME,
   LIFETIME_PROBE_JOB,
@@ -133,9 +141,11 @@ import {
 } from "@/shared/rpc";
 import {
   HEARTBEAT_STORE,
+  JOB_STORE,
   MODEL_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
+  type StoredJob,
   type StoredModel,
 } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
@@ -170,6 +180,13 @@ const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown>
     requestType: readMessageField(candidate, "type") ?? "unknown",
     reason: getErrorMessage(error),
   });
+};
+
+/** Whether a job was asked for by the user, which lets it run while they are active. */
+const isRequested = (job: StoredJob): boolean => {
+  const payload = v.safeParse(extractFactsPayloadSchema, job.payload);
+
+  return payload.success && payload.output.requestedAt !== undefined;
 };
 
 /** The models registered from the local Ollama server. */
@@ -576,11 +593,29 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       const release = holdForJob();
 
       try {
-        await run(job);
+        return await run(job);
       } finally {
         release();
       }
     };
+
+  /**
+   * Whether the user is away: the browser reports them idle or locked. Text
+   * generation runs only then, or when asked for (REQ-MOD-008).
+   */
+  const isUserAway = async (): Promise<boolean> =>
+    (await dependencies.readIdleState()) !== "active";
+
+  /**
+   * Whether a fact-extraction job may take its next chunk now: the user is
+   * away, or asked for it. Read afresh from the queue, so a request made while
+   * it runs counts at once.
+   */
+  const mayExtractNow = async (jobId: string): Promise<boolean> => {
+    const job = await (await getDatabase()).get(JOB_STORE, jobId);
+
+    return (job !== undefined && isRequested(job)) || (await isUserAway());
+  };
 
   /**
    * What each job type does, by type. Every job runs held, except the probe,
@@ -592,6 +627,35 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         database: await getDatabase(),
         job,
         loadSession: loadEmbeddingSession,
+      });
+    }),
+    [EXTRACT_FACTS_JOB]: runHeld(async (job) => {
+      const openedDatabase = await getDatabase();
+      const model = await getActiveModel(openedDatabase, "text-generation");
+
+      // Queued for a model that is no longer the active one: the model now
+      // active has jobs of its own, so this one has nothing left to do.
+      if (
+        model === undefined ||
+        model.manifest.reference.hub !== "ollama" ||
+        getFactProducerVersion(model.ref) !== job.producerVersion
+      ) {
+        return undefined;
+      }
+
+      const generator = createOllamaGenerator(
+        dependencies.fetchResource,
+        ollamaOrigin,
+        model.manifest,
+      );
+
+      return runFactExtractionJob({
+        database: openedDatabase,
+        job,
+        modelRef: model.ref,
+        generate: generator.generate,
+        mayContinue: () => mayExtractNow(job.id),
+        now: getNow,
       });
     }),
     [LIFETIME_PROBE_JOB]: async (job) => {
@@ -666,7 +730,17 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         await scheduleJobWake(getNow() + JOB_WAKE_DELAY_MS);
 
-        while (await runNextJob(openedDatabase, jobRunners)) {
+        // Asked once per pass: text generation waits while the user is active.
+        while (
+          await runNextJob(openedDatabase, jobRunners, {
+            isPermitted: await (async () => {
+              const isAway = await isUserAway();
+
+              return (job: StoredJob) =>
+                job.type !== EXTRACT_FACTS_JOB || isAway || isRequested(job);
+            })(),
+          })
+        ) {
           // Each pass claims, runs and settles one job.
           hasRunAny = true;
         }
@@ -767,9 +841,9 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       },
     });
 
-    // Only an embedding model has snapshots waiting for it.
-    if (recorded.active && recorded.manifest.contract.family === "embedding") {
-      void embedSnapshots();
+    // Snapshots wait for either family: embedding, and fact extraction.
+    if (recorded.active) {
+      void queueSnapshotWork();
     }
 
     return { recorded, probes };
@@ -791,9 +865,15 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     }
   };
 
-  /** Queues embedding for the session's snapshots, then runs what is due. */
-  const embedSnapshots = async (): Promise<void> => {
-    await enqueueCapture((openedDatabase) => enqueueSnapshotEmbeddings(openedDatabase, getNow()));
+  /**
+   * Queues the work the session's snapshots need — embedding, and fact
+   * extraction while a generation model is active — then runs what is due.
+   */
+  const queueSnapshotWork = async (): Promise<void> => {
+    await enqueueCapture(async (openedDatabase) => {
+      await enqueueSnapshotEmbeddings(openedDatabase, getNow());
+      await enqueueFactExtractions(openedDatabase);
+    });
     await resumeLocalAi();
     await runJobs();
   };
@@ -903,7 +983,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
     // Not awaited into the answer: embedding takes seconds, the page needs none of it.
     if (isSnapshotStored) {
-      void embedSnapshots();
+      void queueSnapshotWork();
     }
 
     return (
@@ -952,6 +1032,39 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("model.listed", {
             models: await listInstalledModels(await getDatabase()),
           });
+        }
+
+        case "facts.extractNow": {
+          const requestedAt = getNow();
+          const queued = await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const jobs = await enqueueFactExtractions(openedDatabase);
+            const pending = jobs.filter(
+              ({ status }) => status === "queued" || status === "running",
+            );
+            const transaction = openedDatabase.transaction(JOB_STORE, "readwrite");
+
+            // Marked on the job itself, so the request outlives an unload.
+            await Promise.all([
+              ...pending.map(async ({ id }) => {
+                const stored = await transaction.store.get(id);
+
+                if (stored !== undefined) {
+                  await transaction.store.put({
+                    ...stored,
+                    payload: { ...(stored.payload as object), requestedAt },
+                  });
+                }
+              }),
+              transaction.done,
+            ]);
+
+            return pending.length;
+          });
+
+          void runJobs();
+
+          return buildRpcMessage("facts.extractionStarted", { queued });
         }
 
         case "diagnostics.lifetimeProbe": {
@@ -1335,7 +1448,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
           // The user is looking at it: if Ollama is back, so is similarity.
           if (status.state === "running") {
-            void embedSnapshots();
+            void queueSnapshotWork();
           }
 
           return buildRpcMessage("ollama.state", {
@@ -1703,7 +1816,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       await recluster();
       // A job the last run was in the middle of is handed back by the first
       // run of jobs after this load, then resumed.
-      void embedSnapshots();
+      void queueSnapshotWork();
     },
     handleNavigationCommitted: (navigation) =>
       captureAndPush(async (openedDatabase) => {
@@ -1755,15 +1868,21 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     },
     handleContentMessage,
     handleWindowFocusChanged: () => captureAndPush((openedDatabase) => followFocus(openedDatabase)),
-    handleIdleStateChanged: (state: IdleState) =>
-      captureAndPush((openedDatabase) =>
+    handleIdleStateChanged: async (state: IdleState) => {
+      // The user stepped away: text generation may run now (REQ-MOD-008).
+      if (state !== "active") {
+        void runJobs();
+      }
+
+      await captureAndPush((openedDatabase) =>
         followFocus(openedDatabase, {
           // Idleness is reported a threshold after input stopped; reading
           // stopped with the input.
           now:
             state === "active" ? getNow() : getNow() - ENGAGEMENT_RULES.idleThresholdSeconds * 1000,
         }),
-      ),
+      );
+    },
     handlePermissionsAdded: () =>
       enqueueCapture(async (openedDatabase) => {
         void injectSessionTabs(openedDatabase, dependencies.pageSignals);

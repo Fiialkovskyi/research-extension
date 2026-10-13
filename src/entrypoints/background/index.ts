@@ -165,6 +165,7 @@ export default defineBackground(() => {
       },
       closeTab: (tabId) => browser.tabs.remove(tabId),
     },
+    readIdleState: () => browser.idle.queryState(ENGAGEMENT_RULES.idleThresholdSeconds),
     readFocusedTab: () =>
       readFocusedTab({
         getLastFocusedWindow: () => browser.windows.getLastFocused(),

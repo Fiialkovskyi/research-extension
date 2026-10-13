@@ -8,6 +8,8 @@ import { recordSnapshot } from "@/features/pageSnapshots";
 import {
   CHUNK_STORE,
   EDGE_STORE,
+  EXTRACTION_STORE,
+  FACT_STORE,
   JOB_STORE,
   KEY_STORE,
   NODE_STORE,
@@ -64,6 +66,8 @@ beforeEach(async () => {
         SNAPSHOT_STORE,
         CHUNK_STORE,
         VECTOR_STORE,
+        FACT_STORE,
+        EXTRACTION_STORE,
         JOB_STORE,
         KEY_STORE,
       ] as const
@@ -123,6 +127,13 @@ beforeEach(async () => {
     database.put(VECTOR_STORE, vector("space-1", "a", `${snapshotId}:0`)),
     database.put(VECTOR_STORE, vector("space-2", "a", `${snapshotId}:0`)),
     database.put(VECTOR_STORE, vector("space-1", "b", "other:0")),
+    database.put(FACT_STORE, {
+      id: `${snapshotId}:0:0`,
+      nodeId: "a",
+      sessionId: "session-1",
+    } as never),
+    database.put(FACT_STORE, { id: "other:0:0", nodeId: "b", sessionId: "session-1" } as never),
+    database.put(EXTRACTION_STORE, { snapshotId, nodeId: "a", sessionId: "session-1" } as never),
     database.put(JOB_STORE, {
       id: "job-a",
       type: "embedSnapshot",
@@ -164,6 +175,8 @@ describe("deleteNode", () => {
     expect(await database.count(CHUNK_STORE)).toBe(0);
     expect((await database.getAll(VECTOR_STORE)).map(({ nodeId }) => nodeId)).toEqual(["b"]);
     expect((await database.getAll(JOB_STORE)).map(({ id }) => id)).toEqual(["job-b"]);
+    expect((await database.getAll(FACT_STORE)).map(({ nodeId }) => nodeId)).toEqual(["b"]);
+    expect(await database.count(EXTRACTION_STORE)).toBe(0);
   });
 
   it("keeps the pages reached from it", async () => {

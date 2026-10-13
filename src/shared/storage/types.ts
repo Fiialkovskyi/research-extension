@@ -5,6 +5,8 @@ import type {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  EXTRACTION_STORE,
+  FACT_STORE,
   HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
@@ -260,6 +262,60 @@ export type JobStatus = "queued" | "running" | "done" | "failed";
  * Its id is derived from what it does — type, inputs, producer version — so the
  * same work asked for twice is one job, not two.
  */
+/** What produced a fact: enough to tell it from one a later prompt or model makes. */
+export interface StoredFactProvenance {
+  /** The generation model's pinned ref. */
+  modelRef: string;
+  /** The prompt id and version, such as `factExtraction@1`. */
+  prompt: string;
+  chunkerVersion: string;
+  extractedAt: number;
+}
+
+/**
+ * One fact extracted from a chunk of a deep-read page, kept only when its
+ * quote was found in that chunk (REQ-SYN-002).
+ *
+ * Its text — subject, attribute, value, unit and quote — is page content, so it
+ * is stored only encrypted with the data key; ids and provenance stay readable,
+ * so counting facts needs no key.
+ */
+export interface StoredFact {
+  /** `<snapshotId>:<chunkIndex>:<n>`: redoing a chunk overwrites, never duplicates. */
+  id: string;
+  sessionId: string;
+  nodeId: string;
+  snapshotId: string;
+  chunkId: string;
+  provenance: StoredFactProvenance;
+  /** The data key that encrypted the text. */
+  keyId: string;
+  iv: Uint8Array;
+  /** JSON `{ subject, attribute, value, unit?, quote }`, encrypted. */
+  encryptedFact: ArrayBuffer;
+}
+
+/** How fact extraction of one snapshot went: progress and counts, no content. */
+export interface StoredExtraction {
+  snapshotId: string;
+  sessionId: string;
+  nodeId: string;
+  modelRef: string;
+  prompt: string;
+  chunkCount: number;
+  /**
+   * Each chunk done so far, by index: facts kept, facts dropped as ungrounded,
+   * and whether the answer failed the schema. Overwritten when a chunk is
+   * redone after an unload, so the totals below never count it twice.
+   */
+  chunkOutcomes: { kept: number; dropped: number; isInvalid: boolean }[];
+  chunksDone: number;
+  keptCount: number;
+  droppedCount: number;
+  invalidChunkCount: number;
+  finishedAt?: number;
+}
+
 /**
  * One heartbeat of a background-lifetime probe run (diagnostics only).
  *
@@ -493,5 +549,15 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: [string, number];
     value: StoredHeartbeat;
     indexes: { runId: string };
+  };
+  [FACT_STORE]: {
+    key: string;
+    value: StoredFact;
+    indexes: { sessionId: string; nodeId: string };
+  };
+  [EXTRACTION_STORE]: {
+    key: string;
+    value: StoredExtraction;
+    indexes: { sessionId: string; nodeId: string };
   };
 }

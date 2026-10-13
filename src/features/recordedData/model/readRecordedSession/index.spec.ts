@@ -7,7 +7,9 @@ import { readRecordedSession } from ".";
 import { readRecordedText } from "../readRecordedText";
 import { recordSnapshot } from "@/features/pageSnapshots";
 import {
+  EXTRACTION_STORE,
   KEY_STORE,
+  MODEL_STORE,
   NODE_STORE,
   openResearchDatabase,
   type ResearchDatabaseSchema,
@@ -48,9 +50,17 @@ const node = (id: string, overrides: Partial<StoredNode> = {}): StoredNode => ({
 beforeEach(async () => {
   database = await openResearchDatabase();
   await Promise.all(
-    ([SESSION_STORE, NODE_STORE, SNAPSHOT_STORE, VECTOR_STORE, KEY_STORE] as const).map((store) =>
-      database.clear(store),
-    ),
+    (
+      [
+        SESSION_STORE,
+        NODE_STORE,
+        SNAPSHOT_STORE,
+        VECTOR_STORE,
+        KEY_STORE,
+        EXTRACTION_STORE,
+        MODEL_STORE,
+      ] as const
+    ).map((store) => database.clear(store)),
   );
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -103,6 +113,43 @@ describe("readRecordedSession", () => {
       snapshot: null,
       vectorCount: 0,
     });
+  });
+
+  it("counts a page's facts kept and dropped, and none for a page not extracted", async () => {
+    const snapshotId = (await database.get(NODE_STORE, "a"))?.snapshotId ?? "";
+
+    await database.put(EXTRACTION_STORE, {
+      snapshotId,
+      sessionId: "session-1",
+      nodeId: "a",
+      modelRef: "m",
+      prompt: "factExtraction@1",
+      chunkCount: 2,
+      chunkOutcomes: [{ kept: 7, dropped: 2, isInvalid: false }],
+      chunksDone: 1,
+      keptCount: 7,
+      droppedCount: 2,
+      invalidChunkCount: 0,
+    });
+
+    const recorded = await readRecordedSession(database);
+
+    expect(recorded?.pages[1]?.facts).toEqual({ kept: 7, dropped: 2, isFinished: false });
+    expect(recorded?.pages[0]?.facts).toBeNull();
+  });
+
+  it("says whether facts can be extracted: only with an active generation model", async () => {
+    expect((await readRecordedSession(database))?.canExtractFacts).toBe(false);
+
+    await database.put(MODEL_STORE, {
+      ref: "ollama:qwen3:4b@abc",
+      manifest: { contract: { family: "text-generation" } },
+      active: true,
+      conformance: "passed",
+      installedAt: 1,
+    } as never);
+
+    expect((await readRecordedSession(database))?.canExtractFacts).toBe(true);
   });
 
   it("never includes a page's text", async () => {

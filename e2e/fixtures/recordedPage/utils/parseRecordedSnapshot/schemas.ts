@@ -4,6 +4,8 @@ import * as v from "valibot";
 export const recordedSnapshotSchema = v.object({
   empty: v.boolean(),
   title: v.nullable(v.string()),
+  /** Whether the page offers "Extract facts now". */
+  canExtractFacts: v.boolean(),
   entries: v.array(
     v.object({
       nodeId: v.string(),
@@ -12,6 +14,8 @@ export const recordedSnapshotSchema = v.object({
       copies: v.nullable(v.string()),
       snapshot: v.nullable(v.string()),
       vectors: v.nullable(v.string()),
+      /** The page's fact counts, or null for a page without text. */
+      facts: v.nullable(v.string()),
       /** The page text shown, or null until asked for. */
       text: v.nullable(v.string()),
     }),

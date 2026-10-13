@@ -21,6 +21,7 @@ import {
   buildOllamaOriginsCommand,
   type OllamaPlatform,
 } from "../../model/buildOllamaOriginsCommand";
+import { matchesOllamaName } from "../../model/matchesOllamaName";
 import { ollamaResponseSchemas } from "../../schemas";
 import type { OllamaModelEntry } from "../../types";
 
@@ -463,9 +464,13 @@ export function OllamaCard({
   };
 
   const turnOn = (name: string) => {
+    // A model Ollama already has is not downloaded again: the first stage the
+    // background reports for it is the check, so that is what is shown.
+    const isPulled = models.some((model) => model.isPulled && matchesOllamaName(name, model.name));
+
     setEnabling((previous) => ({
       ...previous,
-      [name]: { stage: "downloading", percent: undefined },
+      [name]: isPulled ? { stage: "checking" } : { stage: "downloading", percent: undefined },
     }));
     client.send(buildRpcMessage("ollama.enable", { name }));
   };

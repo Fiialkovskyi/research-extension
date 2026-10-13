@@ -116,6 +116,18 @@ describe("createOllamaGenerator", () => {
     });
   });
 
+  it("asks for the context the caller needs, and leaves Ollama's own otherwise", async () => {
+    const server = createServer({ lines: [finish("stop"), finish("stop")] });
+    const generator = createOllamaGenerator(server.fetchResource, ORIGIN, MANIFEST);
+
+    await generator.generate({ ...ASK, contextTokens: 4_096 }).final();
+    await generator.generate(ASK).final();
+
+    expect(server.chats[0]?.body).toMatchObject({ options: { num_predict: 64, num_ctx: 4_096 } });
+    expect(server.chats[1]?.body).toMatchObject({ options: { num_predict: 64 } });
+    expect(server.chats[1]?.body).not.toHaveProperty("options.num_ctx");
+  });
+
   it("says it stopped at the token limit when Ollama did", async () => {
     const server = createServer({ lines: [piece("1, 2, 3"), finish("length")] });
 

@@ -15,6 +15,8 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  EXTRACTION_STORE,
+  FACT_STORE,
   HEARTBEAT_STORE,
   JOB_STORE,
   SPACE_STORE,
@@ -119,6 +121,7 @@ const buildDependencies = (
       requestFlush: () => Promise.resolve(undefined),
     },
     readFocusedTab: () => Promise.resolve(undefined),
+    readIdleState: () => Promise.resolve("active"),
     hasOllamaAccess: () => Promise.resolve(false),
     backgroundLifetime: {
       touch: () => Promise.resolve(),
@@ -2269,6 +2272,27 @@ const answerChat = (init: RequestInit | undefined, isChatBroken: boolean) => {
 
   if (body.format !== undefined) {
     const passage = body.messages.at(-1)?.content;
+
+    // A fact-extraction request: one fact quoting the passage's first words,
+    // and one the passage does not say.
+    if (passage?.startsWith("<page_text>\n") === true && !isChatBroken) {
+      const text = passage.slice("<page_text>\n".length, -"\n</page_text>".length);
+
+      return Promise.resolve(
+        new Response(
+          chatLine(
+            JSON.stringify({
+              entities: [{ name: "Motor", entity_type: "product" }],
+              facts: [
+                { subject: "Motor", attribute: "placement", value: "x", quote: text.slice(0, 20) },
+                { subject: "Motor", attribute: "colour", value: "red", quote: "comes in red" },
+              ],
+            }),
+          ) + chatLine("", "stop"),
+        ),
+      );
+    }
+
     const probe = EXTRACTION_PROBES.find((candidate) => candidate.passage === passage);
     // Any other passage is the timed article, answered with facts.
     const answer = isChatBroken
@@ -3150,5 +3174,124 @@ describe("the background-lifetime probe through the background", () => {
     );
 
     expect(answer).toMatchObject({ type: "rpc.refused" });
+  });
+});
+
+/** A session app whose active generation model is Ollama's `qwen3:4b`, through the fake server. */
+const createExtractionApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
+  const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+  const signals = await createSignalsApp({
+    fetchResource: ollama.fetchResource,
+    hasOllamaAccess: () => Promise.resolve(true),
+    ...overrides,
+  });
+  const { app, database } = signals;
+
+  await Promise.all([database.clear(FACT_STORE), database.clear(EXTRACTION_STORE)]);
+  await app.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" }));
+
+  const ref = `ollama:qwen3:4b@${ollama.chatDigest}`;
+  const registered = await database.get(MODEL_STORE, ref);
+
+  if (registered === undefined) {
+    throw new Error("The model was not registered.");
+  }
+
+  // Marked as having passed rather than checked: the checks are not the subject here.
+  await database.put(MODEL_STORE, { ...registered, active: true, conformance: "passed" });
+
+  return { ...signals, ollama, ref };
+};
+
+/** Reads a page deeply, which stores its snapshot and queues its work. */
+const readPageDeeply = async (app: BackgroundApp, clock: { focusedTabId: number | undefined }) => {
+  await app.handleNavigationCommitted(commit("https://example.org/a"));
+  clock.focusedTabId = 7;
+  await app.handleTabActivated(7);
+  await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+  await app.handleContentMessage(
+    extracted("Mid-drive motors sit at the cranks. They weigh about three kilograms."),
+    FROM_PAGE_A,
+  );
+};
+
+const extractionJobs = async (database: Awaited<ReturnType<typeof openResearchDatabase>>) =>
+  (await database.getAll(JOB_STORE)).filter(({ type }) => type === "extractFacts");
+
+describe("fact extraction through the background", () => {
+  it("extracts a deep-read page's grounded facts while the user is away", async () => {
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await readPageDeeply(app, clock);
+
+    await vi.waitFor(async () =>
+      expect((await database.getAll(EXTRACTION_STORE))[0]).toMatchObject({
+        keptCount: 1,
+        droppedCount: 1,
+        finishedAt: expect.any(Number),
+      }),
+    );
+    expect(await database.count(FACT_STORE)).toBe(1);
+    expect((await extractionJobs(database))[0]?.status).toBe("done");
+  });
+
+  it("starts no extraction while the user is active, and other jobs still run", async () => {
+    const embedding = createEmbeddingStub();
+    const { app, database, clock } = await createExtractionApp({
+      loadEmbeddingSession: embedding.load,
+    });
+
+    await database.put(MODEL_STORE, EMBEDDING_MODEL as never);
+    await readPageDeeply(app, clock);
+
+    await vi.waitFor(async () => expect(await database.count(VECTOR_STORE)).toBe(1));
+    expect((await extractionJobs(database)).map(({ status }) => status)).toEqual(["queued"]);
+    expect(await database.count(FACT_STORE)).toBe(0);
+  });
+
+  it("starts extraction once the user steps away", async () => {
+    let state: "active" | "idle" = "active";
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve(state),
+    });
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await extractionJobs(database)).toHaveLength(1));
+
+    state = "idle";
+    await app.handleIdleStateChanged("idle");
+
+    await vi.waitFor(async () => expect(await database.count(FACT_STORE)).toBe(1));
+  });
+
+  it("extracts while the user is active once they ask for it", async () => {
+    const { app, database, clock } = await createExtractionApp();
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await extractionJobs(database)).toHaveLength(1));
+
+    expect(await app.handleMessage(buildRpcMessage("facts.extractNow", {}))).toMatchObject({
+      type: "facts.extractionStarted",
+      payload: { queued: 1 },
+    });
+    await vi.waitFor(async () => expect(await database.count(FACT_STORE)).toBe(1));
+  });
+
+  it("queues no extraction without an active generation model", async () => {
+    const { app, database, clock, ref } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+    const model = await database.get(MODEL_STORE, ref);
+
+    await database.put(MODEL_STORE, { ...model!, active: false });
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () =>
+      expect((await database.getAll(NODE_STORE))[0]?.snapshotId).toBeDefined(),
+    );
+    await app.reconcileSession();
+
+    expect(await extractionJobs(database)).toEqual([]);
   });
 });

@@ -8,6 +8,8 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  EXTRACTION_STORE,
+  FACT_STORE,
   HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
@@ -335,6 +337,32 @@ describe("applyDatabaseUpgrade", () => {
     expect(await after.count(HEARTBEAT_STORE)).toBe(0);
     expect(after.transaction(HEARTBEAT_STORE).store.keyPath).toEqual(["runId", "writtenAt"]);
     expect([...after.transaction(HEARTBEAT_STORE).store.indexNames]).toContain("runId");
+    expect(await after.get(SESSION_STORE, "session-1")).toBeDefined();
+
+    after.close();
+  });
+
+  it("adds empty, indexed fact and extraction stores to a version-13 profile", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 13);
+
+    await before.put(SESSION_STORE, { id: "session-1", status: "saved" } as never);
+    before.close();
+
+    const after = await openAt(name, 14);
+
+    expect(after.version).toBe(14);
+    expect(await after.count(FACT_STORE)).toBe(0);
+    expect(await after.count(EXTRACTION_STORE)).toBe(0);
+    expect([...after.transaction(FACT_STORE).store.indexNames].toSorted()).toEqual([
+      "nodeId",
+      "sessionId",
+    ]);
+    expect(after.transaction(EXTRACTION_STORE).store.keyPath).toBe("snapshotId");
+    expect([...after.transaction(EXTRACTION_STORE).store.indexNames].toSorted()).toEqual([
+      "nodeId",
+      "sessionId",
+    ]);
     expect(await after.get(SESSION_STORE, "session-1")).toBeDefined();
 
     after.close();

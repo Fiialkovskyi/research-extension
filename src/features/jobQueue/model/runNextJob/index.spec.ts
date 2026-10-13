@@ -55,6 +55,34 @@ describe("runNextJob", () => {
     });
   });
 
+  it("hands a deferred job back, due now, with its checkpoint and attempts", async () => {
+    const database = await openResearchDatabase();
+    const job = await enqueueJob(database, {
+      type: "extractFacts",
+      inputHashes: ["a"],
+      producerVersion: "1",
+    });
+
+    await database.put(JOB_STORE, { ...job, attempts: 1, checkpoint: { nextChunk: 3 } });
+    await runNextJob(database, { extractFacts: () => Promise.resolve("deferred" as const) });
+
+    expect(await database.get(JOB_STORE, job.id)).toMatchObject({
+      status: "queued",
+      attempts: 1,
+      checkpoint: { nextChunk: 3 },
+    });
+  });
+
+  it("claims only permitted jobs", async () => {
+    const database = await openResearchDatabase();
+
+    await enqueueJob(database, { type: "extractFacts", inputHashes: ["a"], producerVersion: "1" });
+
+    expect(
+      await runNextJob(database, {}, { isPermitted: ({ type }) => type !== "extractFacts" }),
+    ).toBe(false);
+  });
+
   it("fails a job of a type it has no runner for", async () => {
     const database = await openResearchDatabase();
     const job = await enqueueJob(database, {

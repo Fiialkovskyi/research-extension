@@ -21,6 +21,8 @@ export const recordedPageSchema = v.object({
     v.object({ byteLength: v.number(), truncated: v.boolean(), capturedAt: v.number() }),
   ),
   vectorCount: v.number(),
+  /** Facts extracted from the page and facts dropped as ungrounded; null before extraction starts. */
+  facts: v.nullable(v.object({ kept: v.number(), dropped: v.number(), isFinished: v.boolean() })),
 });
 
 /** A session and everything recorded for it, as the view shows it. */
@@ -29,6 +31,8 @@ export const recordedSessionSchema = v.object({
   title: v.string(),
   status: v.picklist(["active", "closed", "saved"]),
   pages: v.array(recordedPageSchema),
+  /** Whether a text-generation model is active, so facts can be extracted. */
+  canExtractFacts: v.boolean(),
 });
 
 export const recordedDataRequestSchemas = {

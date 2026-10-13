@@ -3,6 +3,8 @@ import type { IDBPDatabase } from "idb";
 import {
   CHUNK_STORE,
   EDGE_STORE,
+  EXTRACTION_STORE,
+  FACT_STORE,
   JOB_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
@@ -10,7 +12,7 @@ import {
   VECTOR_STORE,
 } from "@/shared/storage";
 
-/** Whether a job works on this snapshot, by the payload an embedding job carries. */
+/** Whether a job works on this snapshot, by the payload embedding and extraction jobs carry. */
 const isJobFor = (payload: unknown, snapshotId: string): boolean =>
   typeof payload === "object" &&
   payload !== null &&
@@ -20,7 +22,8 @@ const isJobFor = (payload: unknown, snapshotId: string): boolean =>
 /**
  * Deletes a page and everything derived from it, in one transaction
  * (REQ-STO-008): the node, every edge touching it, its snapshot, its chunks,
- * its vectors in every space and the jobs working on it. Pages reached from
+ * its vectors in every space, its facts and their extraction record, and the
+ * jobs working on it. Pages reached from
  * it keep their own records.
  *
  * @returns Whether the page existed.
@@ -30,7 +33,16 @@ export const deleteNode = async (
   nodeId: string,
 ): Promise<boolean> => {
   const transaction = database.transaction(
-    [NODE_STORE, EDGE_STORE, SNAPSHOT_STORE, CHUNK_STORE, VECTOR_STORE, JOB_STORE],
+    [
+      NODE_STORE,
+      EDGE_STORE,
+      SNAPSHOT_STORE,
+      CHUNK_STORE,
+      VECTOR_STORE,
+      FACT_STORE,
+      EXTRACTION_STORE,
+      JOB_STORE,
+    ],
     "readwrite",
   );
   const nodes = transaction.objectStore(NODE_STORE);
@@ -43,9 +55,13 @@ export const deleteNode = async (
 
   const edges = transaction.objectStore(EDGE_STORE);
   const vectors = transaction.objectStore(VECTOR_STORE);
-  const [sessionEdges, vectorKeys] = await Promise.all([
+  const facts = transaction.objectStore(FACT_STORE);
+  const extractions = transaction.objectStore(EXTRACTION_STORE);
+  const [sessionEdges, vectorKeys, factKeys, extractionKeys] = await Promise.all([
     edges.index("sessionId").getAll(node.sessionId),
     vectors.index("nodeId").getAllKeys(nodeId),
+    facts.index("nodeId").getAllKeys(nodeId),
+    extractions.index("nodeId").getAllKeys(nodeId),
   ]);
   const deletions: Promise<unknown>[] = [
     nodes.delete(nodeId),
@@ -53,6 +69,8 @@ export const deleteNode = async (
       .filter((edge) => edge.from === nodeId || edge.to === nodeId)
       .map((edge) => edges.delete(edge.id)),
     ...vectorKeys.map((key) => vectors.delete(key)),
+    ...factKeys.map((key) => facts.delete(key)),
+    ...extractionKeys.map((key) => extractions.delete(key)),
   ];
 
   if (node.snapshotId !== undefined) {

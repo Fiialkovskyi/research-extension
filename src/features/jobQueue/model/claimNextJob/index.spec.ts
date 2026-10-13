@@ -33,6 +33,22 @@ const job = (overrides: Partial<StoredJob> & { id: string }): StoredJob => ({
 });
 
 describe("claimNextJob", () => {
+  it("passes over a job that is not permitted, for the next one in priority", async () => {
+    await database.put(JOB_STORE, job({ id: "gated", type: "extractFacts", priority: 5 }));
+    await database.put(JOB_STORE, job({ id: "free", priority: -1 }));
+
+    const claimed = await claimNextJob(database, 100, ({ type }) => type !== "extractFacts");
+
+    expect(claimed?.id).toBe("free");
+    expect((await database.get(JOB_STORE, "gated"))?.status).toBe("queued");
+  });
+
+  it("returns undefined when only jobs that are not permitted are queued", async () => {
+    await database.put(JOB_STORE, job({ id: "gated", type: "extractFacts" }));
+
+    expect(await claimNextJob(database, 100, () => false)).toBeUndefined();
+  });
+
   it("returns undefined when nothing is queued", async () => {
     expect(await claimNextJob(database, 100)).toBeUndefined();
   });

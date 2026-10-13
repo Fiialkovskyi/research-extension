@@ -1,4 +1,5 @@
 import { diagnosticsRequestSchemas } from "@/features/diagnostics";
+import { factExtractionRequestSchemas } from "@/features/factExtraction";
 import { inferenceRequestSchemas } from "@/features/inference";
 import {
   benchmarkRequestSchemas,
@@ -17,6 +18,7 @@ import { tabGroupRequestSchemas } from "@/features/tabGroups";
 export const requestSchemas = {
   ...benchmarkRequestSchemas,
   ...diagnosticsRequestSchemas,
+  ...factExtractionRequestSchemas,
   ...generationBenchmarkRequestSchemas,
   ...inferenceRequestSchemas,
   ...modelInstallRequestSchemas,

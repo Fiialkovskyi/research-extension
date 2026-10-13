@@ -4,6 +4,8 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  EXTRACTION_STORE,
+  FACT_STORE,
   HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
@@ -144,6 +146,19 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     });
 
     heartbeats.createIndex("runId", "runId");
+  },
+  14: (database) => {
+    // Facts and their per-snapshot extraction records, both deleted with
+    // their page or session.
+    const facts = database.createObjectStore(FACT_STORE, { keyPath: "id" });
+
+    facts.createIndex("sessionId", "sessionId");
+    facts.createIndex("nodeId", "nodeId");
+
+    const extractions = database.createObjectStore(EXTRACTION_STORE, { keyPath: "snapshotId" });
+
+    extractions.createIndex("sessionId", "sessionId");
+    extractions.createIndex("nodeId", "nodeId");
   },
 };
 

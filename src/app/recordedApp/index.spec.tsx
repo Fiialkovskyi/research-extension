@@ -22,12 +22,14 @@ const page = {
   },
   snapshot: { byteLength: 100, truncated: false, capturedAt: 2 },
   vectorCount: 1,
+  facts: null as { kept: number; dropped: number; isFinished: boolean } | null,
 };
 
 /** A background holding one session with page A, until something is deleted. */
 const createClient = () => {
   let pages = [page];
   let hasSession = true;
+  let extractionReads = 0;
   const sent: string[] = [];
   const client: RecordedClient = {
     request: vi.fn((message: RpcMessage<string, unknown>) => {
@@ -35,13 +37,30 @@ const createClient = () => {
 
       switch (message.type) {
         case "recorded.read":
+          extractionReads += 1;
+
+          if (pages[0]?.facts?.isFinished === false && extractionReads > 2) {
+            pages = [{ ...page, facts: { kept: 3, dropped: 1, isFinished: true } }];
+          }
+
           return Promise.resolve(
             buildRpcMessage("recorded.session", {
               session: hasSession
-                ? { id: "session-1", title: "E-bike motors", status: "active", pages }
+                ? {
+                    id: "session-1",
+                    title: "E-bike motors",
+                    status: "active",
+                    pages,
+                    canExtractFacts: true,
+                  }
                 : null,
             }),
           );
+        case "facts.extractNow":
+          // Extraction starts, then finishes by the second read after it.
+          pages = [{ ...page, facts: { kept: 1, dropped: 0, isFinished: false } }];
+          extractionReads = 0;
+          return Promise.resolve(buildRpcMessage("facts.extractionStarted", { queued: 1 }));
         case "recorded.readText":
           return Promise.resolve(
             buildRpcMessage("recorded.text", { nodeId: "a", text: "Sits at the cranks." }),
@@ -74,6 +93,26 @@ describe("RecordedApp", () => {
     fireEvent.click(screen.getByTestId("recorded-show-text"));
 
     expect(await screen.findByTestId("recorded-text")).toHaveTextContent("Sits at the cranks.");
+  });
+
+  it("asks for facts, then reads again until extraction has finished", async () => {
+    const { client, sent } = createClient();
+
+    render(<RecordedApp client={client} refreshIntervalMs={10} />);
+    fireEvent.click(await screen.findByTestId("recorded-extract-facts"));
+
+    expect(await screen.findByText("Extracting facts…")).toBeInTheDocument();
+
+    expect(await screen.findByText(/3 kept, 1 dropped$/u)).toBeInTheDocument();
+    expect(screen.getByTestId("recorded-extract-facts")).toHaveTextContent("Extract facts now");
+    expect(screen.getByTestId("recorded-extract-facts")).toBeEnabled();
+
+    const reads = sent.filter((type) => type === "recorded.read").length;
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(sent).toContain("facts.extractNow");
+    expect(sent.filter((type) => type === "recorded.read")).toHaveLength(reads);
   });
 
   it("reads again after deleting a page", async () => {

@@ -1,4 +1,6 @@
 import type { RecordedPage as RecordedPageEntry, RecordedSession } from "../../types";
+import { Button } from "@/shared/ui";
+
 import { ConfirmDelete } from "../confirmDelete";
 
 export interface RecordedPageProps {
@@ -8,6 +10,10 @@ export interface RecordedPageProps {
   onShowText: (nodeId: string) => void;
   onDeleteNode: (nodeId: string) => void;
   onDeleteSession: (sessionId: string) => void;
+  /** Asks for the session's facts to be extracted now, while the user is active. */
+  onExtractFacts: () => void;
+  /** Extraction was asked for and is under way: pages not begun are waiting for the model. */
+  isExtracting?: boolean;
 }
 
 const formatDuration = (milliseconds: number): string => {
@@ -18,15 +24,26 @@ const formatDuration = (milliseconds: number): string => {
 
 const formatTime = (epochMs: number): string => new Date(epochMs).toLocaleString();
 
+/** Says how many facts a page gave, and how many were dropped as ungrounded. */
+const describeFacts = (facts: RecordedPageEntry["facts"], isExtracting: boolean): string => {
+  if (facts === null) {
+    return isExtracting ? "waiting for the model…" : "not extracted";
+  }
+
+  return `${facts.kept} kept, ${facts.dropped} dropped${facts.isFinished ? "" : ", extracting…"}`;
+};
+
 /** One recorded page: what it was, what was kept about it, and its controls. */
 function Entry({
   page,
   text,
+  isExtracting,
   onShowText,
   onDeleteNode,
 }: {
   page: RecordedPageEntry;
   text: string | null | undefined;
+  isExtracting: boolean;
   onShowText: (nodeId: string) => void;
   onDeleteNode: (nodeId: string) => void;
 }) {
@@ -63,13 +80,19 @@ function Entry({
         </dd>
         <dt>Vectors</dt>
         <dd data-testid="recorded-vectors">{page.vectorCount}</dd>
+        {snapshot !== null && (
+          <>
+            <dt>Facts</dt>
+            <dd data-testid="recorded-facts">{describeFacts(page.facts, isExtracting)}</dd>
+          </>
+        )}
       </dl>
       <div className="mt-2 flex flex-wrap gap-2">
         {snapshot !== null && text === undefined && (
           <button
             type="button"
             data-testid="recorded-show-text"
-            className="text-sm underline"
+            className="cursor-pointer text-sm underline"
             onClick={() => {
               onShowText(page.id);
             }}
@@ -100,7 +123,9 @@ function Entry({
 /**
  * Everything a session recorded, page by page, each with a delete control,
  * and a control deleting the whole session (REQ-SEC-008). A page's text is
- * shown only when asked for.
+ * shown only when asked for; its facts are counted, never shown. With a
+ * generation model active, extraction can be asked for now rather than when
+ * the user next steps away (REQ-MOD-008).
  */
 export function RecordedPage({
   session,
@@ -108,6 +133,8 @@ export function RecordedPage({
   onShowText,
   onDeleteNode,
   onDeleteSession,
+  onExtractFacts,
+  isExtracting = false,
 }: RecordedPageProps) {
   return (
     <section aria-labelledby="recorded-heading">
@@ -115,6 +142,15 @@ export function RecordedPage({
         <h1 id="recorded-heading" data-testid="recorded-title" className="text-lg font-semibold">
           What was recorded: {session.title}
         </h1>
+        {session.canExtractFacts && (
+          <Button
+            data-testid="recorded-extract-facts"
+            disabled={isExtracting}
+            onClick={onExtractFacts}
+          >
+            {isExtracting ? "Extracting facts…" : "Extract facts now"}
+          </Button>
+        )}
         <ConfirmDelete
           subject="this session"
           testId="recorded-delete-session"
@@ -132,6 +168,7 @@ export function RecordedPage({
               key={page.id}
               page={page}
               text={texts.get(page.id)}
+              isExtracting={isExtracting}
               onShowText={onShowText}
               onDeleteNode={onDeleteNode}
             />

@@ -72,6 +72,12 @@ export interface BackgroundDependencies {
    * the memory of an event page that may be unloaded.
    */
   readFocusedTab: () => Promise<number | undefined>;
+  /**
+   * Whether the user is active, idle or locked now, by the reading-time
+   * threshold. Text generation runs only while they are not active, unless
+   * asked for (REQ-MOD-008).
+   */
+  readIdleState: () => Promise<IdleState>;
   /** Whether the user granted access to the local Ollama server. */
   hasOllamaAccess: () => Promise<boolean>;
   /** What the background needs to stay loaded through long work, and to wake itself. */

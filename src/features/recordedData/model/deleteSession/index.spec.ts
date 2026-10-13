@@ -8,6 +8,8 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  EXTRACTION_STORE,
+  FACT_STORE,
   JOB_STORE,
   NODE_STORE,
   openResearchDatabase,
@@ -26,6 +28,8 @@ const STORES = [
   SNAPSHOT_STORE,
   CHUNK_STORE,
   VECTOR_STORE,
+  FACT_STORE,
+  EXTRACTION_STORE,
   JOB_STORE,
   CLUSTERING_STORE,
   SESSION_STORE,
@@ -57,6 +61,16 @@ const record = async (sessionId: string) => {
     part: 0,
     nodeId: `${sessionId}-n`,
     sessionId,
+  } as never);
+  await database.put(FACT_STORE, {
+    id: `${sessionId}-s:0:0`,
+    sessionId,
+    nodeId: `${sessionId}-n`,
+  } as never);
+  await database.put(EXTRACTION_STORE, {
+    snapshotId: `${sessionId}-s`,
+    sessionId,
+    nodeId: `${sessionId}-n`,
   } as never);
   await database.put(JOB_STORE, {
     id: `${sessionId}-j`,
@@ -95,6 +109,7 @@ describe("deleteSession", () => {
     expect(await database.get(SESSION_STORE, "session-2")).toBeDefined();
     expect(await database.count(NODE_STORE)).toBe(1);
     expect(await database.count(VECTOR_STORE)).toBe(1);
+    expect(await database.count(FACT_STORE)).toBe(1);
     expect(await database.count(SPACE_STORE)).toBe(1);
   });
 

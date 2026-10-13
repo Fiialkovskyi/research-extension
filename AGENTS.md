@@ -181,17 +181,18 @@ artifacts for in-flight work live in `openspec/changes/<change>/`.
 
 Run from the repository root:
 
-| Command                           | What it does                                                                                                           |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                     | `wxt -b firefox` — launches Firefox with the extension loaded and HMR (needs `web-ext`, installed as a dev dependency) |
-| `npm run build:firefox`           | Production build into `.output/firefox-mv3/`                                                                           |
-| `npm run zip:firefox`             | Packages the build (and a sources zip) into `.output/`                                                                 |
-| `npm run typecheck`               | `tsc --noEmit` over `src/`, then over `e2e/` (two programs)                                                            |
-| `npm run lint` / `lint:fix`       | oxlint                                                                                                                 |
-| `npm run format` / `format:check` | oxfmt                                                                                                                  |
-| `npm run test` / `test:watch`     | Vitest unit run / watch                                                                                                |
-| `npm run test:e2e`                | Packages for Firefox, then drives it with WebdriverIO                                                                  |
-| `npm run verify`                  | typecheck → lint → format:check → test → test:e2e                                                                      |
+| Command                           | What it does                                                                                                     |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                     | `wxt -b firefox` — launches Firefox with the extension loaded and HMR, in the profile kept in `.firefoxProfile/` |
+| `npm run dev:fresh`               | The same in a new throwaway profile, as a first-time user would see it                                           |
+| `npm run build:firefox`           | Production build into `.output/firefox-mv3/`                                                                     |
+| `npm run zip:firefox`             | Packages the build (and a sources zip) into `.output/`                                                           |
+| `npm run typecheck`               | `tsc --noEmit` over `src/`, then over `e2e/` (two programs)                                                      |
+| `npm run lint` / `lint:fix`       | oxlint                                                                                                           |
+| `npm run format` / `format:check` | oxfmt                                                                                                            |
+| `npm run test` / `test:watch`     | Vitest unit run / watch                                                                                          |
+| `npm run test:e2e`                | Packages for Firefox, then drives it with WebdriverIO                                                            |
+| `npm run verify`                  | typecheck → lint → format:check → test → test:e2e                                                                |
 
 Run `npm run verify` before submitting changes.
 

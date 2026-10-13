@@ -8,7 +8,7 @@ export function Button(props: ButtonProps) {
     <button
       {...props}
       type="button"
-      className="rounded border border-slate-300 px-3 py-1 text-sm disabled:opacity-50 dark:border-slate-600"
+      className="cursor-pointer rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-100 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent dark:border-slate-600 dark:hover:bg-slate-800"
     />
   );
 }

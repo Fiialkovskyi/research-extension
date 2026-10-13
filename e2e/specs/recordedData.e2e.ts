@@ -148,6 +148,10 @@ describe("what was recorded", () => {
     });
     expect(recorded.entries[0]?.scroll).toMatch(/^(9\d|100)%$/);
     expect(recorded.entries[0]?.snapshot).toContain("KB");
+    // No generation model is active in the suite: nothing is extracted, and
+    // extraction is not offered.
+    expect(recorded.entries[0]?.facts).toBe("not extracted");
+    expect(recorded.canExtractFacts).toBe(false);
 
     await clickRecordedButton("recorded-show-text", articleId);
 

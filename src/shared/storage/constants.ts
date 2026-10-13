@@ -13,7 +13,7 @@ export const DATABASE_NAME = "research-graph";
  * rather than editing an existing one, so a profile that has already migrated
  * is never asked to migrate differently.
  */
-export const DATABASE_VERSION = 13;
+export const DATABASE_VERSION = 14;
 
 export const MODEL_STORE = "models";
 export const MODEL_FILE_STORE = "modelFiles";
@@ -30,6 +30,10 @@ export const CHUNK_STORE = "chunks";
 export const VECTOR_STORE = "vectors";
 /** Diagnostics only: the background-lifetime probe's heartbeats. Content-free. */
 export const HEARTBEAT_STORE = "heartbeats";
+/** Facts extracted from deep-read pages; their text is encrypted. */
+export const FACT_STORE = "facts";
+/** One record per extracted snapshot: its progress and counts. */
+export const EXTRACTION_STORE = "extractions";
 
 /**
  * How many runs the log keeps. Runs are written on every embedding job and

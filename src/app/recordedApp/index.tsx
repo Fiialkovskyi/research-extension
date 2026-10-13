@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { factExtractionResponseSchemas } from "@/features/factExtraction";
 import { type RecordedSession, recordedDataResponseSchemas } from "@/features/recordedData";
 import { RecordedPage } from "@/features/recordedData/ui/recordedPage";
 import { getErrorMessage } from "@/shared/getErrorMessage";
@@ -17,9 +18,22 @@ export interface RecordedClient {
 
 export interface RecordedAppProps {
   client: RecordedClient;
+  /** How often to read again while facts are being extracted. */
+  refreshIntervalMs?: number;
 }
 
-const responseSchemas = { ...recordedDataResponseSchemas, ...rpcResponseSchemas } as const;
+const responseSchemas = {
+  ...recordedDataResponseSchemas,
+  ...factExtractionResponseSchemas,
+  ...rpcResponseSchemas,
+} as const;
+
+/** Whether some page's facts are still being extracted, or were asked for and not begun. */
+const isExtracting = (session: RecordedSession, isRequested: boolean): boolean =>
+  session.pages.some(
+    ({ snapshot, facts }) =>
+      snapshot !== null && (facts === null ? isRequested : !facts.isFinished),
+  );
 
 /** What the page shows: nothing yet, nothing to show, or a session. */
 type RecordedState =
@@ -45,8 +59,9 @@ const readRecordedState = (answer: unknown): RecordedState | { failure: string }
 };
 
 /** Composition root of the "What was recorded" page. */
-export function RecordedApp({ client }: RecordedAppProps) {
+export function RecordedApp({ client, refreshIntervalMs = 3_000 }: RecordedAppProps) {
   const [state, setState] = useState<RecordedState>({ status: "loading" });
+  const [isExtractionRequested, setIsExtractionRequested] = useState(false);
   const [texts, setTexts] = useState<ReadonlyMap<string, string | null>>(new Map());
   const [failure, setFailure] = useState<string | undefined>();
 
@@ -133,6 +148,31 @@ export function RecordedApp({ client }: RecordedAppProps) {
     [ask, load],
   );
 
+  const extractFacts = useCallback(async () => {
+    if ((await ask(buildRpcMessage("facts.extractNow", {}))) !== undefined) {
+      setIsExtractionRequested(true);
+      await load();
+    }
+  }, [ask, load]);
+
+  const isRefreshing =
+    state.status === "ready" && isExtracting(state.session, isExtractionRequested);
+
+  // Counts change as pages are extracted; read again until none is under way.
+  useEffect(() => {
+    if (!isRefreshing) {
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      void load();
+    }, refreshIntervalMs);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [isRefreshing, load, refreshIntervalMs]);
+
   const deleteSession = useCallback(
     async (sessionId: string) => {
       await ask(buildRpcMessage("session.delete", { sessionId }));
@@ -166,6 +206,8 @@ export function RecordedApp({ client }: RecordedAppProps) {
           onShowText={(nodeId) => void showText(nodeId)}
           onDeleteNode={(nodeId) => void deleteNode(nodeId)}
           onDeleteSession={(sessionId) => void deleteSession(sessionId)}
+          onExtractFacts={() => void extractFacts()}
+          isExtracting={isRefreshing}
         />
       )}
     </main>

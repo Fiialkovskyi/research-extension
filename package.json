@@ -7,7 +7,8 @@
   "type": "module",
   "scripts": {
     "postinstall": "wxt prepare && npm run sync:ort",
-    "dev": "npm run sync:ort && wxt -b firefox",
+    "dev": "npm run sync:ort && node -e \"require('node:fs').mkdirSync('.firefoxProfile', { recursive: true })\" && wxt -b firefox",
+    "dev:fresh": "npm run sync:ort && DEV_FRESH_PROFILE=true wxt -b firefox",
     "build:firefox": "npm run sync:ort && wxt build -b firefox",
     "zip:firefox": "npm run sync:ort && wxt zip -b firefox",
     "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json",

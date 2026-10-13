@@ -164,6 +164,28 @@ describe("OllamaCard", () => {
     expect(screen.getByTestId("ollama-step-allow").textContent).toContain("open it again");
   });
 
+  it("says it is downloading only when Ollama does not have the model yet", () => {
+    const { client, push } = createStubClient();
+
+    renderCard(client);
+    pushState(push, "running", [{ ...MODEL, isPulled: false }]);
+    fireEvent.click(screen.getByTestId("ollama-turn-on"));
+
+    expect(screen.getByTestId("ollama-enable-progress").textContent).toBe("Downloading the model…");
+  });
+
+  it("goes straight to the check for a model Ollama already has", () => {
+    const { client, push } = createStubClient();
+
+    renderCard(client);
+    pushState(push, "running", [{ ...MODEL, isPulled: true }]);
+    fireEvent.click(screen.getByTestId("ollama-turn-on"));
+
+    expect(screen.getByTestId("ollama-enable-progress").textContent).toBe(
+      "Checking the model's quality…",
+    );
+  });
+
   it("turns local AI on in one action, showing one progress", () => {
     const { client, sent, push } = createStubClient();
 

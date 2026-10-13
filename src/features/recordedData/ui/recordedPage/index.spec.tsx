@@ -27,14 +27,21 @@ const SESSION: RecordedSession = {
       },
       snapshot: { byteLength: 12_288, truncated: false, capturedAt: 2 },
       vectorCount: 4,
+      facts: { kept: 7, dropped: 2, isFinished: true },
     },
   ],
+  canExtractFacts: false,
 };
 
-const renderPage = (texts = new Map<string, string | null>()) => {
-  const handlers = { onShowText: vi.fn(), onDeleteNode: vi.fn(), onDeleteSession: vi.fn() };
+const renderPage = (texts = new Map<string, string | null>(), session = SESSION) => {
+  const handlers = {
+    onShowText: vi.fn(),
+    onDeleteNode: vi.fn(),
+    onDeleteSession: vi.fn(),
+    onExtractFacts: vi.fn(),
+  };
 
-  render(<RecordedPage session={SESSION} texts={texts} {...handlers} />);
+  render(<RecordedPage session={session} texts={texts} {...handlers} />);
 
   return handlers;
 };
@@ -51,6 +58,59 @@ describe("RecordedPage", () => {
     expect(within(entry).getByTestId("recorded-copies")).toHaveTextContent("1");
     expect(within(entry).getByTestId("recorded-snapshot")).toHaveTextContent("12.0 KB");
     expect(within(entry).getByTestId("recorded-vectors")).toHaveTextContent("4");
+    expect(within(entry).getByTestId("recorded-facts")).toHaveTextContent("7 kept, 2 dropped");
+  });
+
+  it("says a page is not extracted yet, or still extracting", () => {
+    const [page] = SESSION.pages;
+
+    renderPage(undefined, {
+      ...SESSION,
+      pages: [
+        { ...page!, id: "x", facts: null },
+        { ...page!, id: "y", facts: { kept: 1, dropped: 0, isFinished: false } },
+      ],
+    });
+
+    const [notYet, under] = screen.getAllByTestId("recorded-facts");
+
+    expect(notYet).toHaveTextContent("not extracted");
+    expect(under).toHaveTextContent("1 kept, 0 dropped, extracting…");
+  });
+
+  it("offers to extract facts now only with a generation model active", () => {
+    renderPage();
+    expect(screen.queryByTestId("recorded-extract-facts")).toBeNull();
+  });
+
+  it("shows extraction under way: the button waits, and pages not begun say so", () => {
+    const [page] = SESSION.pages;
+
+    render(
+      <RecordedPage
+        session={{ ...SESSION, canExtractFacts: true, pages: [{ ...page!, facts: null }] }}
+        texts={new Map()}
+        onShowText={vi.fn()}
+        onDeleteNode={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onExtractFacts={vi.fn()}
+        isExtracting
+      />,
+    );
+
+    const button = screen.getByTestId("recorded-extract-facts");
+
+    expect(button).toHaveTextContent("Extracting facts…");
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId("recorded-facts")).toHaveTextContent("waiting for the model…");
+  });
+
+  it("asks for extraction when the user chooses it", () => {
+    const { onExtractFacts } = renderPage(undefined, { ...SESSION, canExtractFacts: true });
+
+    fireEvent.click(screen.getByTestId("recorded-extract-facts"));
+
+    expect(onExtractFacts).toHaveBeenCalledTimes(1);
   });
 
   it("asks for a page's text only when the user does, and shows it once read", () => {

@@ -7,6 +7,7 @@ describe("parseRecordedSnapshot", () => {
     const snapshot = {
       empty: false,
       title: "What was recorded: Motors",
+      canExtractFacts: true,
       entries: [
         {
           nodeId: "a",
@@ -15,6 +16,7 @@ describe("parseRecordedSnapshot", () => {
           copies: "1",
           snapshot: "12.0 KB",
           vectors: "0",
+          facts: "7 kept, 2 dropped",
           text: null,
         },
       ],

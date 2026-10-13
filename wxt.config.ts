@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "wxt";
 
@@ -87,6 +89,26 @@ export default defineConfig({
       origin: "http://127.0.0.1:3100",
     },
   },
+  // `npm run dev` keeps one Firefox profile in the repository rather than a
+  // fresh one per run, so what the extension stored — Ollama set up and
+  // checked, sessions, page access — is there the next time. `npm run dev`
+  // creates the directory; deleting it starts over. `npm run dev:fresh` sets
+  // `DEV_FRESH_PROFILE` and gets a new throwaway profile instead.
+  webExt:
+    process.env["DEV_FRESH_PROFILE"] === "true"
+      ? {}
+      : {
+          firefoxProfile: resolve(import.meta.dirname, ".firefoxProfile"),
+          keepProfileChanges: true,
+          firefoxPref: {
+            // The extension is installed temporarily and removed when Firefox
+            // quits; without these its storage and its moz-extension://
+            // address would go with it, and Ollama's allowed origin would no
+            // longer match.
+            "extensions.webextensions.keepStorageOnUninstall": true,
+            "extensions.webextensions.keepUuidOnUninstall": true,
+          },
+        },
   vite: () => ({
     plugins: [tailwindcss()],
     resolve: {

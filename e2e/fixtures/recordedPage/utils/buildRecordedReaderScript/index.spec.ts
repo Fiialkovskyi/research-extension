@@ -15,7 +15,12 @@ describe("buildRecordedReaderScript", () => {
     document.body.innerHTML =
       '<p data-testid="recorded-empty">No research session is recorded.</p>';
 
-    expect(read()).toMatchObject({ empty: true, title: null, entries: [] });
+    expect(read()).toMatchObject({
+      empty: true,
+      title: null,
+      canExtractFacts: false,
+      entries: [],
+    });
   });
 
   it("reports each entry's values and any text shown", () => {
@@ -27,12 +32,14 @@ describe("buildRecordedReaderScript", () => {
         <dd data-testid="recorded-copies">1</dd>
         <dd data-testid="recorded-snapshot">12.0 KB</dd>
         <dd data-testid="recorded-vectors">0</dd>
+        <dd data-testid="recorded-facts">not extracted</dd>
         <pre data-testid="recorded-text">Sits at the cranks.</pre>
       </li>`;
 
     expect(read()).toEqual({
       empty: false,
       title: "What was recorded: Motors",
+      canExtractFacts: false,
       entries: [
         {
           nodeId: "a",
@@ -41,6 +48,7 @@ describe("buildRecordedReaderScript", () => {
           copies: "1",
           snapshot: "12.0 KB",
           vectors: "0",
+          facts: "not extracted",
           text: "Sits at the cranks.",
         },
       ],

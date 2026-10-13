@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "entity_type": { "type": "string" }
+        },
+        "required": ["name", "entity_type"]
+      }
+    },
+    "facts": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "properties": {
+          "subject": { "type": "string" },
+          "attribute": { "type": "string" },
+          "value": { "type": "string" },
+          "unit": { "type": "string" },
+          "quote": { "type": "string" }
+        },
+        "required": ["subject", "attribute", "value", "quote"]
+      }
+    }
+  },
+  "required": ["entities", "facts"]
+}

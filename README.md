@@ -20,8 +20,11 @@ npm install          # also runs `wxt prepare` to generate .wxt/ types
 npm run dev          # builds, then opens Firefox with the extension loaded (HMR on)
 ```
 
-`npm run dev` opens a fresh Firefox profile with the extension already installed, so there is
-nothing to load by hand. The dev server is pinned to `127.0.0.1:3100` with `strictPort`, not WXT's
+`npm run dev` opens Firefox with the extension already installed, so there is nothing to load by
+hand. It keeps its Firefox profile in `.firefoxProfile/` (git-ignored) between runs, together with
+what the extension stored there: Ollama set up and checked, sessions, page access. Delete that
+directory to start over, or run `npm run dev:fresh` for a new throwaway profile that keeps
+nothing, as a first-time user would see it. The dev server is pinned to `127.0.0.1:3100` with `strictPort`, not WXT's
 default port 3000: in dev mode the popup fetches its modules over HTTP, and if another project's
 server already holds port 3000 on a wildcard address, WXT quietly falls back to `[::1]` while
 Firefox resolves `localhost` to `127.0.0.1` and loads the _other_ server's response — the popup then

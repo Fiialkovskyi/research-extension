@@ -1,7 +1,9 @@
 import type { IDBPDatabase } from "idb";
 
+import { getActiveModel } from "@/features/modelRegistry";
 import { getLiveSession } from "@/features/researchSession";
 import {
+  EXTRACTION_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
   SNAPSHOT_STORE,
@@ -13,8 +15,9 @@ import type { RecordedSession } from "../../types";
 /**
  * Everything the live session — active or closed — recorded, page by page:
  * what the page was, the signals kept about it, whether its text was captured
- * and how many vectors it has (REQ-SEC-008). The text itself is not included;
- * it is read on request.
+ * how many vectors it has, and how many facts were kept from it and dropped
+ * (REQ-SEC-008). The text itself is not included, nor are the facts' text; the
+ * text is read on request.
  *
  * @returns The session, or `undefined` when none is live.
  */
@@ -32,9 +35,10 @@ export const readRecordedSession = async (
   );
   const pages = await Promise.all(
     nodes.map(async (node) => {
-      const [snapshot, vectorCount] = await Promise.all([
+      const [snapshot, vectorCount, extraction] = await Promise.all([
         node.snapshotId === undefined ? undefined : database.get(SNAPSHOT_STORE, node.snapshotId),
         database.countFromIndex(VECTOR_STORE, "nodeId", node.id),
+        node.snapshotId === undefined ? undefined : database.get(EXTRACTION_STORE, node.snapshotId),
       ]);
 
       return {
@@ -55,9 +59,23 @@ export const readRecordedSession = async (
                 capturedAt: snapshot.capturedAt,
               },
         vectorCount,
+        facts:
+          extraction === undefined
+            ? null
+            : {
+                kept: extraction.keptCount,
+                dropped: extraction.droppedCount,
+                isFinished: extraction.finishedAt !== undefined,
+              },
       };
     }),
   );
 
-  return { id: session.id, title: session.title, status: session.status, pages };
+  return {
+    id: session.id,
+    title: session.title,
+    status: session.status,
+    pages,
+    canExtractFacts: (await getActiveModel(database, "text-generation")) !== undefined,
+  };
 };

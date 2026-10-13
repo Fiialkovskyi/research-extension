@@ -49,6 +49,12 @@ export interface GenerateRequest {
    * is asked to; the answer is validated by the caller either way.
    */
   responseSchema?: Record<string, unknown>;
+  /**
+   * How many tokens of context the run needs: prompt and answer together. A
+   * runtime whose context is configured asks for this much; one whose context
+   * is fixed ignores it.
+   */
+  contextTokens?: number;
   /** Cancels the run; the stream ends and the runtime is released. */
   signal?: AbortSignal;
 }

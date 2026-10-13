@@ -9,6 +9,9 @@ dist/
 # ONNX Runtime binaries, copied out of node_modules by scripts/syncOnnxRuntime.ts
 public/ort/
 
+# the Firefox profile `npm run dev` keeps between runs
+.firefoxProfile/
+
 # test & tooling artifacts
 coverage/
 logs/
