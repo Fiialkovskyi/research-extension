@@ -180,7 +180,7 @@ The extension SHALL declare an options surface, reachable through the browser's 
 
 ### Requirement: Package bounds its outbound connections by policy
 
-The package SHALL declare a content security policy for its own documents that permits WebAssembly compilation and allows outbound connections only to the extension itself and to the model-host origins the package enumerates. A connection to any other origin SHALL be blocked.
+The package SHALL declare a content security policy for its own documents that permits WebAssembly compilation and allows outbound connections only to the extension itself, to the model-host origins the package enumerates, and to the loopback origin of the local inference server (`http://127.0.0.1:11434`). A connection to any other origin SHALL be blocked. The local inference server SHALL be reached only after the user grants its optional host permission from the options surface.
 
 #### Scenario: Package declares the policy
 
@@ -192,6 +192,13 @@ The package SHALL declare a content security policy for its own documents that p
 
 - **WHEN** the extension connects to one of the enumerated model-host origins
 - **THEN** the connection is permitted
+
+#### Scenario: The local inference server is reachable only on loopback, once granted
+
+- **GIVEN** the user granted access to the local inference server from the options surface
+- **WHEN** the extension connects to `http://127.0.0.1:11434`
+- **THEN** the connection is permitted
+- **AND** no origin other than that loopback address is added for it
 
 #### Scenario: An undeclared origin is blocked
 
