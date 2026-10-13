@@ -1,4 +1,5 @@
 import { diagnosticsRequestSchemas } from "@/features/diagnostics";
+import { entityResolutionRequestSchemas } from "@/features/entityResolution";
 import { factExtractionRequestSchemas } from "@/features/factExtraction";
 import { inferenceRequestSchemas } from "@/features/inference";
 import {
@@ -18,6 +19,7 @@ import { tabGroupRequestSchemas } from "@/features/tabGroups";
 export const requestSchemas = {
   ...benchmarkRequestSchemas,
   ...diagnosticsRequestSchemas,
+  ...entityResolutionRequestSchemas,
   ...factExtractionRequestSchemas,
   ...generationBenchmarkRequestSchemas,
   ...inferenceRequestSchemas,

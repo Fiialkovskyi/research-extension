@@ -479,7 +479,7 @@ Synthesis is fact-first. The LLM extracts grounded facts from deep-read pages, a
 3. **Embed:** document-role embeddings into the active space. Steps 2 and 3 run as an idempotent `embedSnapshot` job per snapshot and space, one at a time in the background, checkpointed per batch of 8. Chunks are stored as character ranges of the encrypted snapshot, never as text. An oversize chunk is split at word boundaries by an estimate of 1.4 tokens per word (OpenSpec change `add-snapshot-embeddings`).
 4. **Extract facts:** the LLM receives one chunk per request and returns JSON matching `FactExtraction@1`, at most 12 facts per chunk (OpenSpec change `add-fact-extraction`). One chunk keeps a request inside Ollama's default 4,096-token context, bounds the answer, grounds each quote against exactly one chunk, and lets an `extractFacts` job checkpoint after every chunk. The job is queued only while a text-generation model is active, and takes a chunk only while the user is idle or locked, or after they chose "Extract facts now" (REQ-MOD-008). Fact text is encrypted at rest with the data key.
 5. **Ground:** each fact's `quote` must appear in the source chunk (exact or whitespace-normalized match). Ungrounded facts are dropped and counted in the run log.
-6. **Resolve entities:** merge entity mentions by normalized name, then by embedding similarity of at least 0.85 in the active space with the same `entity_type`. Merges are reversible by the user.
+6. **Resolve entities:** merge entity mentions by normalized name, then by embedding similarity of at least 0.85 in the active space with the same `entity_type`. Merges are reversible by the user (OpenSpec change `add-entity-resolution`). A `resolveEntities` job runs per page once its extraction finishes. A match by meaning creates the mention's own entity, recorded as merged into the match, so "Separate" on "What was recorded" undoes it without rewriting facts. Only a new mention's entity is ever merged, so a separated one is never merged again. Entity names are encrypted at rest. Values are read into base units by `unitNormalizer@1` when facts are read: kg, mm, km, Wh (mAh kept), W, N·m, s and GB; percentages and currency codes are kept; a decimal comma is read, and a lone comma before exactly three digits groups thousands.
 7. **Synthesize:** cluster summary, comparison table and gap list (below).
 
 **Fact schema**
@@ -699,7 +699,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 **M4: Synthesis**
 
 - [x] Versioned prompts and schemas; fact extraction with grounding. (SYN-001, SYN-002, SYN-010, SYN-011) The user's "include" mark for pages that are not deep read is still open.
-- [ ] Entity resolution and unit normalization. (SYN pipeline step 6)
+- [x] Entity resolution and unit normalization. (SYN pipeline step 6)
 - [ ] Cluster summaries with citations and staleness. (SYN-003, SYN-004, LIN-006)
 - [ ] Generic comparison table with conflicts and CSV export. (SYN-005 to SYN-007)
 - [ ] Gaps and open questions with "search this". (SYN-008, SYN-009)

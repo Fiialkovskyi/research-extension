@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import { MAXIMUM_FACTS_PER_CHUNK } from "./constants";
+import { MAXIMUM_FACTS_PER_CHUNK, UNKNOWN_ENTITY_TYPE } from "./constants";
 
 /**
  * A `factExtraction@1` answer, as it must be before anything is stored.
@@ -40,9 +40,13 @@ export const extractFactsCheckpointSchema = v.object({
   nextChunk: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 
-/** A fact's text, as it is encrypted into the store. */
+/**
+ * A fact's text, as it is encrypted into the store. Facts stored before the
+ * subject's type was kept have none, and read as `unknown`.
+ */
 export const sealedFactSchema = v.object({
   subject: v.string(),
+  entityType: v.optional(v.string(), UNKNOWN_ENTITY_TYPE),
   attribute: v.string(),
   value: v.string(),
   unit: v.optional(v.string()),

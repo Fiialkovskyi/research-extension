@@ -1,7 +1,7 @@
 /**
  * Builds the script, evaluated in the "What was recorded" page, that reports
  * what it shows: the empty state, the session's title, whether it offers to
- * extract facts, and each entry with the values it displays and any page text
+ * extract facts, whether it says no entities were found, and each entry with the values it displays and any page text
  * shown.
  */
 export const buildRecordedReaderScript = (): string => `
@@ -10,6 +10,7 @@ export const buildRecordedReaderScript = (): string => `
     empty: !!document.querySelector('[data-testid="recorded-empty"]'),
     title: read(document, "recorded-title"),
     canExtractFacts: !!document.querySelector('[data-testid="recorded-extract-facts"]'),
+    entitiesEmpty: !!document.querySelector('[data-testid="recorded-entities-empty"]'),
     entries: Array.from(document.querySelectorAll('[data-testid="recorded-entry"]'), (entry) => ({
       nodeId: entry.dataset.nodeId,
       heading: entry.querySelector("h2")?.textContent ?? "",

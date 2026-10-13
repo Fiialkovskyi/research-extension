@@ -8,6 +8,7 @@ import { recordSnapshot } from "@/features/pageSnapshots";
 import {
   CHUNK_STORE,
   EDGE_STORE,
+  ENTITY_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
   JOB_STORE,
@@ -68,6 +69,7 @@ beforeEach(async () => {
         VECTOR_STORE,
         FACT_STORE,
         EXTRACTION_STORE,
+        ENTITY_STORE,
         JOB_STORE,
         KEY_STORE,
       ] as const
@@ -165,6 +167,15 @@ beforeEach(async () => {
   ]);
 });
 
+/** An entity of session 1, merged into another when given. */
+const entity = (id: string, mergedInto?: string) =>
+  ({
+    id,
+    sessionId: "session-1",
+    isSeparated: false,
+    ...(mergedInto ? { mergedInto } : {}),
+  }) as never;
+
 describe("deleteNode", () => {
   it("deletes the page and everything derived from it", async () => {
     expect(await deleteNode(database, "a")).toBe(true);
@@ -177,6 +188,44 @@ describe("deleteNode", () => {
     expect((await database.getAll(JOB_STORE)).map(({ id }) => id)).toEqual(["job-b"]);
     expect((await database.getAll(FACT_STORE)).map(({ nodeId }) => nodeId)).toEqual(["b"]);
     expect(await database.count(EXTRACTION_STORE)).toBe(0);
+  });
+
+  it("removes the entities only page A held, and frees those merged into them", async () => {
+    await database.put(ENTITY_STORE, entity("only-a"));
+    await database.put(ENTITY_STORE, entity("shared"));
+    await database.put(ENTITY_STORE, entity("child-of-a", "only-a"));
+    await database.put(FACT_STORE, {
+      id: "a-snap:1:0",
+      nodeId: "a",
+      sessionId: "session-1",
+      entityId: "only-a",
+    } as never);
+    await database.put(FACT_STORE, {
+      id: "a-snap:1:1",
+      nodeId: "a",
+      sessionId: "session-1",
+      entityId: "shared",
+    } as never);
+    await database.put(FACT_STORE, {
+      id: "b-snap:0:5",
+      nodeId: "b",
+      sessionId: "session-1",
+      entityId: "shared",
+    } as never);
+    await database.put(FACT_STORE, {
+      id: "b-snap:0:6",
+      nodeId: "b",
+      sessionId: "session-1",
+      entityId: "child-of-a",
+    } as never);
+
+    await deleteNode(database, "a");
+
+    expect((await database.getAll(ENTITY_STORE)).map(({ id }) => id).toSorted()).toEqual([
+      "child-of-a",
+      "shared",
+    ]);
+    expect(await database.get(ENTITY_STORE, "child-of-a")).not.toHaveProperty("mergedInto");
   });
 
   it("keeps the pages reached from it", async () => {

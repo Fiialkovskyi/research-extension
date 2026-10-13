@@ -3,6 +3,7 @@ import type { IDBPDatabase } from "idb";
 import {
   CHUNK_STORE,
   EDGE_STORE,
+  ENTITY_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
   JOB_STORE,
@@ -22,8 +23,8 @@ const isJobFor = (payload: unknown, snapshotId: string): boolean =>
 /**
  * Deletes a page and everything derived from it, in one transaction
  * (REQ-STO-008): the node, every edge touching it, its snapshot, its chunks,
- * its vectors in every space, its facts and their extraction record, and the
- * jobs working on it. Pages reached from
+ * its vectors in every space, its facts and their extraction record, the
+ * entities left with no facts, and the jobs working on it. Pages reached from
  * it keep their own records.
  *
  * @returns Whether the page existed.
@@ -41,6 +42,7 @@ export const deleteNode = async (
       VECTOR_STORE,
       FACT_STORE,
       EXTRACTION_STORE,
+      ENTITY_STORE,
       JOB_STORE,
     ],
     "readwrite",
@@ -57,10 +59,10 @@ export const deleteNode = async (
   const vectors = transaction.objectStore(VECTOR_STORE);
   const facts = transaction.objectStore(FACT_STORE);
   const extractions = transaction.objectStore(EXTRACTION_STORE);
-  const [sessionEdges, vectorKeys, factKeys, extractionKeys] = await Promise.all([
+  const [sessionEdges, vectorKeys, pageFacts, extractionKeys] = await Promise.all([
     edges.index("sessionId").getAll(node.sessionId),
     vectors.index("nodeId").getAllKeys(nodeId),
-    facts.index("nodeId").getAllKeys(nodeId),
+    facts.index("nodeId").getAll(nodeId),
     extractions.index("nodeId").getAllKeys(nodeId),
   ]);
   const deletions: Promise<unknown>[] = [
@@ -69,7 +71,7 @@ export const deleteNode = async (
       .filter((edge) => edge.from === nodeId || edge.to === nodeId)
       .map((edge) => edges.delete(edge.id)),
     ...vectorKeys.map((key) => vectors.delete(key)),
-    ...factKeys.map((key) => facts.delete(key)),
+    ...pageFacts.map(({ id }) => facts.delete(id)),
     ...extractionKeys.map((key) => extractions.delete(key)),
   ];
 
@@ -91,7 +93,30 @@ export const deleteNode = async (
     );
   }
 
-  await Promise.all([...deletions, transaction.done]);
+  await Promise.all(deletions);
+
+  // Entities the page's facts belonged to and no other page's do are gone
+  // too; one merged into a removed entity stands on its own again.
+  const entities = transaction.objectStore(ENTITY_STORE);
+  const touched = [...new Set(pageFacts.flatMap(({ entityId }) => entityId ?? []))];
+  const emptied = new Set(
+    (
+      await Promise.all(
+        touched.map(async (entityId) =>
+          (await facts.index("entityId").count(entityId)) === 0 ? entityId : undefined,
+        ),
+      )
+    ).flatMap((entityId) => entityId ?? []),
+  );
+  const orphans = (await entities.index("sessionId").getAll(node.sessionId)).filter(
+    ({ id, mergedInto }) => !emptied.has(id) && mergedInto !== undefined && emptied.has(mergedInto),
+  );
+
+  await Promise.all([
+    ...[...emptied].map((entityId) => entities.delete(entityId)),
+    ...orphans.map(({ mergedInto: _removed, ...entity }) => entities.put(entity)),
+    transaction.done,
+  ]);
 
   return true;
 };

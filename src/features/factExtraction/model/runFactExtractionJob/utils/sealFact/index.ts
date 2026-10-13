@@ -21,12 +21,15 @@ export interface FactPlace {
 export const sealFact = async (
   dataKey: DataKey,
   fact: ExtractedFact,
+  /** The subject's type, from the answer's entities. */
+  entityType: string,
   place: FactPlace,
   provenance: StoredFactProvenance,
 ): Promise<StoredFact> => {
   const { subject, attribute, value, unit, quote } = fact;
   const text = JSON.stringify({
     subject,
+    entityType,
     attribute,
     value,
     ...(unit === undefined ? {} : { unit }),

@@ -8,6 +8,7 @@ describe("parseRecordedSnapshot", () => {
       empty: false,
       title: "What was recorded: Motors",
       canExtractFacts: true,
+      entitiesEmpty: false,
       entries: [
         {
           nodeId: "a",

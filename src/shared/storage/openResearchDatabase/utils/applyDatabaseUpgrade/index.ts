@@ -4,6 +4,7 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  ENTITY_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
   HEARTBEAT_STORE,
@@ -159,6 +160,14 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
 
     extractions.createIndex("sessionId", "sessionId");
     extractions.createIndex("nodeId", "nodeId");
+  },
+  15: (database, transaction) => {
+    // Entities, and the facts each one holds, so deleting a page can find
+    // the entities it leaves empty.
+    database
+      .createObjectStore(ENTITY_STORE, { keyPath: "id" })
+      .createIndex("sessionId", "sessionId");
+    transaction.objectStore(FACT_STORE).createIndex("entityId", "entityId");
   },
 };
 

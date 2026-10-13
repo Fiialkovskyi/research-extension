@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { entityResolutionResponseSchemas } from "@/features/entityResolution";
 import { factExtractionResponseSchemas } from "@/features/factExtraction";
 import { type RecordedSession, recordedDataResponseSchemas } from "@/features/recordedData";
 import { RecordedPage } from "@/features/recordedData/ui/recordedPage";
@@ -25,6 +26,7 @@ export interface RecordedAppProps {
 const responseSchemas = {
   ...recordedDataResponseSchemas,
   ...factExtractionResponseSchemas,
+  ...entityResolutionResponseSchemas,
   ...rpcResponseSchemas,
 } as const;
 
@@ -173,6 +175,14 @@ export function RecordedApp({ client, refreshIntervalMs = 3_000 }: RecordedAppPr
     };
   }, [isRefreshing, load, refreshIntervalMs]);
 
+  const separateEntity = useCallback(
+    async (entityId: string) => {
+      await ask(buildRpcMessage("entity.separate", { entityId }));
+      await load();
+    },
+    [ask, load],
+  );
+
   const deleteSession = useCallback(
     async (sessionId: string) => {
       await ask(buildRpcMessage("session.delete", { sessionId }));
@@ -208,6 +218,7 @@ export function RecordedApp({ client, refreshIntervalMs = 3_000 }: RecordedAppPr
           onDeleteSession={(sessionId) => void deleteSession(sessionId)}
           onExtractFacts={() => void extractFacts()}
           isExtracting={isRefreshing}
+          onSeparateEntity={(entityId) => void separateEntity(entityId)}
         />
       )}
     </main>

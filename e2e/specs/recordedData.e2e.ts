@@ -152,6 +152,7 @@ describe("what was recorded", () => {
     // extraction is not offered.
     expect(recorded.entries[0]?.facts).toBe("not extracted");
     expect(recorded.canExtractFacts).toBe(false);
+    expect(recorded.entitiesEmpty).toBe(true);
 
     await clickRecordedButton("recorded-show-text", articleId);
 

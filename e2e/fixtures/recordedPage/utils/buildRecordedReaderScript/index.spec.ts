@@ -19,6 +19,7 @@ describe("buildRecordedReaderScript", () => {
       empty: true,
       title: null,
       canExtractFacts: false,
+      entitiesEmpty: false,
       entries: [],
     });
   });
@@ -26,6 +27,7 @@ describe("buildRecordedReaderScript", () => {
   it("reports each entry's values and any text shown", () => {
     document.body.innerHTML = `
       <h1 data-testid="recorded-title">What was recorded: Motors</h1>
+      <p data-testid="recorded-entities-empty">No entities found yet.</p>
       <li data-testid="recorded-entry" data-node-id="a">
         <h2>Mid-drive motors</h2>
         <dd data-testid="recorded-scroll">80%</dd>
@@ -40,6 +42,7 @@ describe("buildRecordedReaderScript", () => {
       empty: false,
       title: "What was recorded: Motors",
       canExtractFacts: false,
+      entitiesEmpty: true,
       entries: [
         {
           nodeId: "a",

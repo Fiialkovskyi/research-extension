@@ -5,6 +5,7 @@ import type {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  ENTITY_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
   HEARTBEAT_STORE,
@@ -287,12 +288,38 @@ export interface StoredFact {
   nodeId: string;
   snapshotId: string;
   chunkId: string;
+  /**
+   * The entity the fact was first assigned to, never a merge target: follow
+   * the entity's `mergedInto` for the one it resolves to. Absent until its
+   * page's entities are resolved.
+   */
+  entityId?: string;
   provenance: StoredFactProvenance;
   /** The data key that encrypted the text. */
   keyId: string;
   iv: Uint8Array;
   /** JSON `{ subject, attribute, value, unit?, quote }`, encrypted. */
   encryptedFact: ArrayBuffer;
+}
+
+/**
+ * One thing a session's facts are about. Its name and type are a reading of
+ * page content, so they are stored only encrypted; a merge is a pointer, so
+ * undoing it rewrites nothing else.
+ */
+export interface StoredEntity {
+  /** A UUID. */
+  id: string;
+  sessionId: string;
+  /** The entity this one was merged into by meaning; absent for a root. */
+  mergedInto?: string;
+  /** The user separated it: never merged by meaning again. */
+  isSeparated: boolean;
+  keyId: string;
+  iv: Uint8Array;
+  /** JSON `{ name, type }`, encrypted. */
+  encryptedEntity: ArrayBuffer;
+  createdAt: number;
 }
 
 /** How fact extraction of one snapshot went: progress and counts, no content. */
@@ -553,7 +580,12 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [FACT_STORE]: {
     key: string;
     value: StoredFact;
-    indexes: { sessionId: string; nodeId: string };
+    indexes: { sessionId: string; nodeId: string; entityId: string };
+  };
+  [ENTITY_STORE]: {
+    key: string;
+    value: StoredEntity;
+    indexes: { sessionId: string };
   };
   [EXTRACTION_STORE]: {
     key: string;

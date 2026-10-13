@@ -30,6 +30,16 @@ const createClient = () => {
   let pages = [page];
   let hasSession = true;
   let extractionReads = 0;
+  let entities = [
+    {
+      id: "neo",
+      name: "MacBook Neo 13",
+      type: "product",
+      factCount: 2,
+      pageCount: 1,
+      merged: [{ id: "air", name: "MacBook Air 13" }],
+    },
+  ];
   const sent: string[] = [];
   const client: RecordedClient = {
     request: vi.fn((message: RpcMessage<string, unknown>) => {
@@ -52,9 +62,25 @@ const createClient = () => {
                     status: "active",
                     pages,
                     canExtractFacts: true,
+                    entities,
                   }
                 : null,
             }),
+          );
+        case "entity.separate":
+          entities = [
+            { ...entities[0]!, merged: [] },
+            {
+              id: "air",
+              name: "MacBook Air 13",
+              type: "product",
+              factCount: 1,
+              pageCount: 1,
+              merged: [],
+            },
+          ];
+          return Promise.resolve(
+            buildRpcMessage("entity.separated", { entityId: "air", separated: true }),
           );
         case "facts.extractNow":
           // Extraction starts, then finishes by the second read after it.
@@ -113,6 +139,16 @@ describe("RecordedApp", () => {
 
     expect(sent).toContain("facts.extractNow");
     expect(sent.filter((type) => type === "recorded.read")).toHaveLength(reads);
+  });
+
+  it("separates a merged name, then reads again", async () => {
+    const { client, sent } = createClient();
+
+    render(<RecordedApp client={client} />);
+    fireEvent.click(await screen.findByTestId("recorded-separate-entity"));
+
+    await vi.waitFor(() => expect(screen.getAllByTestId("recorded-entity")).toHaveLength(2));
+    expect(sent).toEqual(["recorded.read", "entity.separate", "recorded.read"]);
   });
 
   it("reads again after deleting a page", async () => {

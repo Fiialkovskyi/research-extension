@@ -3,9 +3,12 @@ import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runFactExtractionJob } from ".";
+import { getDataKey } from "@/features/dataProtection";
 import type { GenerateRequest, GenerationStream } from "@/features/inference";
 import { recordSnapshot } from "@/features/pageSnapshots";
 import { chunkText } from "@/features/snapshotEmbeddings";
+
+import { readSealedFact } from "../readSealedFact";
 import {
   CHUNK_STORE,
   EXTRACTION_STORE,
@@ -159,6 +162,33 @@ describe("runFactExtractionJob", () => {
       finishedAt: 1_000,
     });
     expect(await database.count(CHUNK_STORE)).toBe(CHUNK_COUNT);
+  });
+
+  it("keeps each fact's subject type as the answer listed it, and unknown otherwise", async () => {
+    await run({
+      generate: (request) => {
+        const firstSentence = readPassage(request).split(". ")[0] ?? "";
+
+        return answerWith(
+          JSON.stringify({
+            entities: [{ name: "MODEL  ", entity_type: "product" }],
+            facts: [
+              { subject: "Model", attribute: "weight", value: "1", quote: firstSentence },
+              { subject: "Scale", attribute: "kind", value: "shop", quote: firstSentence },
+            ],
+          }),
+        );
+      },
+    });
+
+    const database = await openResearchDatabase();
+    const dataKey = await getDataKey(database);
+    const facts = await Promise.all(
+      (await database.getAll(FACT_STORE)).map((fact) => readSealedFact(dataKey, fact)),
+    );
+
+    expect(facts.find(({ subject }) => subject === "Model")?.entityType).toBe("product");
+    expect(facts.find(({ subject }) => subject === "Scale")?.entityType).toBe("unknown");
   });
 
   it("sends each chunk as delimited data, bounded, in the schema, with its context", async () => {

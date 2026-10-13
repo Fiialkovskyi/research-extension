@@ -11,13 +11,14 @@ import {
 } from "@/shared/storage";
 
 import type { RecordedSession } from "../../types";
+import { readRecordedEntities } from "./utils/readRecordedEntities";
 
 /**
  * Everything the live session — active or closed — recorded, page by page:
  * what the page was, the signals kept about it, whether its text was captured
  * how many vectors it has, and how many facts were kept from it and dropped
- * (REQ-SEC-008). The text itself is not included, nor are the facts' text; the
- * text is read on request.
+ * (REQ-SEC-008), and the session's entities, decrypted. The text itself is
+ * not included, nor are the facts' text; the text is read on request.
  *
  * @returns The session, or `undefined` when none is live.
  */
@@ -77,5 +78,6 @@ export const readRecordedSession = async (
     status: session.status,
     pages,
     canExtractFacts: (await getActiveModel(database, "text-generation")) !== undefined,
+    entities: await readRecordedEntities(database, session.id),
   };
 };

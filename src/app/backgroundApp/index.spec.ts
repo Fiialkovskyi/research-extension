@@ -15,6 +15,7 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  ENTITY_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
   HEARTBEAT_STORE,
@@ -3277,6 +3278,45 @@ describe("fact extraction through the background", () => {
       payload: { queued: 1 },
     });
     await vi.waitFor(async () => expect(await database.count(FACT_STORE)).toBe(1));
+  });
+
+  it("resolves a page's entities once its extraction finishes", async () => {
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await database.clear(ENTITY_STORE);
+    await readPageDeeply(app, clock);
+
+    await vi.waitFor(async () => expect(await database.count(ENTITY_STORE)).toBe(1));
+    await vi.waitFor(async () =>
+      expect((await database.getAll(FACT_STORE))[0]?.entityId).toBe(
+        (await database.getAll(ENTITY_STORE))[0]?.id,
+      ),
+    );
+    expect(
+      (await database.getAll(JOB_STORE)).find(({ type }) => type === "resolveEntities")?.status,
+    ).toBe("done");
+  });
+
+  it("separates a merged entity on request", async () => {
+    const { app, database } = await createExtractionApp();
+
+    await database.put(ENTITY_STORE, {
+      id: "neo",
+      sessionId: "session-1",
+      mergedInto: "air",
+      isSeparated: false,
+      keyId: "k",
+      iv: new Uint8Array(12),
+      encryptedEntity: new ArrayBuffer(1),
+      createdAt: 1,
+    });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("entity.separate", { entityId: "neo" })),
+    ).toMatchObject({ type: "entity.separated", payload: { entityId: "neo", separated: true } });
+    expect((await database.get(ENTITY_STORE, "neo"))?.mergedInto).toBeUndefined();
   });
 
   it("queues no extraction without an active generation model", async () => {

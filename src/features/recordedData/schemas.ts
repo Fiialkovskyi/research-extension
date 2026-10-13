@@ -25,6 +25,20 @@ export const recordedPageSchema = v.object({
   facts: v.nullable(v.object({ kept: v.number(), dropped: v.number(), isFinished: v.boolean() })),
 });
 
+/**
+ * One entity of the session as the view shows it: decrypted, with the facts
+ * and pages it holds, its merged entities' included, and the names merged
+ * into it, each of which can be separated.
+ */
+export const recordedEntitySchema = v.object({
+  id: v.string(),
+  name: v.string(),
+  type: v.string(),
+  factCount: v.number(),
+  pageCount: v.number(),
+  merged: v.array(v.object({ id: v.string(), name: v.string() })),
+});
+
 /** A session and everything recorded for it, as the view shows it. */
 export const recordedSessionSchema = v.object({
   id: v.string(),
@@ -33,6 +47,7 @@ export const recordedSessionSchema = v.object({
   pages: v.array(recordedPageSchema),
   /** Whether a text-generation model is active, so facts can be extracted. */
   canExtractFacts: v.boolean(),
+  entities: v.array(recordedEntitySchema),
 });
 
 export const recordedDataRequestSchemas = {

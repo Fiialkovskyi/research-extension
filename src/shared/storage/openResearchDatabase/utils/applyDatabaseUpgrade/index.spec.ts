@@ -8,6 +8,7 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  ENTITY_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
   HEARTBEAT_STORE,
@@ -364,6 +365,23 @@ describe("applyDatabaseUpgrade", () => {
       "sessionId",
     ]);
     expect(await after.get(SESSION_STORE, "session-1")).toBeDefined();
+
+    after.close();
+  });
+
+  it("adds the entity store and indexes a version-14 profile's facts by entity", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 14);
+
+    await before.put(FACT_STORE, { id: "s:0:0", sessionId: "x", nodeId: "n" } as never);
+    before.close();
+
+    const after = await openAt(name, 15);
+
+    expect(after.version).toBe(15);
+    expect(await after.count(FACT_STORE)).toBe(1);
+    expect([...after.transaction(FACT_STORE).store.indexNames]).toContain("entityId");
+    expect([...after.transaction(ENTITY_STORE).store.indexNames]).toEqual(["sessionId"]);
 
     after.close();
   });

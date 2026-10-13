@@ -8,6 +8,7 @@ import {
   CLUSTERING_STORE,
   DATABASE_VERSION,
   EDGE_STORE,
+  ENTITY_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
   HEARTBEAT_STORE,
@@ -46,6 +47,7 @@ describe("openResearchDatabase", () => {
         HEARTBEAT_STORE,
         FACT_STORE,
         EXTRACTION_STORE,
+        ENTITY_STORE,
       ].toSorted(),
     );
 

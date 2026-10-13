@@ -17,10 +17,13 @@ import {
   type StoredJob,
 } from "@/shared/storage";
 
+import { normalizeEntityName } from "@/shared/normalizeEntityName";
+
 import {
   FACT_ANSWER_MAX_TOKENS,
   FACT_CONTEXT_TOKENS,
   FACT_EXTRACTION_PROMPT,
+  UNKNOWN_ENTITY_TYPE,
 } from "../../constants";
 import { extractFactsCheckpointSchema, extractFactsPayloadSchema } from "../../schemas";
 import { buildFactExtractionMessages } from "../buildFactExtractionMessages";
@@ -146,6 +149,13 @@ export const runFactExtractionJob = async ({
     });
 
     const facts = answer.isValid ? answer.answer.facts : [];
+    // Each subject's type, as the answer listed it among its entities.
+    const types = new Map(
+      (answer.isValid ? answer.answer.entities : []).map(({ name, entity_type: type }) => [
+        normalizeEntityName(name),
+        type,
+      ]),
+    );
     const grounded = facts.filter(({ quote }) => isQuoteGrounded(quote, passage));
     const provenance = { modelRef, prompt, chunkerVersion: CHUNKER_VERSION, extractedAt: now() };
     const sealed = await Promise.all(
@@ -153,6 +163,7 @@ export const runFactExtractionJob = async ({
         sealFact(
           dataKey,
           fact,
+          types.get(normalizeEntityName(fact.subject)) ?? UNKNOWN_ENTITY_TYPE,
           {
             sessionId: snapshot.sessionId,
             nodeId: snapshot.nodeId,

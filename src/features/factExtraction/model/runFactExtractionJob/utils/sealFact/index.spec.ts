@@ -26,6 +26,7 @@ describe("sealFact", () => {
     const stored = await sealFact(
       dataKey,
       fact,
+      "product",
       { sessionId: "s", nodeId: "n", snapshotId: "snap", chunkIndex: 2, position: 0 },
       PROVENANCE,
     );
@@ -46,6 +47,6 @@ describe("sealFact", () => {
       ciphertext: stored.encryptedFact,
     });
 
-    expect(JSON.parse(new TextDecoder().decode(plain))).toEqual(fact);
+    expect(JSON.parse(new TextDecoder().decode(plain))).toEqual({ ...fact, entityType: "product" });
   });
 });

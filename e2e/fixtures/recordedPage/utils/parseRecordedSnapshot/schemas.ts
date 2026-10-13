@@ -6,6 +6,8 @@ export const recordedSnapshotSchema = v.object({
   title: v.nullable(v.string()),
   /** Whether the page offers "Extract facts now". */
   canExtractFacts: v.boolean(),
+  /** Whether the page says no entities were found yet. */
+  entitiesEmpty: v.boolean(),
   entries: v.array(
     v.object({
       nodeId: v.string(),

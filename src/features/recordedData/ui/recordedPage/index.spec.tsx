@@ -31,6 +31,7 @@ const SESSION: RecordedSession = {
     },
   ],
   canExtractFacts: false,
+  entities: [],
 };
 
 const renderPage = (texts = new Map<string, string | null>(), session = SESSION) => {
@@ -39,6 +40,7 @@ const renderPage = (texts = new Map<string, string | null>(), session = SESSION)
     onDeleteNode: vi.fn(),
     onDeleteSession: vi.fn(),
     onExtractFacts: vi.fn(),
+    onSeparateEntity: vi.fn(),
   };
 
   render(<RecordedPage session={session} texts={texts} {...handlers} />);
@@ -94,6 +96,7 @@ describe("RecordedPage", () => {
         onDeleteNode={vi.fn()}
         onDeleteSession={vi.fn()}
         onExtractFacts={vi.fn()}
+        onSeparateEntity={vi.fn()}
         isExtracting
       />,
     );
@@ -103,6 +106,42 @@ describe("RecordedPage", () => {
     expect(button).toHaveTextContent("Extracting facts…");
     expect(button).toBeDisabled();
     expect(screen.getByTestId("recorded-facts")).toHaveTextContent("waiting for the model…");
+  });
+
+  it("says no entities were found yet", () => {
+    renderPage();
+
+    expect(screen.getByTestId("recorded-entities-empty")).toHaveTextContent(
+      "No entities found yet.",
+    );
+  });
+
+  it("lists entities with their counts and merged names, and separates one on request", () => {
+    const { onSeparateEntity } = renderPage(undefined, {
+      ...SESSION,
+      entities: [
+        {
+          id: "neo",
+          name: "MacBook Neo 13",
+          type: "product",
+          factCount: 12,
+          pageCount: 2,
+          merged: [{ id: "apple-neo", name: "Apple MacBook Neo 13 A18 Pro" }],
+        },
+      ],
+    });
+
+    const entity = screen.getByTestId("recorded-entity");
+
+    expect(entity).toHaveTextContent("MacBook Neo 13");
+    expect(entity).toHaveTextContent("product · 12 facts · 2 pages");
+    expect(screen.getByTestId("recorded-merged-name")).toHaveTextContent(
+      "Apple MacBook Neo 13 A18 Pro",
+    );
+
+    fireEvent.click(screen.getByTestId("recorded-separate-entity"));
+
+    expect(onSeparateEntity).toHaveBeenCalledWith("apple-neo");
   });
 
   it("asks for extraction when the user chooses it", () => {

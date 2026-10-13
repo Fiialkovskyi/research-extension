@@ -14,7 +14,13 @@ const { readRecordedPage } = await import("./index");
 
 describe("readRecordedPage", () => {
   it("reads the page in its tab and returns to the chrome context", async () => {
-    const empty = { empty: true, title: null, canExtractFacts: false, entries: [] };
+    const empty = {
+      empty: true,
+      title: null,
+      canExtractFacts: false,
+      entitiesEmpty: false,
+      entries: [],
+    };
 
     browser.execute.mockResolvedValue(JSON.stringify(empty));
 

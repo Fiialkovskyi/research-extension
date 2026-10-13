@@ -84,6 +84,12 @@ import {
   runNextJob,
 } from "@/features/jobQueue";
 import {
+  enqueueEntityResolutions,
+  RESOLVE_ENTITIES_JOB,
+  runEntityResolutionJob,
+  separateEntity,
+} from "@/features/entityResolution";
+import {
   enqueueFactExtractions,
   EXTRACT_FACTS_JOB,
   extractFactsPayloadSchema,
@@ -649,12 +655,34 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         model.manifest,
       );
 
-      return runFactExtractionJob({
+      const outcome = await runFactExtractionJob({
         database: openedDatabase,
         job,
         modelRef: model.ref,
         generate: generator.generate,
         mayContinue: () => mayExtractNow(job.id),
+        now: getNow,
+      });
+
+      // The page's facts are all in: its entities can be resolved next.
+      if (outcome !== "deferred") {
+        await enqueueEntityResolutions(openedDatabase);
+      }
+
+      return outcome;
+    }),
+    [RESOLVE_ENTITIES_JOB]: runHeld(async (job) => {
+      const openedDatabase = await getDatabase();
+      const embeddingModel = await getActiveModel(openedDatabase, "embedding");
+      const session =
+        embeddingModel === undefined ? undefined : await loadEmbeddingSession(embeddingModel);
+
+      await runEntityResolutionJob({
+        database: openedDatabase,
+        job,
+        ...(session === undefined
+          ? {}
+          : { embed: (texts: readonly string[]) => session.embed(texts, "document") }),
         now: getNow,
       });
     }),
@@ -873,6 +901,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     await enqueueCapture(async (openedDatabase) => {
       await enqueueSnapshotEmbeddings(openedDatabase, getNow());
       await enqueueFactExtractions(openedDatabase);
+      await enqueueEntityResolutions(openedDatabase);
     });
     await resumeLocalAi();
     await runJobs();
@@ -1031,6 +1060,17 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "model.list": {
           return buildRpcMessage("model.listed", {
             models: await listInstalledModels(await getDatabase()),
+          });
+        }
+
+        case "entity.separate": {
+          const separated = await serializeWork(async () =>
+            separateEntity(await getDatabase(), request.payload.entityId),
+          );
+
+          return buildRpcMessage("entity.separated", {
+            entityId: request.payload.entityId,
+            separated,
           });
         }
 

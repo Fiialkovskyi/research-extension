@@ -13,18 +13,20 @@ export {
   EXTRACT_FACTS_PRIORITY,
   FACT_EXTRACTION_PROMPT,
   MAXIMUM_FACTS_PER_CHUNK,
+  UNKNOWN_ENTITY_TYPE,
 } from "./constants";
 export {
   extractFactsPayloadSchema,
   factExtractionRequestSchemas,
   factExtractionResponseSchemas,
 } from "./schemas";
-export type { ExtractedFact, ExtractFactsPayload, FactExtractionAnswer } from "./types";
+export type { ExtractedFact, ExtractFactsPayload, FactExtractionAnswer, SealedFact } from "./types";
 export { buildFactExtractionMessages } from "./model/buildFactExtractionMessages";
 export { enqueueFactExtractions } from "./model/enqueueFactExtractions";
 export { getFactProducerVersion } from "./model/getFactProducerVersion";
 export { isQuoteGrounded } from "./model/isQuoteGrounded";
 export { readFactAnswer } from "./model/readFactAnswer";
+export { readSealedFact } from "./model/readSealedFact";
 export {
   runFactExtractionJob,
   type RunFactExtractionJobOptions,

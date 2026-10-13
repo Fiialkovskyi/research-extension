@@ -1,4 +1,8 @@
-import type { RecordedPage as RecordedPageEntry, RecordedSession } from "../../types";
+import type {
+  RecordedEntity,
+  RecordedPage as RecordedPageEntry,
+  RecordedSession,
+} from "../../types";
 import { Button } from "@/shared/ui";
 
 import { ConfirmDelete } from "../confirmDelete";
@@ -14,6 +18,8 @@ export interface RecordedPageProps {
   onExtractFacts: () => void;
   /** Extraction was asked for and is under way: pages not begun are waiting for the model. */
   isExtracting?: boolean;
+  /** Undoes the merge of an entity into another. */
+  onSeparateEntity: (entityId: string) => void;
 }
 
 const formatDuration = (milliseconds: number): string => {
@@ -121,6 +127,63 @@ function Entry({
 }
 
 /**
+ * The session's entities: what each is, how much it holds, and the names
+ * merged into it, each of which the user can separate when the merge is wrong.
+ */
+function Entities({
+  entities,
+  onSeparateEntity,
+}: {
+  entities: readonly RecordedEntity[];
+  onSeparateEntity: (entityId: string) => void;
+}) {
+  return (
+    <section aria-labelledby="recorded-entities-heading" className="mt-4">
+      <h2 id="recorded-entities-heading" className="font-medium">
+        Entities
+      </h2>
+      {entities.length === 0 ? (
+        <p data-testid="recorded-entities-empty" className="mt-1 text-sm">
+          No entities found yet.
+        </p>
+      ) : (
+        <ul className="mt-1 flex flex-col gap-2 text-sm">
+          {entities.map((entity) => (
+            <li key={entity.id} data-testid="recorded-entity" data-entity-id={entity.id}>
+              <span className="font-medium">{entity.name}</span>{" "}
+              <span className="text-neutral-500 dark:text-neutral-400">
+                {entity.type} · {entity.factCount} facts · {entity.pageCount} pages
+              </span>
+              {entity.merged.length > 0 && (
+                <ul className="mt-1 ml-4 flex flex-col gap-1">
+                  {entity.merged.map((merged) => (
+                    <li
+                      key={merged.id}
+                      data-testid="recorded-merged-name"
+                      className="flex items-center gap-2"
+                    >
+                      <span>also named “{merged.name}”</span>
+                      <Button
+                        data-testid="recorded-separate-entity"
+                        onClick={() => {
+                          onSeparateEntity(merged.id);
+                        }}
+                      >
+                        Separate
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
  * Everything a session recorded, page by page, each with a delete control,
  * and a control deleting the whole session (REQ-SEC-008). A page's text is
  * shown only when asked for; its facts are counted, never shown. With a
@@ -135,6 +198,7 @@ export function RecordedPage({
   onDeleteSession,
   onExtractFacts,
   isExtracting = false,
+  onSeparateEntity,
 }: RecordedPageProps) {
   return (
     <section aria-labelledby="recorded-heading">
@@ -175,6 +239,7 @@ export function RecordedPage({
           ))}
         </ul>
       )}
+      <Entities entities={session.entities} onSeparateEntity={onSeparateEntity} />
     </section>
   );
 }

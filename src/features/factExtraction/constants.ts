@@ -35,3 +35,6 @@ export const FACT_CONTEXT_TOKENS = 4_096;
 /** The delimiters page text travels between (REQ-SYN-011). */
 export const PAGE_TEXT_OPEN = "<page_text>";
 export const PAGE_TEXT_CLOSE = "</page_text>";
+
+/** The type of a subject the answer did not list, and of facts stored before types were kept. */
+export const UNKNOWN_ENTITY_TYPE = "unknown";
