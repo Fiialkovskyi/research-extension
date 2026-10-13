@@ -8,6 +8,7 @@ describe("parseSummariesSnapshot", () => {
       empty: false,
       title: "Summaries: E-bikes",
       needsModel: true,
+      tableEmpty: true,
       clusters: [{ label: "Bikes", hasNoFacts: true, statements: [] }],
     };
 

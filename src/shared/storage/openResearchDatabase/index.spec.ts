@@ -22,6 +22,7 @@ import {
   SNAPSHOT_STORE,
   SPACE_STORE,
   SUMMARY_STORE,
+  TABLE_COLUMNS_STORE,
   VECTOR_STORE,
 } from "../constants";
 
@@ -50,6 +51,7 @@ describe("openResearchDatabase", () => {
         EXTRACTION_STORE,
         ENTITY_STORE,
         SUMMARY_STORE,
+        TABLE_COLUMNS_STORE,
       ].toSorted(),
     );
 

@@ -56,7 +56,7 @@ describe("summaries", () => {
             return false;
           }
 
-          return snapshot.title !== null;
+          return snapshot.title !== null && snapshot.tableEmpty;
         },
         { timeout: UI_TIMEOUT_MS },
       )
@@ -68,5 +68,7 @@ describe("summaries", () => {
     // No generation model is active in the suite, so the page says what to turn on.
     expect(snapshot?.needsModel).toBe(true);
     expect(snapshot?.clusters.flatMap(({ statements }) => statements)).toEqual([]);
+    // The comparison table follows, with nothing to compare yet.
+    expect(snapshot?.tableEmpty).toBe(true);
   });
 });

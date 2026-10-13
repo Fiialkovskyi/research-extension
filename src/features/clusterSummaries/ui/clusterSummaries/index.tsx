@@ -107,8 +107,9 @@ export function ClusterSummaries({
   return (
     <section aria-labelledby="summaries-heading">
       <h1 id="summaries-heading" data-testid="summaries-title" className="text-lg font-semibold">
-        Summaries: {title}
+        Synthesis: {title}
       </h1>
+      <h2 className="mt-2 font-medium">Summaries</h2>
       {!canSummarize && (
         <p data-testid="summaries-no-model" className="mt-1 text-sm">
           Turn on page summaries in the settings to write them.

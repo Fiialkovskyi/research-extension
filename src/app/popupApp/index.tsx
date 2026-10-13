@@ -489,7 +489,7 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
             What was recorded
           </Button>{" "}
           <Button data-testid="open-summaries" onClick={openSummaries}>
-            Summaries
+            Synthesis
           </Button>
         </div>
       )}
@@ -553,7 +553,7 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
             What was recorded
           </Button>{" "}
           <Button data-testid="open-summaries" onClick={openSummaries}>
-            Summaries
+            Synthesis
           </Button>{" "}
           <Button data-testid="save-session" onClick={saveSession}>
             Save research

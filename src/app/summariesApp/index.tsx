@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 
 import { clusterSummaryResponseSchemas, type SummariesView } from "@/features/clusterSummaries";
 import { ClusterSummaries } from "@/features/clusterSummaries/ui/clusterSummaries";
+import {
+  buildComparisonCsv,
+  type ComparisonTable as Table,
+  comparisonTableResponseSchemas,
+} from "@/features/comparisonTable";
+import { ComparisonTable } from "@/features/comparisonTable/ui/comparisonTable";
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import {
   buildRpcMessage,
@@ -19,9 +25,29 @@ export interface SummariesAppProps {
   client: SummariesClient;
   /** How often to read again while a summary asked for is being written. */
   refreshIntervalMs?: number;
+  /** Saves a text file for the user; a Blob download from this page by default. */
+  saveFile?: (name: string, text: string) => void;
 }
 
-const responseSchemas = { ...clusterSummaryResponseSchemas, ...rpcResponseSchemas } as const;
+const responseSchemas = {
+  ...clusterSummaryResponseSchemas,
+  ...comparisonTableResponseSchemas,
+  ...rpcResponseSchemas,
+} as const;
+
+/**
+ * Downloads a CSV through a Blob link on this extension page (REQ-SYN-007),
+ * which needs no `downloads` permission.
+ */
+const downloadCsv = (name: string, text: string): void => {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 type SummariesState =
   | { status: "loading" }
@@ -29,8 +55,14 @@ type SummariesState =
   | { status: "ready"; view: SummariesView };
 
 /** Composition root of the Summaries page. */
-export function SummariesApp({ client, refreshIntervalMs = 3_000 }: SummariesAppProps) {
+export function SummariesApp({
+  client,
+  refreshIntervalMs = 3_000,
+  saveFile = downloadCsv,
+}: SummariesAppProps) {
   const [state, setState] = useState<SummariesState>({ status: "loading" });
+  const [table, setTable] = useState<Table>();
+  const [entityType, setEntityType] = useState<string>();
   const [failure, setFailure] = useState<string>();
 
   /** Sends a request and returns its answer, or records why it failed. */
@@ -120,6 +152,72 @@ export function SummariesApp({ client, refreshIntervalMs = 3_000 }: SummariesApp
     };
   }, [isPending, load, refreshIntervalMs]);
 
+  const loadTable = useCallback(
+    async (type?: string) => {
+      const answer = await ask(
+        buildRpcMessage("table.read", type === undefined ? {} : { entityType: type }),
+      );
+
+      if (answer?.type === "table.view") {
+        setTable(answer.payload.table ?? undefined);
+      }
+    },
+    [ask],
+  );
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    client.request(buildRpcMessage("table.read", {})).then(
+      (answer) => {
+        try {
+          const response = parseRpcMessage(answer, responseSchemas);
+
+          if (isCurrent && response.type === "table.view") {
+            setTable(response.payload.table ?? undefined);
+          }
+        } catch (error) {
+          if (isCurrent) {
+            setFailure(getErrorMessage(error));
+          }
+        }
+      },
+      (error: unknown) => {
+        if (isCurrent) {
+          setFailure(getErrorMessage(error));
+        }
+      },
+    );
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [client]);
+
+  const chooseType = useCallback(
+    async (type: string) => {
+      setEntityType(type);
+      await loadTable(type);
+    },
+    [loadTable],
+  );
+
+  const setColumns = useCallback(
+    async (type: string, columns: string[]) => {
+      await ask(buildRpcMessage("table.setColumns", { entityType: type, columns }));
+      await loadTable(entityType ?? type);
+    },
+    [ask, entityType, loadTable],
+  );
+
+  const exportTable = useCallback(() => {
+    if (table === undefined || state.status !== "ready") {
+      return;
+    }
+
+    saveFile(`${state.view.title} — ${table.entityType ?? "table"}.csv`, buildComparisonCsv(table));
+  }, [saveFile, state, table]);
+
   const summarize = useCallback(
     async (clusterId: string) => {
       await ask(buildRpcMessage("summaries.refresh", { clusterId }));
@@ -151,6 +249,14 @@ export function SummariesApp({ client, refreshIntervalMs = 3_000 }: SummariesApp
           clusters={state.view.clusters}
           canSummarize={state.view.canSummarize}
           onSummarize={(clusterId) => void summarize(clusterId)}
+        />
+      )}
+      {state.status === "ready" && table !== undefined && (
+        <ComparisonTable
+          table={table}
+          onChooseType={(type) => void chooseType(type)}
+          onSetColumns={(type, columns) => void setColumns(type, columns)}
+          onExport={exportTable}
         />
       )}
     </main>

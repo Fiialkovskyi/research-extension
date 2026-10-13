@@ -22,6 +22,7 @@ import {
   SNAPSHOT_STORE,
   SPACE_STORE,
   SUMMARY_STORE,
+  TABLE_COLUMNS_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -397,6 +398,20 @@ describe("applyDatabaseUpgrade", () => {
     expect(after.version).toBe(16);
     expect(await after.count(SUMMARY_STORE)).toBe(0);
     expect([...after.transaction(SUMMARY_STORE).store.indexNames]).toEqual(["sessionId"]);
+
+    after.close();
+  });
+
+  it("adds an empty column-settings store, indexed by session, to a version-16 profile", async () => {
+    const name = getNextDatabaseName();
+
+    (await openAt(name, 16)).close();
+
+    const after = await openAt(name, 17);
+
+    expect(after.version).toBe(17);
+    expect(await after.count(TABLE_COLUMNS_STORE)).toBe(0);
+    expect([...after.transaction(TABLE_COLUMNS_STORE).store.indexNames]).toEqual(["sessionId"]);
 
     after.close();
   });

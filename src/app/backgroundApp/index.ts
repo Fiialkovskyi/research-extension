@@ -91,6 +91,7 @@ import {
   runClusterSummaryJob,
   SUMMARIZE_CLUSTER_JOB,
 } from "@/features/clusterSummaries";
+import { readComparisonTable, saveTableColumns } from "@/features/comparisonTable";
 import {
   enqueueEntityResolutions,
   RESOLVE_ENTITIES_JOB,
@@ -1110,6 +1111,25 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("model.listed", {
             models: await listInstalledModels(await getDatabase()),
           });
+        }
+
+        case "table.read": {
+          const view = await readComparisonTable(await getDatabase(), request.payload.entityType);
+
+          return buildRpcMessage("table.view", {
+            title: view?.title ?? "",
+            table: view?.table ?? null,
+          });
+        }
+
+        case "table.setColumns": {
+          const { entityType, columns } = request.payload;
+
+          await serializeWork(async () =>
+            saveTableColumns(await getDatabase(), entityType, columns),
+          );
+
+          return buildRpcMessage("table.columnsSaved", { entityType });
         }
 
         case "summaries.read": {

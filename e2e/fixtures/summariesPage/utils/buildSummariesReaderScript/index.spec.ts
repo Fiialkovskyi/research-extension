@@ -14,7 +14,13 @@ describe("buildSummariesReaderScript", () => {
   it("reports the empty state", () => {
     document.body.innerHTML = '<p data-testid="summaries-empty">No research session.</p>';
 
-    expect(read()).toEqual({ empty: true, title: null, needsModel: false, clusters: [] });
+    expect(read()).toEqual({
+      empty: true,
+      title: null,
+      needsModel: false,
+      tableEmpty: false,
+      clusters: [],
+    });
   });
 
   it("reports each cluster, whether it has facts, and its statements", () => {
@@ -26,12 +32,14 @@ describe("buildSummariesReaderScript", () => {
         <li data-testid="summary-cluster"><h2>Bikes</h2>
           <ul><li data-testid="summary-statement"><span>Volta is lighter.</span></li></ul>
         </li>
-      </ul>`;
+      </ul>
+      <p data-testid="table-empty">No entities with facts yet.</p>`;
 
     expect(read()).toEqual({
       empty: false,
       title: "Summaries: E-bikes",
       needsModel: true,
+      tableEmpty: true,
       clusters: [
         { label: "Motors", hasNoFacts: true, statements: [] },
         { label: "Bikes", hasNoFacts: false, statements: ["Volta is lighter."] },

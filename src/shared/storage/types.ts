@@ -19,6 +19,7 @@ import type {
   SNAPSHOT_STORE,
   SPACE_STORE,
   SUMMARY_STORE,
+  TABLE_COLUMNS_STORE,
   VECTOR_STORE,
 } from "./constants";
 
@@ -347,6 +348,21 @@ export interface StoredSummary {
   encryptedStatements: ArrayBuffer;
 }
 
+/**
+ * The columns a user chose for one comparison table. Attribute names come from
+ * page content, so the list is stored only encrypted; the key's type part is
+ * normalised, so the type is not readable either way it is spelled.
+ */
+export interface StoredTableColumns {
+  /** `<sessionId>:<normalised type>`. */
+  id: string;
+  sessionId: string;
+  keyId: string;
+  iv: Uint8Array;
+  /** JSON list of attribute keys, encrypted. */
+  encryptedColumns: ArrayBuffer;
+}
+
 /** How fact extraction of one snapshot went: progress and counts, no content. */
 export interface StoredExtraction {
   snapshotId: string;
@@ -620,6 +636,11 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [SUMMARY_STORE]: {
     key: string;
     value: StoredSummary;
+    indexes: { sessionId: string };
+  };
+  [TABLE_COLUMNS_STORE]: {
+    key: string;
+    value: StoredTableColumns;
     indexes: { sessionId: string };
   };
 }

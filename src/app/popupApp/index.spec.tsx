@@ -611,7 +611,8 @@ describe("PopupApp", () => {
       const client = createClient({ active: "E-bike motors" });
 
       render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
-      fireEvent.click(await screen.findByTestId("open-summaries"));
+      expect(await screen.findByTestId("open-summaries")).toHaveTextContent("Synthesis");
+      fireEvent.click(screen.getByTestId("open-summaries"));
 
       expect(client.request).toHaveBeenCalledWith(
         expect.objectContaining({ type: "summaries.open" }),

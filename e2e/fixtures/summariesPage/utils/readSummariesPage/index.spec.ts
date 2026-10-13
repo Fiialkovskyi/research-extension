@@ -14,7 +14,7 @@ const { readSummariesPage } = await import("./index");
 
 describe("readSummariesPage", () => {
   it("reads the page in its tab and returns to the chrome context", async () => {
-    const empty = { empty: true, title: null, needsModel: false, clusters: [] };
+    const empty = { empty: true, title: null, needsModel: false, tableEmpty: false, clusters: [] };
 
     browser.execute.mockResolvedValue(JSON.stringify(empty));
 

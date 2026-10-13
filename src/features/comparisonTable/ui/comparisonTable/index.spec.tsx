@@ -1,0 +1,118 @@
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { ComparisonTable } from ".";
+import type { ComparisonTable as Table } from "../../types";
+
+const source = (factId: string, url: string) => ({
+  factId,
+  pageTitle: url,
+  url,
+  quote: `quote ${factId}`,
+});
+
+const TABLE: Table = {
+  types: [
+    { type: "product", rowCount: 2 },
+    { type: "company", rowCount: 1 },
+  ],
+  entityType: "product",
+  columns: [
+    { key: "weight", label: "weight" },
+    { key: "price", label: "price" },
+  ],
+  otherColumns: [{ key: "colour", label: "colour" }],
+  rows: [
+    {
+      entityId: "volta",
+      name: "Volta E5",
+      cells: {
+        weight: {
+          value: "23.5 kg",
+          alternativeCount: 0,
+          isConflict: false,
+          groups: [{ value: "23.5 kg", sources: [source("a", "https://a")] }],
+        },
+        price: {
+          value: "1749 USD",
+          alternativeCount: 1,
+          isConflict: true,
+          groups: [
+            { value: "1749 USD", sources: [source("b", "https://a")] },
+            { value: "1999 USD", sources: [source("c", "https://b")] },
+          ],
+        },
+      },
+    },
+    { entityId: "corsa", name: "Corsa", cells: {} },
+  ],
+};
+
+const renderTable = (table = TABLE) => {
+  const handlers = { onChooseType: vi.fn(), onSetColumns: vi.fn(), onExport: vi.fn() };
+
+  render(<ComparisonTable table={table} {...handlers} />);
+
+  return handlers;
+};
+
+describe("ComparisonTable", () => {
+  it("shows a row per entity and a column per attribute", () => {
+    renderTable();
+
+    expect(
+      screen.getAllByTestId("table-row").map((row) => row.textContent?.split(/\d/u)[0]),
+    ).toEqual(["Volta E", "Corsa"]);
+    expect(screen.getAllByTestId("table-column").map((column) => column.textContent)).toEqual([
+      "weight ✕",
+      "price ✕",
+    ]);
+  });
+
+  it("marks a conflict, counts alternatives, and lists every value with its sources", () => {
+    renderTable();
+
+    const [, price] = within(screen.getAllByTestId("table-row")[0]!).getAllByTestId("table-cell");
+
+    expect(price).toHaveAttribute("data-conflict", "true");
+    expect(price).toHaveTextContent("+1");
+    expect(
+      within(price!)
+        .getAllByTestId("table-value")
+        .map((value) => value.textContent),
+    ).toEqual(["1749 USDhttps://a: quote b", "1999 USDhttps://b: quote c"]);
+    expect(within(price!).getAllByRole("link")[1]).toHaveAttribute("href", "https://b");
+  });
+
+  it("chooses another type", () => {
+    const { onChooseType } = renderTable();
+
+    fireEvent.change(screen.getByTestId("table-type"), { target: { value: "company" } });
+
+    expect(onChooseType).toHaveBeenCalledWith("company");
+  });
+
+  it("removes a column and adds another", () => {
+    const { onSetColumns } = renderTable();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove the column weight" }));
+    expect(onSetColumns).toHaveBeenLastCalledWith("product", ["price"]);
+
+    fireEvent.change(screen.getByTestId("table-add-column"), { target: { value: "colour" } });
+    expect(onSetColumns).toHaveBeenLastCalledWith("product", ["weight", "price", "colour"]);
+  });
+
+  it("exports on request", () => {
+    const { onExport } = renderTable();
+
+    fireEvent.click(screen.getByTestId("table-export"));
+
+    expect(onExport).toHaveBeenCalledTimes(1);
+  });
+
+  it("says when there is nothing to compare yet", () => {
+    renderTable({ ...TABLE, types: [], entityType: null, columns: [], otherColumns: [], rows: [] });
+
+    expect(screen.getByTestId("table-empty")).toBeInTheDocument();
+  });
+});

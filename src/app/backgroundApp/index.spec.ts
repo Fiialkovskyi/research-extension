@@ -3432,6 +3432,41 @@ describe("fact extraction through the background", () => {
     });
   });
 
+  it("reads the comparison table from extracted facts, and keeps chosen columns", async () => {
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await database.count(ENTITY_STORE)).toBeGreaterThan(0));
+    await vi.waitFor(async () =>
+      expect((await database.getAll(FACT_STORE)).every(({ entityId }) => entityId)).toBe(true),
+    );
+
+    const read = () => app.handleMessage(buildRpcMessage("table.read", {}));
+
+    expect(await read()).toMatchObject({
+      type: "table.view",
+      payload: {
+        title: "E-bike motors",
+        table: {
+          entityType: "product",
+          columns: [{ key: "placement", label: "placement" }],
+          rows: [{ name: "Motor", cells: { placement: { value: "x", isConflict: false } } }],
+        },
+      },
+    });
+
+    expect(
+      await app.handleMessage(
+        buildRpcMessage("table.setColumns", { entityType: "product", columns: ["missing"] }),
+      ),
+    ).toMatchObject({ type: "table.columnsSaved" });
+    expect(await read()).toMatchObject({
+      payload: { table: { columns: [], otherColumns: [{ key: "placement" }] } },
+    });
+  });
+
   it("opens the Summaries page", async () => {
     const openSummariesPage = vi.fn(() => Promise.resolve());
     const { app } = await createExtractionApp({ openSummariesPage });
