@@ -1,5 +1,8 @@
 /**
- * What the add-on can say about its own network policy.
+ * What the add-on can say about itself: its network policy, and (spike M0-1)
+ * how long its background event page stays alive.
+ *
+ * On the policy:
  *
  * The policy is the enforcement point for the no-egress guarantee, so the
  * useful question is not whether it is active but what it refused. A blocked
@@ -16,6 +19,15 @@
 // The surface that renders a component imports it from `ui/` by path.
 
 export {
+  HOLD_PAGE_PATH,
+  HOLD_PING_INTERVAL_MS,
+  HOLD_PORT_NAME,
+  LIFETIME_PROBE_JOB,
+  LIFETIME_STRATEGIES,
+  PROBE_HEARTBEAT_INTERVAL_MS,
+  PROBE_SILENCE_LIMIT_MS,
+} from "./constants";
+export {
   blockedRequestSchema,
   diagnosticsRequestSchemas,
   diagnosticsResponseSchemas,
@@ -24,4 +36,11 @@ export type {
   BlockedRequestReport,
   DiagnosticsRequestType,
   DiagnosticsResponseType,
+  LifetimeStrategy,
+  ProbeCheckpoint,
+  ProbeJobPayload,
+  ProbeOutcome,
 } from "./types";
+export { buildHeartbeat, type HeartbeatSource } from "./model/buildHeartbeat";
+export { readProbeOutcome } from "./model/readProbeOutcome";
+export { runLifetimeProbe, type RunLifetimeProbeOptions } from "./model/runLifetimeProbe";

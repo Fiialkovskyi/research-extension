@@ -15,6 +15,7 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  HEARTBEAT_STORE,
   JOB_STORE,
   SPACE_STORE,
   VECTOR_STORE,
@@ -119,6 +120,12 @@ const buildDependencies = (
     },
     readFocusedTab: () => Promise.resolve(undefined),
     hasOllamaAccess: () => Promise.resolve(false),
+    backgroundLifetime: {
+      touch: () => Promise.resolve(),
+      scheduleWake: () => Promise.resolve(),
+      openHoldPage: () => Promise.reject(new Error("no tabs in this test")),
+      closeTab: () => Promise.resolve(),
+    },
     resumeApi: {
       createTab: () => Promise.reject(new Error("no tabs in this test")),
       groupTabs: () => Promise.reject(new Error("no groups in this test")),
@@ -1756,6 +1763,58 @@ describe("embedding deep-read pages through the background", () => {
     expect(await database.getAll(JOB_STORE)).toEqual([expect.objectContaining({ status: "done" })]);
   });
 
+  it("holds the background loaded while an embedding job runs, and lets go after", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      // The model answers only once the test opens this gate.
+      const gate = { open: (): void => undefined };
+      const touch = vi.fn(() => Promise.resolve());
+      const load = vi.fn(() =>
+        Promise.resolve({
+          embed: async (texts: readonly string[]) => {
+            await new Promise<void>((resolve) => {
+              gate.open = resolve;
+            });
+            return texts.map(() => new Float32Array([1, 0, 0, 0]));
+          },
+        }),
+      );
+      const { app, database, clock } = await createSignalsApp({
+        loadEmbeddingSession: load,
+        backgroundLifetime: {
+          touch,
+          scheduleWake: () => Promise.resolve(),
+          openHoldPage: () => Promise.reject(new Error("no tabs")),
+          closeTab: () => Promise.resolve(),
+        },
+      });
+
+      await database.put(MODEL_STORE, EMBEDDING_MODEL as never);
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      clock.focusedTabId = 7;
+      await app.handleTabActivated(7);
+      await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+      await app.handleContentMessage(extracted("Mid-drive motors sit at the cranks."), FROM_PAGE_A);
+      await vi.waitFor(() => expect(load).toHaveBeenCalled());
+
+      // Waiting on the model: the hold touches the browser to count as active.
+      vi.advanceTimersByTime(15_000);
+      expect(touch).toHaveBeenCalledTimes(3);
+
+      gate.open();
+      await vi.waitFor(async () => expect(await database.count(VECTOR_STORE)).toBe(1));
+      await vi.waitFor(async () =>
+        expect((await database.getAll(JOB_STORE))[0]?.status).toBe("done"),
+      );
+      vi.advanceTimersByTime(60_000);
+
+      expect(touch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("queues nothing without an active embedding model", async () => {
     const embedding = createEmbeddingStub();
     const { app, database, clock } = await createSignalsApp({
@@ -2712,7 +2771,48 @@ describe("Page summaries through Ollama", () => {
     });
   });
 
-  it("reports progress every second while extraction runs, which keeps the event page alive", async () => {
+  it("holds the background loaded while extraction waits on the server, and lets go after", async () => {
+    const slow = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 300 });
+    const touch = vi.fn(() => Promise.resolve());
+    const { app, database } = await createSessionApp({
+      fetchResource: slow.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+      backgroundLifetime: {
+        touch,
+        scheduleWake: () => Promise.resolve(),
+        openHoldPage: () => Promise.reject(new Error("no tabs")),
+        closeTab: () => Promise.resolve(),
+      },
+    });
+
+    await app.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" }));
+
+    const registered = await database.get(MODEL_STORE, `ollama:qwen3:4b@${slow.chatDigest}`);
+
+    if (registered === undefined) {
+      throw new Error("The model was not registered.");
+    }
+
+    await database.put(MODEL_STORE, { ...registered, active: true, conformance: "passed" });
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const measured = app.handleMessage(buildRpcMessage("generation.measure", {}));
+
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0));
+      vi.advanceTimersByTime(10_000);
+      expect(touch).toHaveBeenCalledTimes(2);
+
+      expect(await measured).toMatchObject({ type: "generation.measured" });
+      vi.advanceTimersByTime(60_000);
+      expect(touch).toHaveBeenCalledTimes(2);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports progress every second while extraction runs", async () => {
     const slow = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 2_300 });
     const { app: slowApp, database } = await createSessionApp({
       fetchResource: slow.fetchResource,
@@ -2750,4 +2850,305 @@ describe("Page summaries through Ollama", () => {
       types.indexOf("generation.measured"),
     );
   }, 15_000);
+});
+
+/**
+ * A virtual clock for probe runs: `now` reads it, a probe's sleeps wait on it,
+ * and `step` moves it on, also moving the faked intervals keep-alives use.
+ */
+const createProbeClock = () => {
+  let clock = 1_000_000;
+  const sleeps: { at: number; resolve: () => void }[] = [];
+
+  return {
+    now: () => clock,
+    setTimer: (callback: () => void, delayMs: number) => {
+      sleeps.push({ at: clock + delayMs, resolve: callback });
+      return sleeps.length;
+    },
+    sleeping: () => sleeps.length,
+    /** The page is unloaded: what it was waiting for never comes. */
+    unload: () => {
+      sleeps.splice(0);
+    },
+    step: (ms: number) => {
+      clock += ms;
+      vi.advanceTimersByTime(ms);
+
+      for (const sleep of sleeps.splice(0).filter((pending) => {
+        if (pending.at <= clock) {
+          return true;
+        }
+
+        sleeps.push(pending);
+        return false;
+      })) {
+        sleep.resolve();
+      }
+    },
+  };
+};
+
+/** A background app on the real (fake-indexeddb) database, with no probes or jobs yet. */
+const createProbeApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
+  const database = await openResearchDatabase();
+
+  await Promise.all([database.clear(JOB_STORE), database.clear(HEARTBEAT_STORE)]);
+
+  const clock = createProbeClock();
+  const scheduleWake = vi.fn((_at: number | undefined) => Promise.resolve());
+  const lifetime = {
+    touch: vi.fn(() => Promise.resolve()),
+    scheduleWake,
+    openHoldPage: vi.fn(() => Promise.resolve(41)),
+    closeTab: vi.fn((_tabId: number) => Promise.resolve()),
+  };
+  const create = () =>
+    createBackgroundApp(
+      buildDependencies({
+        openDatabase: openResearchDatabase,
+        now: clock.now,
+        setTimer: clock.setTimer,
+        backgroundLifetime: lifetime,
+        ...overrides,
+      }),
+    );
+
+  return { app: create(), create, database, clock, lifetime };
+};
+
+/** Steps the clock on, a beat at a time, until every job has settled. */
+const stepUntilDone = async (
+  clock: ReturnType<typeof createProbeClock>,
+  database: Awaited<ReturnType<typeof openResearchDatabase>>,
+) => {
+  const isSettled = async () =>
+    (await database.getAll(JOB_STORE)).every(
+      ({ status }) => status === "done" || status === "failed",
+    );
+
+  for (let step = 0; step < 50 && !(await isSettled()); step += 1) {
+    await vi.waitFor(async () => expect(clock.sleeping() > 0 || (await isSettled())).toBe(true));
+    clock.step(2_000);
+  }
+};
+
+const readProbes = async (app: BackgroundApp) =>
+  (await app.handleMessage(buildRpcMessage("diagnostics.readProbes", {}))) as {
+    payload: { runs: { state: string; strategy: string; pageLoads: number; lastSeenMs: number }[] };
+  };
+
+describe("the background-lifetime probe through the background", () => {
+  it("answers a probe at once with its run id, then runs it to completion", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const { app, database, clock } = await createProbeApp();
+      const answer = await app.handleMessage(
+        buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "none", holdMs: 5_000 }),
+      );
+
+      expect(answer).toMatchObject({
+        type: "diagnostics.probeStarted",
+        payload: { runId: expect.any(String) },
+      });
+
+      await stepUntilDone(clock, database);
+
+      await vi.waitFor(async () =>
+        expect((await readProbes(app)).payload.runs).toEqual([
+          expect.objectContaining({ state: "completed", strategy: "none", pageLoads: 1 }),
+        ]),
+      );
+      expect(await database.getAll(JOB_STORE)).toEqual([
+        expect.objectContaining({ status: "done" }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("touches the browser while an API-activity run holds, and stops when it ends", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const { app, database, clock, lifetime } = await createProbeApp();
+
+      await app.handleMessage(
+        buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "apiActivity", holdMs: 12_000 }),
+      );
+      await stepUntilDone(clock, database);
+
+      const touches = lifetime.touch.mock.calls.length;
+
+      expect(touches).toBeGreaterThanOrEqual(2);
+
+      vi.advanceTimersByTime(60_000);
+      expect(lifetime.touch).toHaveBeenCalledTimes(touches);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("holds a job-runner run the way every job is held", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const { app, database, clock, lifetime } = await createProbeApp();
+
+      await app.handleMessage(
+        buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "jobRunner", holdMs: 12_000 }),
+      );
+      await stepUntilDone(clock, database);
+
+      expect(lifetime.touch.mock.calls.length).toBeGreaterThanOrEqual(2);
+      await vi.waitFor(async () =>
+        expect((await readProbes(app)).payload.runs).toEqual([
+          expect.objectContaining({ state: "completed", strategy: "jobRunner" }),
+        ]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens the hold page for a host-page run, posts to its port, and closes it", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const { app, database, clock, lifetime } = await createProbeApp();
+      const holdPage = { ...createFakePort(), name: "hold" };
+
+      app.attachPort({ ...holdPage.port, name: "hold" });
+      await app.handleMessage(
+        buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "hostPage", holdMs: 6_000 }),
+      );
+      await stepUntilDone(clock, database);
+
+      expect(lifetime.openHoldPage).toHaveBeenCalledTimes(1);
+      expect(holdPage.posted).toContainEqual({ type: "hold.ping" });
+      await vi.waitFor(() => expect(lifetime.closeTab).toHaveBeenCalledWith(41));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not answer requests on the hold page's port", async () => {
+    const { app } = await createProbeApp();
+    const holdPage = createFakePort();
+
+    app.attachPort({ ...holdPage.port, name: "hold" });
+    holdPage.send(buildRpcMessage("inference.probe", {}));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(holdPage.posted).toEqual([]);
+  });
+
+  it("resumes a wake-and-resume run in the next page load, woken by the alarm", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const { app, create, database, clock } = await createProbeApp();
+
+      await app.handleMessage(
+        buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "wakeAndResume", holdMs: 6_000 }),
+      );
+      await vi.waitFor(() => expect(clock.sleeping()).toBe(1));
+      // The page is unloaded here: its sleep never ends, and its job stays running.
+      clock.unload();
+      expect((await database.getAll(JOB_STORE))[0]?.status).toBe("running");
+
+      const woken = create();
+
+      clock.step(61_000);
+      void woken.handleAlarm("jobs.wake");
+      await stepUntilDone(clock, database);
+
+      await vi.waitFor(async () =>
+        expect((await readProbes(woken)).payload.runs).toEqual([
+          expect.objectContaining({ state: "resumed", pageLoads: 2 }),
+        ]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ends another strategy's run where the unload stopped it, without resuming", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const { app, create, database, clock } = await createProbeApp();
+
+      await app.handleMessage(
+        buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "none", holdMs: 6_000 }),
+      );
+      await vi.waitFor(() => expect(clock.sleeping()).toBe(1));
+      clock.unload();
+
+      const woken = create();
+
+      clock.step(61_000);
+      await woken.handleAlarm("jobs.wake");
+
+      expect(await database.getAll(JOB_STORE)).toEqual([
+        expect.objectContaining({ status: "done" }),
+      ]);
+      expect((await readProbes(woken)).payload.runs).toEqual([
+        expect.objectContaining({ state: "stopped", lastSeenMs: 0, pageLoads: 1 }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sets the wake-up a minute ahead while a job runs, and clears it once none is left", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    try {
+      const { app, database, clock, lifetime } = await createProbeApp();
+      const startedAt = clock.now();
+
+      await app.handleMessage(
+        buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "none", holdMs: 2_000 }),
+      );
+      await vi.waitFor(() =>
+        expect(lifetime.scheduleWake).toHaveBeenCalledWith(startedAt + 60_000),
+      );
+      await stepUntilDone(clock, database);
+
+      await vi.waitFor(() => expect(lifetime.scheduleWake).toHaveBeenLastCalledWith(undefined));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores an alarm that is not the job wake-up", async () => {
+    const { app, database } = await createProbeApp();
+
+    await database.put(JOB_STORE, {
+      id: "left-running",
+      type: "diagnostics.lifetimeProbe",
+      inputHashes: ["r"],
+      producerVersion: "probe@1",
+      status: "running",
+      priority: 0,
+      attempts: 0,
+      nextAttemptAt: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    });
+    await app.handleAlarm("something.else");
+
+    expect((await database.get(JOB_STORE, "left-running"))?.status).toBe("running");
+  });
+
+  it("refuses a probe hold outside the allowed range", async () => {
+    const { app } = await createProbeApp();
+    const answer = await app.handleMessage(
+      buildRpcMessage("diagnostics.lifetimeProbe", { strategy: "none", holdMs: 10 }),
+    );
+
+    expect(answer).toMatchObject({ type: "rpc.refused" });
+  });
 });

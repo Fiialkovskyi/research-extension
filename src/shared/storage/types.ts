@@ -5,6 +5,7 @@ import type {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
   KEY_STORE,
@@ -259,6 +260,27 @@ export type JobStatus = "queued" | "running" | "done" | "failed";
  * Its id is derived from what it does — type, inputs, producer version — so the
  * same work asked for twice is one job, not two.
  */
+/**
+ * One heartbeat of a background-lifetime probe run (diagnostics only).
+ *
+ * Content-free by construction: times and labels, nothing a page said. Rows of
+ * one run written by two different page loads show the page was unloaded and
+ * woken in between.
+ */
+export interface StoredHeartbeat {
+  runId: string;
+  /** How the run tried to keep the background alive. */
+  strategy: string;
+  /** How long the run was asked to hold the background busy. */
+  holdMs: number;
+  /** Time held so far when this beat was written. */
+  elapsedMs: number;
+  /** Identifies the page load that wrote the beat. */
+  pageLoadId: string;
+  /** Part of the key, so a resumed run's first beat never overwrites its last. */
+  writtenAt: number;
+}
+
 export interface StoredJob {
   /** SHA-256 of the type, the sorted input hashes and the producer version. */
   id: string;
@@ -466,5 +488,10 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: [string, string, number];
     value: StoredVector;
     indexes: { sessionId: string; nodeId: string };
+  };
+  [HEARTBEAT_STORE]: {
+    key: [string, number];
+    value: StoredHeartbeat;
+    indexes: { runId: string };
   };
 }

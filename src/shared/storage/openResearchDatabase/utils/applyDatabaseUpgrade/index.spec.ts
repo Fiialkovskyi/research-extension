@@ -8,6 +8,7 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
   KEY_STORE,
@@ -317,6 +318,24 @@ describe("applyDatabaseUpgrade", () => {
     expect(await after.countFromIndex(VECTOR_STORE, "sessionId", "session-1")).toBe(1);
     expect(await after.countFromIndex(VECTOR_STORE, "nodeId", "a")).toBe(1);
     expect(await after.countFromIndex(JOB_STORE, "sessionId", "session-1")).toBe(1);
+
+    after.close();
+  });
+
+  it("adds an empty heartbeat store to a version-12 profile, keeping its data", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 12);
+
+    await before.put(SESSION_STORE, { id: "session-1", status: "saved" } as never);
+    before.close();
+
+    const after = await openAt(name, 13);
+
+    expect(after.version).toBe(13);
+    expect(await after.count(HEARTBEAT_STORE)).toBe(0);
+    expect(after.transaction(HEARTBEAT_STORE).store.keyPath).toEqual(["runId", "writtenAt"]);
+    expect([...after.transaction(HEARTBEAT_STORE).store.indexNames]).toContain("runId");
+    expect(await after.get(SESSION_STORE, "session-1")).toBeDefined();
 
     after.close();
   });

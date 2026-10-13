@@ -43,8 +43,9 @@ export default defineConfig({
     // survives the tab being closed and restored, which is how a tab restored
     // after its group is gone is brought back into the session. `idle` tells
     // reading time from a user who has walked away, and `scripting` injects the
-    // page observer into session tabs. Nothing else is requested.
-    permissions: ["tabGroups", "tabs", "webNavigation", "sessions", "scripting", "idle"],
+    // page observer into session tabs. `alarms` lets queued jobs wake the
+    // background after it was unloaded. Nothing else is requested.
+    permissions: ["tabGroups", "tabs", "webNavigation", "sessions", "scripting", "idle", "alarms"],
     // Reading a session page's scroll, copies and text needs access to page
     // contents. Optional, so it is never granted at install: the popup asks for
     // it when a session starts, and capture carries on without it if refused.

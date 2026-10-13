@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { OptionsApp, type SurfaceClient } from ".";
@@ -37,17 +37,43 @@ const createStubClient = () => {
 const capabilities = { availableDevices: ["wasm"], crossOriginIsolated: false, threadCount: 1 };
 
 describe("OptionsApp", () => {
-  it("asks what this installation can run, what is installed, what the policy refused, and where Ollama stands", () => {
+  it("asks what this installation can run, what is installed, what the policy refused, where Ollama stands and how probe runs went", () => {
     const { client, sent } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
     expect(sent.map((message) => message.type)).toEqual([
+      // Children's effects run first: the Ollama card, then the probe card.
       "ollama.status",
+      "diagnostics.readProbes",
       "inference.probe",
       "model.list",
       "diagnostics.read",
     ]);
+  });
+
+  it("leaves the probe card's answers to the card, so the page keeps rendering", () => {
+    const { client, answer } = createStubClient();
+
+    render(<OptionsApp client={client} />);
+    act(() => {
+      answer("diagnostics.probeStarted", { runId: "run-1" });
+      answer("diagnostics.probes", { runs: [] });
+    });
+
+    expect(screen.getByTestId("options-app")).toBeTruthy();
+    expect(screen.getByTestId("probe-none")).toBeTruthy();
+  });
+
+  it("keeps the background-lifetime probe in a Developer section, closed by default", () => {
+    const { client } = createStubClient();
+
+    render(<OptionsApp client={client} />);
+
+    const developer = screen.getByTestId("developer-section") as HTMLDetailsElement;
+
+    expect(developer.open).toBe(false);
+    expect(developer.contains(screen.getByTestId("lifetime-probe"))).toBe(true);
   });
 
   it("says it is still checking before an answer arrives", () => {

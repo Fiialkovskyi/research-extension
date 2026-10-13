@@ -74,6 +74,8 @@ export interface BackgroundDependencies {
   readFocusedTab: () => Promise<number | undefined>;
   /** Whether the user granted access to the local Ollama server. */
   hasOllamaAccess: () => Promise<boolean>;
+  /** What the background needs to stay loaded through long work, and to wake itself. */
+  backgroundLifetime: BackgroundLifetimeApi;
   /** Where the local Ollama server answers; the loopback default outside tests. */
   ollamaOrigin?: string;
   /** The current time. Injected so reading time is exercised without waiting. */
@@ -91,6 +93,21 @@ export interface BackgroundDependencies {
    */
   loadEmbeddingSession?: (model: StoredModel) => Promise<EmbeddingSession>;
   clearTimer?: (handle: unknown) => void;
+}
+
+/**
+ * The browser calls that keep the background event page loaded through long
+ * work, and wake it when it was unloaded anyway (spike M0-1).
+ */
+export interface BackgroundLifetimeApi {
+  /** A cheap read-only browser call, made only to count as activity. */
+  touch: () => Promise<unknown>;
+  /** Sets the one job wake-up alarm for a time, or clears it with `undefined`. */
+  scheduleWake: (at: number | undefined) => Promise<void>;
+  /** Opens the hold page in a background tab and resolves to its tab id. */
+  openHoldPage: () => Promise<number>;
+  /** Closes a tab, such as the hold page. */
+  closeTab: (tabId: number) => Promise<void>;
 }
 
 /** What the browser reports about the user's activity. */
@@ -115,6 +132,8 @@ export interface GroupEventDetails {
  * runtime; the real port satisfies it.
  */
 export interface BackgroundPort {
+  /** The name the page connected under; the hold page connects under its own. */
+  name?: string;
   postMessage: (message: unknown) => void;
   onMessage: { addListener: (listener: (message: unknown) => void) => void };
   /** Fires when the surface's page goes away, ending anything it subscribed to. */
@@ -190,6 +209,8 @@ export interface BackgroundApp {
   handleIdleStateChanged: (state: IdleState) => Promise<void>;
   /** Starts observing the session's open pages once page access is granted. */
   handlePermissionsAdded: () => Promise<void>;
+  /** An alarm fired: the job wake-up runs what is due. */
+  handleAlarm: (name: string) => Promise<void>;
   /** Releases the worker, if one was ever started. */
   shutdown: () => void;
 }

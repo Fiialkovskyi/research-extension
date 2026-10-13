@@ -1,6 +1,7 @@
 import { useEffect, useReducer } from "react";
 
 import { diagnosticsResponseSchemas } from "@/features/diagnostics";
+import { LifetimeProbeCard } from "@/features/diagnostics/ui/lifetimeProbeCard";
 import { PolicyReport } from "@/features/diagnostics/ui/policyReport";
 import { inferenceResponseSchemas } from "@/features/inference";
 import { benchmarkResponseSchemas } from "@/features/inferenceBenchmark";
@@ -62,10 +63,14 @@ const DEFAULT_OLLAMA_ENVIRONMENT = {
 
 const refuseOllamaAccess = (): Promise<boolean> => Promise.resolve(false);
 
-/** Every answer the background may send this surface. */
+/**
+ * Every answer this surface's own state follows. The probe card's answers
+ * (`diagnostics.probes`, `diagnostics.probeStarted`) share the port but are
+ * the card's to read, so only the policy report is taken from diagnostics.
+ */
 const responseSchemas = {
   ...benchmarkResponseSchemas,
-  ...diagnosticsResponseSchemas,
+  "diagnostics.report": diagnosticsResponseSchemas["diagnostics.report"],
   ...inferenceResponseSchemas,
   ...modelInstallResponseSchemas,
   ...modelRegistryResponseSchemas,
@@ -332,6 +337,16 @@ export function OptionsApp({
           <InstallProgress state={state.install} />
         </div>
       </section>
+
+      <details data-testid="developer-section" className="mt-6">
+        <summary className="cursor-pointer text-sm font-medium">Developer</summary>
+        <section className="mt-2">
+          <h2 className="text-sm font-medium">Background lifetime</h2>
+          <div className="mt-2">
+            <LifetimeProbeCard client={client} />
+          </div>
+        </section>
+      </details>
     </main>
   );
 }

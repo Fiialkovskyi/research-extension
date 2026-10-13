@@ -3,7 +3,9 @@ import { defineBackground } from "wxt/utils/define-background";
 import type { ScriptPublicPath } from "wxt/utils/inject-script";
 
 import { createBackgroundApp } from "@/app/backgroundApp";
+import { HOLD_PAGE_PATH } from "@/features/diagnostics";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
+import { JOB_WAKE_ALARM } from "@/features/jobQueue";
 import { RECORDED_PAGE_PATH } from "@/features/recordedData";
 import { MAP_PAGE_PATH, openMapTab, readMapTab } from "@/features/researchMap";
 import { NO_TAB_GROUP } from "@/features/researchSession";
@@ -139,6 +141,30 @@ export default defineBackground(() => {
       browser.permissions.contains({
         origins: LOCAL_INFERENCE_ORIGINS.map((origin) => `${origin}/*`),
       }),
+    backgroundLifetime: {
+      // Read-only and cheap: it exists only to count as activity.
+      touch: () => browser.runtime.getPlatformInfo(),
+      scheduleWake: async (at) => {
+        if (at === undefined) {
+          await browser.alarms.clear(JOB_WAKE_ALARM);
+        } else {
+          browser.alarms.create(JOB_WAKE_ALARM, { when: at });
+        }
+      },
+      openHoldPage: async () => {
+        const tab = await browser.tabs.create({
+          url: browser.runtime.getURL(HOLD_PAGE_PATH),
+          active: false,
+        });
+
+        if (tab.id === undefined) {
+          throw new Error("The hold page opened without a tab id.");
+        }
+
+        return tab.id;
+      },
+      closeTab: (tabId) => browser.tabs.remove(tabId),
+    },
     readFocusedTab: () =>
       readFocusedTab({
         getLastFocusedWindow: () => browser.windows.getLastFocused(),
@@ -239,5 +265,10 @@ export default defineBackground(() => {
   // without a reload.
   browser.permissions.onAdded.addListener(() => {
     void app.handlePermissionsAdded();
+  });
+  // Jobs wake the page themselves: an unload mid-job is recovered without
+  // waiting for the user or a browser restart.
+  browser.alarms.onAlarm.addListener(({ name }) => {
+    void app.handleAlarm(name);
   });
 });

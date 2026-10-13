@@ -8,6 +8,7 @@ import {
   CLUSTERING_STORE,
   DATABASE_VERSION,
   EDGE_STORE,
+  HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
   KEY_STORE,
@@ -40,6 +41,7 @@ describe("openResearchDatabase", () => {
         SPACE_STORE,
         CHUNK_STORE,
         VECTOR_STORE,
+        HEARTBEAT_STORE,
       ].toSorted(),
     );
 

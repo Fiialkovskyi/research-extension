@@ -4,6 +4,7 @@ import {
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
+  HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
   KEY_STORE,
@@ -135,6 +136,14 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     transaction.objectStore(VECTOR_STORE).createIndex("sessionId", "sessionId");
     transaction.objectStore(VECTOR_STORE).createIndex("nodeId", "nodeId");
     transaction.objectStore(JOB_STORE).createIndex("sessionId", "sessionId");
+  },
+  13: (database) => {
+    // The background-lifetime probe's heartbeats: one key range per run.
+    const heartbeats = database.createObjectStore(HEARTBEAT_STORE, {
+      keyPath: ["runId", "writtenAt"],
+    });
+
+    heartbeats.createIndex("runId", "runId");
   },
 };
 

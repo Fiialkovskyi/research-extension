@@ -65,11 +65,31 @@ import {
   saveActiveSession,
 } from "@/features/researchLibrary";
 import {
+  EMBED_SNAPSHOT_JOB,
   type EmbeddingSession,
   enqueueSnapshotEmbeddings,
-  runNextEmbeddingJob,
+  runEmbeddingJob,
 } from "@/features/snapshotEmbeddings";
-import { requeueRunningJobs } from "@/features/jobQueue";
+import {
+  checkpointJob,
+  enqueueJob,
+  getNextWakeTime,
+  holdBackgroundAlive,
+  JOB_WAKE_ALARM,
+  JOB_WAKE_DELAY_MS,
+  type JobRunner,
+  readPendingJobs,
+  requeueRunningJobs,
+  runNextJob,
+} from "@/features/jobQueue";
+import {
+  HOLD_PING_INTERVAL_MS,
+  HOLD_PORT_NAME,
+  LIFETIME_PROBE_JOB,
+  type LifetimeStrategy,
+  readProbeOutcome,
+  runLifetimeProbe,
+} from "@/features/diagnostics";
 import { activateModel, getActiveModel, listInstalledModels } from "@/features/modelRegistry";
 import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
 import {
@@ -112,6 +132,7 @@ import {
   RpcMessageError,
 } from "@/shared/rpc";
 import {
+  HEARTBEAT_STORE,
   MODEL_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
@@ -120,7 +141,13 @@ import {
 import type { ProbeResult } from "@/features/modelConformance";
 import { requestSchemas } from "./schemas";
 import type { PageSender } from "@/features/pageSignals";
-import type { BackgroundApp, BackgroundDependencies, Emit, IdleState } from "./types";
+import type {
+  BackgroundApp,
+  BackgroundDependencies,
+  BackgroundPort,
+  Emit,
+  IdleState,
+} from "./types";
 
 export type {
   BackgroundApp,
@@ -491,14 +518,130 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       return loading;
     });
 
+  /** Identifies this load of the background page, which a probe's beats record. */
+  const pageLoadId = crypto.randomUUID();
+  /** The hold page's ports, which the `hostPage` strategy posts to. */
+  const holdPorts = new Set<BackgroundPort>();
+
+  /**
+   * Keeps the background loaded while a job runs, with no extension page open
+   * to keep it company. Spike M0-1 found an API call every few seconds is
+   * what Firefox counts as activity; a pending `fetch` is not.
+   */
+  const holdForJob = (): (() => void) => holdBackgroundAlive(dependencies.backgroundLifetime.touch);
+
+  /**
+   * Starts a probe strategy's keep-alive (spike M0-1) and returns its release;
+   * `none` and `wakeAndResume` have none, and `jobRunner` is the hold every
+   * job runs under.
+   */
+  const holdFor = (strategy: LifetimeStrategy): (() => void) | undefined => {
+    const { backgroundLifetime } = dependencies;
+
+    switch (strategy) {
+      case "none":
+      case "wakeAndResume": {
+        return undefined;
+      }
+      case "apiActivity": {
+        return holdBackgroundAlive(backgroundLifetime.touch);
+      }
+      case "jobRunner": {
+        return holdForJob();
+      }
+      case "hostPage": {
+        const opened = backgroundLifetime.openHoldPage();
+        const release = holdBackgroundAlive(() => {
+          for (const port of holdPorts) {
+            port.postMessage({ type: "hold.ping" });
+          }
+
+          return Promise.resolve();
+        }, HOLD_PING_INTERVAL_MS);
+
+        return () => {
+          release();
+          void opened
+            .then((tabId) => backgroundLifetime.closeTab(tabId))
+            .catch(dependencies.reportError);
+        };
+      }
+    }
+  };
+
+  /** Runs a job type's work under {@link holdForJob}. */
+  const runHeld =
+    (run: JobRunner): JobRunner =>
+    async (job) => {
+      const release = holdForJob();
+
+      try {
+        await run(job);
+      } finally {
+        release();
+      }
+    };
+
+  /**
+   * What each job type does, by type. Every job runs held, except the probe,
+   * which holds the background by its own strategy — that is what it measures.
+   */
+  const jobRunners: Record<string, JobRunner> = {
+    [EMBED_SNAPSHOT_JOB]: runHeld(async (job) => {
+      await runEmbeddingJob({
+        database: await getDatabase(),
+        job,
+        loadSession: loadEmbeddingSession,
+      });
+    }),
+    [LIFETIME_PROBE_JOB]: async (job) => {
+      const openedDatabase = await getDatabase();
+
+      await runLifetimeProbe({
+        job,
+        pageLoadId,
+        now: getNow,
+        sleep: (ms) =>
+          new Promise((resolve) => {
+            setTimer(resolve, ms);
+          }),
+        writeHeartbeat: async (heartbeat) => {
+          await openedDatabase.put(HEARTBEAT_STORE, heartbeat);
+        },
+        saveCheckpoint: (checkpoint) => checkpointJob(openedDatabase, job.id, checkpoint),
+        holdFor,
+      });
+    },
+  };
+
+  /**
+   * Sets the job wake-up for what is pending, or clears it. A failure is
+   * reported, not thrown: the jobs still run while the page is loaded.
+   */
+  const scheduleJobWake = async (at?: number): Promise<void> => {
+    try {
+      const wakeAt = at ?? getNextWakeTime(await readPendingJobs(await getDatabase()), getNow());
+
+      await dependencies.backgroundLifetime.scheduleWake(wakeAt);
+    } catch (error) {
+      dependencies.reportError(error);
+    }
+  };
+
   let isRunningJobs = false;
   let isJobRunRequested = false;
+  let hasRequeuedJobs = false;
 
   /**
    * Runs due jobs one at a time until none is left (REQ-MOD-008: one embedding
    * batch at a time). Single-flight: a request while running makes the running
    * loop look again rather than starting a second. Off the capture queue —
    * embedding takes seconds, and capture must not wait for it.
+   *
+   * The first run after the page loads hands back jobs a previous load left
+   * running: nothing of this load can be running them yet. While jobs run, a
+   * wake-up is set a minute ahead, so an unload mid-job is recovered; once the
+   * loop ends, it is set for what is still pending, or cleared.
    */
   const runJobs = async (): Promise<void> => {
     if (isRunningJobs) {
@@ -511,12 +654,19 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     let hasRunAny = false;
 
     try {
+      if (!hasRequeuedJobs) {
+        hasRequeuedJobs = true;
+        await enqueueCapture((openedDatabase) => requeueRunningJobs(openedDatabase, getNow()));
+      }
+
       do {
         isJobRunRequested = false;
 
         const openedDatabase = await getDatabase();
 
-        while (await runNextEmbeddingJob(openedDatabase, loadEmbeddingSession)) {
+        await scheduleJobWake(getNow() + JOB_WAKE_DELAY_MS);
+
+        while (await runNextJob(openedDatabase, jobRunners)) {
           // Each pass claims, runs and settles one job.
           hasRunAny = true;
         }
@@ -526,6 +676,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     } finally {
       isRunningJobs = false;
     }
+
+    await scheduleJobWake();
 
     // New vectors can change the clusters: recompute once things are quiet.
     if (hasRunAny) {
@@ -800,6 +952,34 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("model.listed", {
             models: await listInstalledModels(await getDatabase()),
           });
+        }
+
+        case "diagnostics.lifetimeProbe": {
+          const runId = crypto.randomUUID();
+
+          await enqueueJob(await getDatabase(), {
+            type: LIFETIME_PROBE_JOB,
+            inputHashes: [runId],
+            producerVersion: "probe@1",
+            // Ahead of embedding, so a run starts when asked.
+            priority: 10,
+            payload: { runId, ...request.payload },
+          });
+          void runJobs();
+
+          return buildRpcMessage("diagnostics.probeStarted", { runId });
+        }
+
+        case "diagnostics.readProbes": {
+          const heartbeats = await (await getDatabase()).getAll(HEARTBEAT_STORE);
+          const byRun = Map.groupBy(heartbeats, ({ runId }) => runId);
+          const now = getNow();
+          const runs = [...byRun.values()]
+            .flatMap((beats) => readProbeOutcome(beats, now) ?? [])
+            .toSorted((a, b) => b.startedAt - a.startedAt)
+            .slice(0, 20);
+
+          return buildRpcMessage("diagnostics.probes", { runs });
         }
 
         case "diagnostics.read": {
@@ -1285,10 +1465,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           );
           const startedAt = getNow();
           let characters = 0;
-          // Reports every second while the answer is written. Firefox unloads
-          // an event page after 30 s without activity, an open port
-          // notwithstanding, and a long answer is that long; posting to the
-          // port is activity, as an install's progress already showed.
+          // Firefox unloads an event page after 30 s without activity, and a
+          // pending answer is not activity (spike M0-1), so the background is
+          // held while it waits. The progress, every second, is for the card.
+          const release = holdBackgroundAlive(dependencies.backgroundLifetime.touch);
           const progress = setInterval(() => {
             emit?.(
               buildRpcMessage("generation.measureProgress", {
@@ -1316,6 +1496,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             return buildRpcMessage("generation.measureFailed", { reason: getErrorMessage(error) });
           } finally {
             clearInterval(progress);
+            release();
           }
         }
 
@@ -1414,6 +1595,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     // Nowhere to stream or push to on a one-shot message.
     handleMessage: (candidate) => handleMessage(candidate, undefined),
     attachPort: (port) => {
+      // The hold page only keeps the background company; it sends nothing.
+      if (port.name === HOLD_PORT_NAME) {
+        holdPorts.add(port);
+        port.onDisconnect.addListener(() => {
+          holdPorts.delete(port);
+        });
+
+        return;
+      }
+
       // One per port, so the port's subscription can be found and dropped.
       const emit: Emit = (update) => {
         port.postMessage(update);
@@ -1510,8 +1701,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       });
       await reconcileTabs();
       await recluster();
-      // A job the last run was in the middle of is handed back, then resumed.
-      await enqueueCapture(requeueRunningJobs);
+      // A job the last run was in the middle of is handed back by the first
+      // run of jobs after this load, then resumed.
       void embedSnapshots();
     },
     handleNavigationCommitted: (navigation) =>
@@ -1577,6 +1768,11 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       enqueueCapture(async (openedDatabase) => {
         void injectSessionTabs(openedDatabase, dependencies.pageSignals);
       }),
+    handleAlarm: async (name) => {
+      if (name === JOB_WAKE_ALARM) {
+        await runJobs();
+      }
+    },
     shutdown: () => {
       discardWorker();
       database = undefined;
