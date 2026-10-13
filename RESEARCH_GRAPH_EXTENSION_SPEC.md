@@ -86,7 +86,7 @@ The background is an MV3 event page, not a service worker. Firefox runs MV3 back
   "optional_host_permissions": ["<all_urls>"],
   "host_permissions": ["https://huggingface.co/*", "https://*.hf.co/*"],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' https://huggingface.co https://*.hf.co"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' https://huggingface.co https://*.hf.co http://127.0.0.1:11434"
   }
 }
 ```
@@ -571,7 +571,7 @@ All research data lives in one IndexedDB database in the extension's origin. Sma
 
 ## 10. Privacy & security (SEC)
 
-The only network traffic the extension originates is model downloads from Hugging Face, and those carry no user data. The CSP enforces this for extension pages, the native host is socket-free by contract, and both are covered by automated egress tests.
+The only network traffic the extension originates is model downloads from Hugging Face, which carry no user data, and requests to a local inference server on loopback, which never leave the machine. The CSP enforces this for extension pages, the native host is socket-free by contract, and both are covered by automated egress tests.
 
 **Threat model**
 
@@ -586,7 +586,8 @@ The only network traffic the extension originates is model downloads from Huggin
 
 **Requirements**
 
-- **REQ-SEC-001:** Extension pages SHALL use a CSP whose `connect-src` allows only `'self'` and the enumerated Hugging Face hosts. Workers inherit it.
+- **REQ-SEC-001:** Extension pages SHALL use a CSP whose `connect-src` allows only `'self'`, the enumerated Hugging Face hosts, and the local inference server on loopback (`http://127.0.0.1:11434`). Workers inherit it.
+- **REQ-SEC-001a (local inference server):** The extension SHALL reach a local inference server (Ollama) only on loopback, only after the user grants its optional host permission from the options page, and SHALL send it nothing but the texts to embed or generate from and the model requests the user initiates. A model it serves SHALL be pinned to the digest the server reports and pass the conformance suite before use, like an installed model.
 - **REQ-SEC-002:** Content scripts SHALL NOT call `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `EventSource`. Enforced by a lint rule and a bundle scan in CI.
 - **REQ-SEC-003:** Model downloads SHALL be user-initiated from the options page, send no cookies or identifiers (`credentials: "omit"`), and support offline install from local files (a folder picker, or a path given to the native host).
 - **REQ-SEC-004 (native host):** The native host SHALL communicate only over stdio native messaging, SHALL NOT open listening or outbound sockets except for user-initiated model downloads from Hugging Face, and SHALL default to `HF_HUB_OFFLINE=1` after install. Its manifest SHALL list only this extension's ID in `allowed_extensions`. Install locations: `~/.mozilla/native-messaging-hosts/` on Linux and `~/Library/Application Support/Mozilla/NativeMessagingHosts/` on macOS.
@@ -670,7 +671,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 - [ ] M0-1: Event-page lifetime. Confirm a background-owned Worker running inference for 5 minutes or more is not killed by event-page idle unload on Firefox ESR 140 and release (Linux and macOS). IF it is, move inference hosting to a pinned extension page and document the result. (RT-004, RT-005)
 - [ ] M0-2: Transformers.js v4 inside the extension CSP (`wasm-unsafe-eval`), with WASM threads availability, WebGPU on Apple Silicon, and WASM fallback on Linux. Benchmark one embedding model and one small text-generation model against NFR-004 and NFR-007. (MOD, NFR)
 - [ ] M0-3: Enumerate the Hugging Face download hosts (redirects, LFS or Xet CDN) and verify downloads succeed under the CSP allowlist. (SEC-001)
-- [ ] M0-4: Native messaging round trip on Linux and macOS with a Python host, including chunked messages over 1 MB and host restart. (SEC-004)
+- [ ] M0-4: Native messaging round trip on Linux and macOS with a Python host, including chunked messages over 1 MB and host restart. (SEC-004) — **Replaced for now by the Ollama spike** (`spike-ollama-provider`): a local Ollama server on loopback serves embeddings, and after its gate, generation, in place of a custom native host. A native host is reconsidered only if Ollama proves unsuitable.
 
 **M1: Capture and graph**
 
@@ -690,9 +691,10 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 **M3: Save and resume**
 
-- [ ] Save, library, lazy restore, "left off at". (STO-003 to STO-005)
-- [ ] Reattach suggestion, export and import with portability checks. (STO-006, STO-007, LIN-009)
-- [ ] Deletion cascades and the "What was recorded" view. (STO-008, SEC-008)
+- [x] Save, library, lazy restore, "left off at". (STO-003 to STO-005)
+- [x] Reattach suggestion. (STO-006)
+- Export and import moved to the end of the roadmap, after M6, by the maintainer's decision (2026-10-13). (STO-007, LIN-009)
+- [x] Deletion cascades and the "What was recorded" view. (STO-008, SEC-008)
 
 **M4: Synthesis**
 
@@ -715,6 +717,10 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 - [ ] Egress test suite, performance gates, accessibility audit. (Section 13)
 - [ ] Passphrase lock and denylist editor. (SEC-006, SEC-007)
 - [ ] AMO submission with source and build instructions; beta onboarding. (RT-007)
+
+**Last: Export and import**
+
+- [ ] Session export to an encrypted `.rgsession` file and import with portability checks; deferred here from M3. (STO-007, LIN-009)
 
 ## 15. Risks & open decisions
 

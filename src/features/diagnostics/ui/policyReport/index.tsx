@@ -1,3 +1,5 @@
+import { StatusDot } from "@/shared/ui";
+
 import type { BlockedRequestReport } from "../../types";
 
 export interface PolicyReportProps {
@@ -23,7 +25,8 @@ export function PolicyReport({ permittedOrigins, blocked }: PolicyReportProps) {
         Permitted: <code>{permittedOrigins.join(" ")}</code>
       </p>
       {blocked === undefined || blocked.length === 0 ? (
-        <p data-testid="policy-nothing-blocked" className="mt-1">
+        <p data-testid="policy-nothing-blocked" className="mt-1 flex items-center gap-2">
+          <StatusDot tone="ok" />
           Nothing has been blocked by the policy.
         </p>
       ) : (
@@ -31,9 +34,12 @@ export function PolicyReport({ permittedOrigins, blocked }: PolicyReportProps) {
           {blocked.map((entry) => (
             <li
               key={`${entry.directive} ${entry.origin}`}
-              className="text-red-700 dark:text-red-400"
+              className="flex items-center gap-2 text-red-700 dark:text-red-400"
             >
-              <code>{entry.origin}</code> refused by <code>{entry.directive}</code>
+              <StatusDot tone="bad" />
+              <span>
+                <code>{entry.origin}</code> refused by <code>{entry.directive}</code>
+              </span>
             </li>
           ))}
         </ul>

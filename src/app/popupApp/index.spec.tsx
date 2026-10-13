@@ -17,6 +17,8 @@ interface ClientAnswers {
   start?: unknown;
   /** The answer to opening the map. */
   map?: unknown;
+  /** Whether local AI is paused waiting for Ollama. */
+  isLocalAiPaused?: boolean;
 }
 
 /** A background that reports `active` when asked, and answers a start with `start`. */
@@ -26,8 +28,13 @@ const createClient = ({
   closed = null,
   start,
   map = buildRpcMessage("map.opened", {}),
+  isLocalAiPaused = false,
 }: ClientAnswers = {}): PopupClient => ({
   request: vi.fn((message: RpcMessage<string, unknown>) => {
+    if (message.type === "ollama.health") {
+      return Promise.resolve(buildRpcMessage("ollama.healthReport", { isPaused: isLocalAiPaused }));
+    }
+
     if (message.type === "map.open") {
       return Promise.resolve(map);
     }
@@ -243,7 +250,8 @@ describe("PopupApp", () => {
     fireEvent.click(await screen.findByTestId("open-map"));
 
     expect(client.request).toHaveBeenCalledWith(expect.objectContaining({ type: "map.open" }));
-    await vi.waitFor(() => expect(client.request).toHaveBeenCalledTimes(2));
+    // The session, local AI's health, and the map.
+    await vi.waitFor(() => expect(client.request).toHaveBeenCalledTimes(3));
     expect(screen.queryByTestId("map-error")).not.toBeInTheDocument();
   });
 
@@ -710,5 +718,61 @@ describe("PopupApp", () => {
       await vi.waitFor(() => expect(screen.queryByTestId("reattach-offer")).toBeNull());
       expect(screen.getByTestId("session-active")).toHaveTextContent("Mid-drive");
     });
+  });
+});
+
+describe("PopupApp's way to settings", () => {
+  it("links to settings with or without a session", async () => {
+    const openSettings = vi.fn();
+
+    render(
+      <PopupApp
+        client={createClient()}
+        pageAccess={buildPageAccess()}
+        graph={buildGraph()}
+        openSettings={openSettings}
+      />,
+    );
+
+    fireEvent.click(await screen.findByTestId("open-settings"));
+
+    expect(openSettings).toHaveBeenCalledOnce();
+  });
+});
+
+describe("PopupApp while local AI waits for Ollama", () => {
+  it("says similarity is paused, and opens settings from the line", async () => {
+    const openSettings = vi.fn();
+
+    render(
+      <PopupApp
+        client={createClient({ active: "E-bike motors", isLocalAiPaused: true })}
+        pageAccess={buildPageAccess()}
+        graph={buildGraph()}
+        openSettings={openSettings}
+      />,
+    );
+
+    expect(await screen.findByTestId("local-ai-paused")).toHaveTextContent(
+      "Local AI is paused: Ollama isn't running. Pages are still recorded",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
+
+    expect(openSettings).toHaveBeenCalledOnce();
+  });
+
+  it("says nothing while local AI is not paused", async () => {
+    render(
+      <PopupApp
+        client={createClient({ active: "E-bike motors" })}
+        pageAccess={buildPageAccess()}
+        graph={buildGraph()}
+      />,
+    );
+
+    await screen.findByTestId("session-active");
+
+    expect(screen.queryByTestId("local-ai-paused")).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import {
   BENCHMARK_TEST_ID,
   CAPABILITIES_TEST_ID,
   EMPTY_LIST_TEST_ID,
+  OLLAMA_CARD_TEST_ID,
   POLICY_TEST_ID,
   PROBE_LIST_TEST_ID,
   PROBLEM_TEST_ID,
@@ -94,5 +95,24 @@ describe("readOptionsSurface", () => {
     const snapshot = await readOptionsSurface();
 
     expect(snapshot.problem).toBe("Digest mismatch for onnx/model_quantized.onnx");
+  });
+
+  it("reads where the Ollama card says the local server stands", async () => {
+    document.body.innerHTML = `
+      <div data-testid="${SURFACE_TEST_ID}">
+        <section data-testid="${OLLAMA_CARD_TEST_ID}" data-state="notConnected"> Connect to Ollama </section>
+      </div>
+    `;
+
+    const snapshot = await readOptionsSurface();
+
+    expect(snapshot.ollamaState).toBe("notConnected");
+    expect(snapshot.ollamaText).toBe("Connect to Ollama");
+  });
+
+  it("reads no Ollama state when the card is absent", async () => {
+    document.body.innerHTML = `<div data-testid="${SURFACE_TEST_ID}"></div>`;
+
+    expect((await readOptionsSurface()).ollamaState).toBe("");
   });
 });

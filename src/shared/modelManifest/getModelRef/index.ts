@@ -6,5 +6,7 @@ import type { ModelReference } from "../types";
  * rather than overwriting each other.
  */
 export const getModelRef = (reference: ModelReference): string => {
-  return `${reference.repository}@${reference.revision}`;
+  return reference.hub === "ollama"
+    ? `ollama:${reference.repository}@${reference.revision}`
+    : `${reference.repository}@${reference.revision}`;
 };

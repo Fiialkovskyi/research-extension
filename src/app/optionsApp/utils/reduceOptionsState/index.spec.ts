@@ -33,6 +33,7 @@ describe("reduceOptionsState", () => {
       isBusy: false,
       device: "wasm",
       probes: [],
+      isChecking: false,
       blockedOrigins: [],
     });
   });
@@ -211,6 +212,22 @@ describe("reduceOptionsState", () => {
 
     expect(state.probes).toEqual(probes);
     expect(state.isBusy).toBe(false);
+  });
+
+  it("knows a model's checks are running until they answer or fail", () => {
+    expect(fold({ type: "activation-requested", ref: "a" }).isChecking).toBe(true);
+    expect(
+      fold(
+        { type: "activation-requested", ref: "a" },
+        { type: "model.activated", payload: { ref: "a", active: true, probes: [] } },
+      ).isChecking,
+    ).toBe(false);
+    expect(
+      fold(
+        { type: "activation-requested", ref: "a" },
+        { type: "model.activationFailed", payload: { ref: "a", reason: "worker" } },
+      ).isChecking,
+    ).toBe(false);
   });
 
   it("reports a refusal even though the request itself succeeded", () => {

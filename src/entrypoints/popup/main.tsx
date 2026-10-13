@@ -46,6 +46,13 @@ const graph: GraphStream = {
 
 createRoot(container).render(
   <StrictMode>
-    <PopupApp client={client} pageAccess={pageAccess} graph={graph} />
+    <PopupApp
+      client={client}
+      pageAccess={pageAccess}
+      graph={graph}
+      openSettings={() => {
+        void browser.runtime.openOptionsPage();
+      }}
+    />
   </StrictMode>,
 );

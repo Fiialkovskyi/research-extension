@@ -14,6 +14,8 @@ import type {
 export type ModelFamily = (typeof MODEL_FAMILIES)[number];
 export type InferenceDevice = (typeof INFERENCE_DEVICES)[number];
 export type ModelReference = v.InferOutput<typeof modelReferenceSchema>;
+export type HuggingFaceReference = Extract<ModelReference, { hub: "huggingface" }>;
+export type OllamaReference = Extract<ModelReference, { hub: "ollama" }>;
 export type EmbeddingContract = v.InferOutput<typeof embeddingContractSchema>;
 export type TextGenerationContract = v.InferOutput<typeof textGenerationContractSchema>;
 export type ModelContract = v.InferOutput<typeof modelContractSchema>;

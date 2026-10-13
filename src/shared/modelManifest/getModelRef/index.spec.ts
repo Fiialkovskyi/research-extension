@@ -24,4 +24,14 @@ describe("getModelRef", () => {
   it("is stable across calls", () => {
     expect(getModelRef(reference)).toBe(getModelRef({ ...reference }));
   });
+
+  it("names a local server's model by its hub, name and digest", () => {
+    expect(
+      getModelRef({
+        hub: "ollama",
+        repository: "nomic-embed-text:latest",
+        revision: "b".repeat(64),
+      }),
+    ).toBe(`ollama:nomic-embed-text:latest@${"b".repeat(64)}`);
+  });
 });

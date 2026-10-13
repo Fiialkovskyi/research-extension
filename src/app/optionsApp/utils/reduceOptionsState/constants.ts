@@ -8,5 +8,6 @@ export const INITIAL_OPTIONS_STATE: OptionsState = {
   // platform has, and therefore the one the budgets are judged against.
   device: "wasm",
   probes: [],
+  isChecking: false,
   blockedOrigins: [],
 };

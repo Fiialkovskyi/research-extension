@@ -10,6 +10,7 @@ import {
   type SavedSessionSummary,
 } from "@/features/researchLibrary";
 import { formatLeftOff, LibraryList } from "@/features/researchLibrary/ui/libraryList";
+import { ollamaResponseSchemas } from "@/features/ollama";
 import { recordedDataResponseSchemas } from "@/features/recordedData";
 import { researchSessionResponseSchemas } from "@/features/researchSession";
 import { tabGroupResponseSchemas } from "@/features/tabGroups";
@@ -22,7 +23,7 @@ import {
   RpcMessageError,
   rpcResponseSchemas,
 } from "@/shared/rpc";
-import { Button, Panel } from "@/shared/ui";
+import { Button, Panel, StatusDot } from "@/shared/ui";
 
 /**
  * The popup's end of its conversation with the background.
@@ -62,6 +63,8 @@ export interface PopupAppProps {
   client: PopupClient;
   pageAccess: PageAccess;
   graph: GraphStream;
+  /** Opens the options page, where local AI is set up. */
+  openSettings?: () => void;
 }
 
 /** Every answer the background may send this surface. */
@@ -183,7 +186,14 @@ const readFailure = (error: unknown): PopupState => {
 };
 
 /** Composition root of the toolbar popup surface. */
-export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
+/** Whether local AI is paused waiting for Ollama; `false` on any other answer. */
+const readLocalAiPaused = (answer: unknown): boolean => {
+  const response = parseRpcMessage(answer, { ...ollamaResponseSchemas, ...rpcResponseSchemas });
+
+  return response.type === "ollama.healthReport" && response.payload.isPaused;
+};
+
+export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppProps) {
   const [state, setState] = useState<PopupState>({ status: "loading" });
   const [snapshot, setSnapshot] = useState<GraphSnapshot | undefined>();
   /** Kept apart from the snapshot, so a new one leaves collapsed rows collapsed. */
@@ -194,6 +204,32 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
   const isActive = state.status === "active";
   const isReady = state.status === "ready" && !state.pending;
   const [library, setLibrary] = useState<SavedSessionSummary[]>([]);
+  const [isLocalAiPaused, setIsLocalAiPaused] = useState(false);
+
+  // Whether similarity is waiting for Ollama, asked once while a session runs.
+  useEffect(() => {
+    if (!isActive) {
+      return undefined;
+    }
+
+    let isCurrent = true;
+
+    client
+      .request(buildRpcMessage("ollama.health", {}))
+      .then(readLocalAiPaused)
+      .then(
+        (isPaused) => {
+          if (isCurrent) {
+            setIsLocalAiPaused(isPaused);
+          }
+        },
+        () => undefined,
+      );
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [client, isActive]);
 
   // The saved sessions, whenever the popup offers to start one.
   useEffect(() => {
@@ -511,6 +547,26 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
           </Button>
         </div>
       )}
+      {state.status === "active" && isLocalAiPaused && (
+        <p
+          data-testid="local-ai-paused"
+          className="mt-3 text-xs text-slate-500 dark:text-slate-400"
+        >
+          <span className="mr-1.5 inline-block align-middle">
+            <StatusDot tone="attention" />
+          </span>
+          Local AI is paused: Ollama isn&apos;t running. Pages are still recorded; similarity
+          resumes when it&apos;s back.
+          {openSettings !== undefined && (
+            <>
+              {" "}
+              <button type="button" className="underline" onClick={openSettings}>
+                Open settings
+              </button>
+            </>
+          )}
+        </p>
+      )}
       {state.status === "active" && hasPageAccess === false && (
         <div data-testid="page-access-missing" className="mt-3 text-sm">
           <p>
@@ -542,6 +598,18 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
           className="mt-2 text-sm text-red-700 dark:text-red-400"
         >
           {mapFailure}
+        </p>
+      )}
+      {openSettings !== undefined && (
+        <p className="mt-3 text-right text-xs">
+          <button
+            type="button"
+            data-testid="open-settings"
+            className="underline"
+            onClick={openSettings}
+          >
+            Settings
+          </button>
         </p>
       )}
     </Panel>

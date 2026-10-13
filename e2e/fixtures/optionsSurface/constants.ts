@@ -29,3 +29,4 @@ export const POLICY_TEST_ID = "policy-report";
 export const PROBLEM_TEST_ID = "options-problem";
 export const INSTALLED_TEST_ID = "install-installed";
 export const INSTALL_FAILED_TEST_ID = "install-failed";
+export const OLLAMA_CARD_TEST_ID = "ollama-card";

@@ -116,6 +116,43 @@ suite at its zip:
 E2E_EXTENSION_ZIP=/path/to/build.zip npx wdio run e2e/wdio.conf.ts
 ```
 
+## Local AI with Ollama (optional)
+
+The extension works on its own. [Ollama](https://ollama.com) is an optional, free app that runs AI
+models on your computer: with it, finding similar pages is faster, and page summaries become
+possible. Nothing leaves your computer — the extension talks to Ollama only at
+`http://127.0.0.1:11434`, the one address besides the model hosts its policy admits.
+
+### Setting it up, if you have never used anything like it
+
+Open the extension's settings — **Settings** at the bottom of the popup — and open **Faster local AI
+with Ollama (optional)**. Choose **Set up Ollama** and allow access when Firefox asks. A short
+checklist then walks you through the rest, and each step ticks itself when it is done:
+
+1. **Install Ollama.** Follow the _Download Ollama_ link and install it like any other app (on a Mac,
+   drag it to Applications).
+2. **Open Ollama.** Open it like any other app. There is no window: a llama icon appears in the menu
+   bar (on Windows, by the clock).
+3. **Allow this extension** — only if the checklist asks. Ollama answers only apps it trusts, so it
+   has to be told once to trust this extension. The checklist shows one command, made for your
+   computer, with a **Copy** button and where to paste it (on a Mac: open _Terminal_, paste, press
+   Return). The command names only this extension, keeps working after a restart, and reopens
+   Ollama for you.
+4. **Turn on local AI.** One button downloads the recommended model through Ollama (about 274 MB),
+   checks its quality, and switches it on.
+
+If Ollama is closed later nothing breaks: pages are still recorded, the popup says local AI is
+paused, and the pages waiting for similarity are processed once Ollama is open again. If the
+checklist asks to allow the extension again — after reinstalling the extension, or if Ollama started
+before the setting at login — run the command it shows once more.
+
+### For developers
+
+The model list, `ollama pull`, `ollama serve` and a throughput measurement sit under _More_ in the
+same section. The e2e suite does not drive a real Ollama: it checks only that the section is offered
+as optional and that the policy admits the loopback origin, so a change to this path is checked by
+hand against a running Ollama.
+
 ## Project layout
 
 See [AGENTS.md](AGENTS.md) for the module layering rules and conventions. Planning artifacts for

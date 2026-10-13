@@ -1,3 +1,5 @@
+import { StatusDot } from "@/shared/ui";
+
 import { MINIMUM_CHUNKS_PER_SECOND } from "../../constants";
 import type { ThroughputMeasurement } from "../../model/measureEmbeddingThroughput";
 
@@ -28,20 +30,41 @@ const getThreadLabel = (threadCount: number | undefined): string | null => {
 export function BenchmarkReport({ measurement, threadCount, isRunning }: BenchmarkReportProps) {
   if (isRunning === true) {
     return (
-      <p data-testid="benchmark-running" className="text-sm text-slate-700 dark:text-slate-300">
+      <p
+        data-testid="benchmark-running"
+        className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
+      >
+        <StatusDot tone="busy" />
         Measuring…
       </p>
     );
   }
 
+  // Said rather than left blank: an empty section reads as belonging to the next one.
   if (measurement === undefined) {
-    return null;
+    return (
+      <p
+        data-testid="benchmark-unmeasured"
+        className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400"
+      >
+        <StatusDot tone="idle" />
+        Not measured yet. Press Measure beside a model.
+      </p>
+    );
   }
 
   const threadLabel = getThreadLabel(threadCount);
   const verdict = measurement.meetsBudget
-    ? { text: "meets the budget", className: "text-emerald-700 dark:text-emerald-400" }
-    : { text: "below the budget", className: "text-red-700 dark:text-red-400" };
+    ? {
+        text: "meets the budget",
+        tone: "ok" as const,
+        className: "text-emerald-700 dark:text-emerald-400",
+      }
+    : {
+        text: "below the budget",
+        tone: "bad" as const,
+        className: "text-red-700 dark:text-red-400",
+      };
 
   return (
     <dl
@@ -49,8 +72,9 @@ export function BenchmarkReport({ measurement, threadCount, isRunning }: Benchma
       className="grid grid-cols-[auto_1fr] gap-x-3 text-xs text-slate-600 dark:text-slate-400"
     >
       <dt>Throughput</dt>
-      <dd>
-        <span className="font-medium">{measurement.chunksPerSecond.toFixed(1)} chunks/s</span>{" "}
+      <dd className="flex flex-wrap items-center gap-1.5">
+        <StatusDot tone={verdict.tone} />
+        <span className="font-medium">{measurement.chunksPerSecond.toFixed(1)} chunks/s</span>
         <span className={verdict.className}>
           ({verdict.text} of {MINIMUM_CHUNKS_PER_SECOND})
         </span>

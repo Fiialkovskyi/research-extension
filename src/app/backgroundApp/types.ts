@@ -72,6 +72,10 @@ export interface BackgroundDependencies {
    * the memory of an event page that may be unloaded.
    */
   readFocusedTab: () => Promise<number | undefined>;
+  /** Whether the user granted access to the local Ollama server. */
+  hasOllamaAccess: () => Promise<boolean>;
+  /** Where the local Ollama server answers; the loopback default outside tests. */
+  ollamaOrigin?: string;
   /** The current time. Injected so reading time is exercised without waiting. */
   now?: () => number;
   /**

@@ -8,10 +8,13 @@ import { BenchmarkReport } from "@/features/inferenceBenchmark/ui/benchmarkRepor
 import { modelInstallResponseSchemas } from "@/features/modelInstall";
 import { InstallProgress } from "@/features/modelInstall/ui/installProgress";
 import { modelRegistryResponseSchemas } from "@/features/modelRegistry";
+import type { ProbeResult } from "@/features/modelConformance";
 import { ModelList } from "@/features/modelRegistry/ui/modelList";
+import type { OllamaPlatform } from "@/features/ollama";
+import { OllamaCard } from "@/features/ollama/ui/ollamaCard";
 import { BUNDLED_MODEL_PROFILES, type ModelProfile } from "@/shared/config";
 import type { InferenceDevice } from "@/shared/modelManifest";
-import { Button } from "@/shared/ui";
+import { Button, StatusDot } from "@/shared/ui";
 import {
   buildRpcMessage,
   parseRpcMessage,
@@ -39,7 +42,25 @@ export interface OptionsAppProps {
   client: SurfaceClient;
   /** Profiles offered for installation. Defaults to the ones that ship. */
   profiles?: readonly ModelProfile[];
+  /**
+   * Asks for access to the local Ollama server, within the user's click.
+   * Without one, connecting is refused, as it would be outside an extension.
+   */
+  requestOllamaAccess?: () => Promise<boolean>;
+  /**
+   * This installation's origin and operating system, which the command that
+   * lets Ollama trust the extension is written for.
+   */
+  ollamaEnvironment?: { extensionOrigin: string; platform: OllamaPlatform };
 }
+
+/** Outside an extension there is no installation to name; tests pass their own. */
+const DEFAULT_OLLAMA_ENVIRONMENT = {
+  extensionOrigin: "moz-extension://this-extension",
+  platform: "mac",
+} as const;
+
+const refuseOllamaAccess = (): Promise<boolean> => Promise.resolve(false);
 
 /** Every answer the background may send this surface. */
 const responseSchemas = {
@@ -54,8 +75,27 @@ const responseSchemas = {
 /** Compute paths a user may pick between, in the order they are offered. */
 const SELECTABLE_DEVICES: readonly InferenceDevice[] = ["wasm", "webgpu"];
 
+/** One line that says how a model's checks went, before the detail of each. */
+function ProbeSummary({ probes }: { probes: readonly ProbeResult[] }) {
+  const failed = probes.filter(({ passed }) => !passed).length;
+
+  return (
+    <p data-testid="probe-summary" className="mt-2 flex items-center gap-2 text-sm font-medium">
+      <StatusDot tone={failed === 0 ? "ok" : "bad"} />
+      {failed === 0
+        ? `All ${probes.length} checks passed`
+        : `${failed} of ${probes.length} checks failed`}
+    </p>
+  );
+}
+
 /** Composition root of the options surface: model management and measurement. */
-export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: OptionsAppProps) {
+export function OptionsApp({
+  client,
+  profiles = BUNDLED_MODEL_PROFILES,
+  requestOllamaAccess = refuseOllamaAccess,
+  ollamaEnvironment = DEFAULT_OLLAMA_ENVIRONMENT,
+}: OptionsAppProps) {
   const [state, dispatch] = useReducer(reduceOptionsState, INITIAL_OPTIONS_STATE);
 
   useEffect(() => {
@@ -208,20 +248,36 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
         </ul>
       </section>
 
-      {state.probes.length === 0 ? null : (
+      {!state.isChecking && state.probes.length === 0 ? null : (
         <section className="mt-6">
           <h2 className="text-sm font-medium">Checks</h2>
+          {state.isChecking ? (
+            <p
+              data-testid="probe-checking"
+              className="mt-2 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300"
+            >
+              <StatusDot tone="busy" />
+              Checking the model…
+            </p>
+          ) : (
+            <ProbeSummary probes={state.probes} />
+          )}
           <ul data-testid="probe-list" className="mt-2 flex flex-col gap-1 text-xs">
             {state.probes.map((probe) => (
               <li
                 key={probe.name}
-                className={
+                className={`flex items-start gap-2 ${
                   probe.passed
                     ? "text-emerald-700 dark:text-emerald-400"
                     : "text-red-700 dark:text-red-400"
-                }
+                }`}
               >
-                {probe.passed ? "Passed" : "Failed"} — {probe.name}: {probe.detail}
+                <span className="mt-1">
+                  <StatusDot tone={probe.passed ? "ok" : "bad"} />
+                </span>
+                <span>
+                  {probe.passed ? "Passed" : "Failed"} — {probe.name}: {probe.detail}
+                </span>
               </li>
             ))}
           </ul>
@@ -238,6 +294,13 @@ export function OptionsApp({ client, profiles = BUNDLED_MODEL_PROFILES }: Option
           />
         </div>
       </section>
+
+      <OllamaCard
+        client={client}
+        requestAccess={requestOllamaAccess}
+        extensionOrigin={ollamaEnvironment.extensionOrigin}
+        platform={ollamaEnvironment.platform}
+      />
 
       <section className="mt-6">
         <h2 className="text-sm font-medium">Network policy</h2>

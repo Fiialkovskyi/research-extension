@@ -31,7 +31,9 @@ export type {
   ModelFamily,
   ModelFile,
   ModelManifest,
+  HuggingFaceReference,
   ModelReference,
+  OllamaReference,
   TextGenerationContract,
 } from "./types";
 export { getModelRef } from "./getModelRef";

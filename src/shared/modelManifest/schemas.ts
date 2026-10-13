@@ -38,11 +38,28 @@ export const commitRevisionSchema = v.pipe(
   v.regex(/^[0-9a-f]{40}$/, "Expected a 40-character commit identifier"),
 );
 
-export const modelReferenceSchema = v.object({
+/** A model downloaded from the Hugging Face hub, pinned to a commit. */
+export const huggingFaceReferenceSchema = v.object({
   hub: v.literal("huggingface"),
   repository: v.pipe(v.string(), v.regex(/^[^/\s]+\/[^/\s]+$/, "Expected owner/name")),
   revision: commitRevisionSchema,
 });
+
+/**
+ * A model served by a local Ollama server, pinned to the content digest Ollama
+ * reports for it: a model re-pulled under the same name is a different model.
+ */
+export const ollamaReferenceSchema = v.object({
+  hub: v.literal("ollama"),
+  /** Ollama's model name with its tag, such as `nomic-embed-text:latest`. */
+  repository: v.pipe(v.string(), v.regex(/^[^\s]+$/, "Expected an Ollama model name")),
+  revision: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/, "Expected a SHA-256 digest")),
+});
+
+export const modelReferenceSchema = v.variant("hub", [
+  huggingFaceReferenceSchema,
+  ollamaReferenceSchema,
+]);
 
 export const embeddingContractSchema = v.object({
   family: v.literal("embedding"),
@@ -79,13 +96,23 @@ export const modelFileSchema = v.object({
   bytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 
-export const modelManifestSchema = v.object({
-  manifestVersion: v.literal(1),
-  reference: modelReferenceSchema,
-  format: v.picklist(["onnx"]),
-  quantization: v.optional(v.string()),
-  files: v.pipe(v.array(modelFileSchema), v.minLength(1)),
-  /** SPDX identifier from the model card, recorded so licensing is traceable. */
-  license: v.string(),
-  contract: modelContractSchema,
-});
+export const modelManifestSchema = v.pipe(
+  v.object({
+    manifestVersion: v.literal(1),
+    reference: modelReferenceSchema,
+    /** `local-server` for a model a local server runs, whose files the add-on never holds. */
+    format: v.picklist(["onnx", "local-server"]),
+    quantization: v.optional(v.string()),
+    files: v.array(modelFileSchema),
+    /** SPDX identifier from the model card, recorded so licensing is traceable. */
+    license: v.string(),
+    contract: modelContractSchema,
+  }),
+  v.check(
+    (manifest) =>
+      manifest.reference.hub === "ollama"
+        ? manifest.format === "local-server" && manifest.files.length === 0
+        : manifest.format === "onnx" && manifest.files.length > 0,
+    "A downloaded model is ONNX with files; a local server's model has none",
+  ),
+);

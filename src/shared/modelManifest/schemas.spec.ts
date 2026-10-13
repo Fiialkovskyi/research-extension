@@ -72,6 +72,26 @@ describe("modelReferenceSchema", () => {
     );
   });
 
+  it("accepts an Ollama model name pinned to its digest", () => {
+    expect(
+      isAccepted(modelReferenceSchema, {
+        hub: "ollama",
+        repository: "nomic-embed-text:latest",
+        revision: validDigest,
+      }),
+    ).toBe(true);
+  });
+
+  it("refuses an Ollama model pinned to anything but a full digest", () => {
+    expect(
+      isAccepted(modelReferenceSchema, {
+        hub: "ollama",
+        repository: "nomic-embed-text:latest",
+        revision: validRevision,
+      }),
+    ).toBe(false);
+  });
+
   it("refuses a hub it does not know", () => {
     expect(isAccepted(modelReferenceSchema, { ...validManifest.reference, hub: "elsewhere" })).toBe(
       false,
@@ -166,6 +186,30 @@ describe("modelManifestSchema", () => {
 
   it("refuses a manifest with no files, which could never be verified", () => {
     expect(isAccepted(modelManifestSchema, { ...validManifest, files: [] })).toBe(false);
+  });
+
+  it("accepts a local server's model, which has no files", () => {
+    expect(
+      isAccepted(modelManifestSchema, {
+        ...validManifest,
+        reference: { hub: "ollama", repository: "nomic-embed-text:latest", revision: validDigest },
+        format: "local-server",
+        files: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("refuses a local server's model with files, or a downloaded one marked local", () => {
+    expect(
+      isAccepted(modelManifestSchema, {
+        ...validManifest,
+        reference: { hub: "ollama", repository: "nomic-embed-text:latest", revision: validDigest },
+        format: "local-server",
+      }),
+    ).toBe(false);
+    expect(isAccepted(modelManifestSchema, { ...validManifest, format: "local-server" })).toBe(
+      false,
+    );
   });
 
   it("refuses a manifest version this build does not know", () => {

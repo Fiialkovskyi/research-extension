@@ -26,6 +26,8 @@ export interface OptionsState {
   device: InferenceDevice;
   benchmark?: BenchmarkResult;
   probes: readonly ProbeResult[];
+  /** A model's checks are running, so the list of them is about to be replaced. */
+  isChecking: boolean;
   /** Origins the package declares it may reach, once the background has said. */
   permittedOrigins?: readonly string[];
   /** Origins the policy has refused. Empty is a result, not an absence. */

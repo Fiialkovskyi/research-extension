@@ -37,12 +37,13 @@ const createStubClient = () => {
 const capabilities = { availableDevices: ["wasm"], crossOriginIsolated: false, threadCount: 1 };
 
 describe("OptionsApp", () => {
-  it("asks what this installation can run, what is installed, and what the policy refused", () => {
+  it("asks what this installation can run, what is installed, what the policy refused, and where Ollama stands", () => {
     const { client, sent } = createStubClient();
 
     render(<OptionsApp client={client} />);
 
     expect(sent.map((message) => message.type)).toEqual([
+      "ollama.status",
       "inference.probe",
       "model.list",
       "diagnostics.read",
@@ -336,6 +337,33 @@ describe("OptionsApp, choosing a device and measuring", () => {
     await waitFor(() => expect(screen.getByTestId("probe-list")).toBeInTheDocument());
     expect(screen.getByTestId("probe-list")).toHaveTextContent(/Passed — normalizes as declared/);
     expect(screen.getByTestId("probe-list")).toHaveTextContent(/Failed — places a paraphrase/);
+    expect(screen.getByTestId("probe-summary")).toHaveTextContent("1 of 2 checks failed");
+  });
+
+  it("says the checks are running, then how they went", async () => {
+    const { client, answer } = createStubClient();
+
+    render(<OptionsApp client={client} />);
+    answer("model.listed", { models: [installed] });
+    await waitFor(() =>
+      expect(screen.getByTestId(`activate-${installed.ref}`)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId(`activate-${installed.ref}`));
+
+    expect(screen.getByTestId("probe-checking")).toHaveTextContent("Checking the model…");
+
+    answer("model.activated", {
+      ref: installed.ref,
+      active: true,
+      conformance: "passed",
+      device: "wasm",
+      probes: [{ name: "reproduces a vector", passed: true, detail: "1.00000" }],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("probe-summary")).toHaveTextContent("All 1 checks passed"),
+    );
+    expect(screen.queryByTestId("probe-checking")).not.toBeInTheDocument();
   });
 
   it("reports a refusal even when the request itself succeeded", async () => {

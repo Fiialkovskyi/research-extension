@@ -38,7 +38,7 @@ export const reduceOptionsState = (state: OptionsState, event: OptionsEvent): Op
     }
 
     case "activation-requested": {
-      return { ...state, isBusy: true, problem: undefined, probes: [] };
+      return { ...state, isBusy: true, isChecking: true, problem: undefined, probes: [] };
     }
 
     case "benchmark-requested": {
@@ -60,7 +60,7 @@ export const reduceOptionsState = (state: OptionsState, event: OptionsEvent): Op
     case "inference.failed":
     case "rpc.refused":
     case "rpc.failed": {
-      return { ...state, isBusy: false, problem: event.payload.reason };
+      return { ...state, isBusy: false, isChecking: false, problem: event.payload.reason };
     }
 
     case "model.listed": {
@@ -105,6 +105,7 @@ export const reduceOptionsState = (state: OptionsState, event: OptionsEvent): Op
       return {
         ...state,
         isBusy: false,
+        isChecking: false,
         probes: event.payload.probes,
         // A refusal is reported even though the request itself succeeded: the
         // model was not activated, and saying nothing would imply it was.
@@ -114,7 +115,7 @@ export const reduceOptionsState = (state: OptionsState, event: OptionsEvent): Op
 
     case "model.activationFailed":
     case "benchmark.failed": {
-      return { ...state, isBusy: false, problem: event.payload.reason };
+      return { ...state, isBusy: false, isChecking: false, problem: event.payload.reason };
     }
 
     case "benchmark.measured": {

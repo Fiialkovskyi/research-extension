@@ -25,7 +25,8 @@ export const benchmarkResponseSchemas = {
     chunksPerSecond: v.pipe(v.number(), v.minValue(0)),
     loadDurationMs: v.pipe(v.number(), v.minValue(0)),
     meetsBudget: v.boolean(),
-    threadCount: v.pipe(v.number(), v.integer(), v.minValue(1)),
+    /** The worker's threads; absent for a local server, which keeps its own. */
+    threadCount: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
   }),
   "benchmark.failed": v.object({ ref: v.string(), reason: v.string() }),
 } as const;

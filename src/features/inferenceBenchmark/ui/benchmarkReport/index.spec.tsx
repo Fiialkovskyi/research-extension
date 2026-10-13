@@ -16,10 +16,10 @@ const measurement = (overrides: Partial<ThroughputMeasurement> = {}): Throughput
 });
 
 describe("BenchmarkReport", () => {
-  it("shows nothing before a measurement exists", () => {
-    const { container } = render(<BenchmarkReport />);
+  it("says it has not measured yet, rather than leaving the section blank", () => {
+    render(<BenchmarkReport />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByTestId("benchmark-unmeasured")).toHaveTextContent("Not measured yet");
   });
 
   it("says it is measuring while a run is in flight", () => {
@@ -48,6 +48,7 @@ describe("BenchmarkReport", () => {
     );
 
     expect(screen.getByTestId("benchmark-report")).toHaveTextContent(/below the budget/);
+    expect(screen.getByTestId("status-dot")).toHaveAttribute("data-tone", "bad");
   });
 
   it("shows the device, because the number means nothing without it", () => {

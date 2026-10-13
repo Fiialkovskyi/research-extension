@@ -1,6 +1,20 @@
 import type { IDBPDatabase } from "idb";
 
-import { type InferenceWorker, loadModelIntoWorker } from "@/features/inference";
+import {
+  type InferenceWorker,
+  loadModelIntoWorker,
+  type WorkerModelSession,
+} from "@/features/inference";
+import {
+  buildOllamaManifest,
+  createOllamaEmbedder,
+  findOllamaProfile,
+  isLocalAiPaused,
+  listOllamaModelEntries,
+  pullOllamaModel,
+  readOllamaStatus,
+  requeuePausedJobs,
+} from "@/features/ollama";
 import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
 import { runEmbeddingConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
@@ -75,9 +89,14 @@ import {
   trackActiveDwell,
   updateTabTitle,
 } from "@/features/tabCapture";
-import { BUNDLED_MODEL_PROFILES, ENGAGEMENT_RULES } from "@/shared/config";
+import {
+  BUNDLED_MODEL_PROFILES,
+  ENGAGEMENT_RULES,
+  LOCAL_INFERENCE_ORIGINS,
+  OLLAMA_ORIGIN,
+} from "@/shared/config";
 import { MODEL_HOST_ORIGINS } from "@/shared/huggingFace";
-import type { InferenceDevice } from "@/shared/modelManifest";
+import { getModelRef, type InferenceDevice } from "@/shared/modelManifest";
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import {
   buildRpcMessage,
@@ -119,6 +138,14 @@ const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown>
     reason: getErrorMessage(error),
   });
 };
+
+/** The models registered from the local Ollama server. */
+const listInstalledOllamaModels = async (
+  openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+): Promise<StoredModel[]> =>
+  (await openedDatabase.getAll(MODEL_STORE)).filter(
+    (model) => model.manifest.reference.hub === "ollama",
+  );
 
 /** The active session's graph as the map draws it. */
 const readGraphSnapshot = async (
@@ -175,6 +202,41 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   };
 
   /** Discards the worker, so the next attempt starts from a clean runtime. */
+  const ollamaOrigin = dependencies.ollamaOrigin ?? OLLAMA_ORIGIN;
+
+  /**
+   * Loads a model for use, wherever it runs: an Ollama model through the local
+   * server, any other in the worker on the given device.
+   */
+  const loadModelSession = async (
+    model: StoredModel,
+    device: InferenceDevice,
+  ): Promise<WorkerModelSession> => {
+    if (model.manifest.reference.hub === "ollama") {
+      const embedder = createOllamaEmbedder(
+        dependencies.fetchResource,
+        ollamaOrigin,
+        model.manifest,
+      );
+
+      return {
+        device: "local-server",
+        ...(model.manifest.contract.family === "embedding"
+          ? { dimensions: model.manifest.contract.dimensions }
+          : {}),
+        loadDurationMs: 0,
+        embed: embedder.embed,
+      };
+    }
+
+    return loadModelIntoWorker({
+      model,
+      database: await getDatabase(),
+      worker: getWorkerForDevice(device),
+      device,
+    });
+  };
+
   /** Embedding models loaded in the worker for jobs, by model ref. */
   const embeddingSessions = new Map<string, Promise<EmbeddingSession>>();
 
@@ -413,14 +475,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         return cached;
       }
 
-      const loading = getDatabase().then((openedDatabase) =>
-        loadModelIntoWorker({
-          model,
-          database: openedDatabase,
-          worker: getWorkerForDevice("wasm"),
-          device: "wasm",
-        }),
-      );
+      const loading = loadModelSession(model, "wasm");
 
       embeddingSessions.set(model.ref, loading);
       loading.catch(() => {
@@ -472,9 +527,98 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     }
   };
 
+  /**
+   * Records a model Ollama has, pinned to its digest, inactive until it passes
+   * conformance like any installed model.
+   *
+   * @returns The model's ref.
+   */
+  const registerOllamaModel = async (name: string): Promise<string> => {
+    const status = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+    const pulled =
+      status.state === "running" ? status.models.find((model) => model.name === name) : undefined;
+
+    if (pulled === undefined) {
+      throw new Error(`Ollama does not have ${name}.`);
+    }
+
+    const manifest = await buildOllamaManifest(
+      dependencies.fetchResource,
+      ollamaOrigin,
+      pulled,
+      findOllamaProfile(name),
+    );
+    const ref = getModelRef(manifest.reference);
+
+    await (
+      await getDatabase()
+    ).put(MODEL_STORE, {
+      ref,
+      manifest,
+      active: false,
+      conformance: "pending",
+      diskBytes: pulled.size,
+      installedAt: getNow(),
+    });
+
+    return ref;
+  };
+
+  /**
+   * Runs a model's conformance suite and activates it if and only if it
+   * passes, then starts embedding what waits.
+   */
+  const activateWithConformance = async (ref: string, device: InferenceDevice) => {
+    let probes: ProbeResult[] = [];
+
+    const recorded = await activateModel({
+      ref,
+      database: await getDatabase(),
+      runConformance: async (model) => {
+        if (model.manifest.contract.family !== "embedding") {
+          return {
+            passed: false,
+            probes: [],
+            reason: `No conformance suite exists yet for a ${model.manifest.contract.family} model.`,
+          };
+        }
+
+        const session = await loadModelSession(model, device);
+        const outcome = await runEmbeddingConformance(model.manifest.contract, session.embed);
+
+        probes = outcome.probes;
+
+        return outcome;
+      },
+    });
+
+    if (recorded.active) {
+      void embedSnapshots();
+    }
+
+    return { recorded, probes };
+  };
+
+  /**
+   * Once Ollama answers again, hands back the jobs that stopped because it did
+   * not. Asked only while local AI is paused, so a working setup costs nothing.
+   */
+  const resumeLocalAi = async (): Promise<void> => {
+    if (!(await isLocalAiPaused(await getDatabase()))) {
+      return;
+    }
+
+    const status = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+
+    if (status.state === "running") {
+      await enqueueCapture((openedDatabase) => requeuePausedJobs(openedDatabase, getNow()));
+    }
+  };
+
   /** Queues embedding for the session's snapshots, then runs what is due. */
   const embedSnapshots = async (): Promise<void> => {
     await enqueueCapture((openedDatabase) => enqueueSnapshotEmbeddings(openedDatabase, getNow()));
+    await resumeLocalAi();
     await runJobs();
   };
 
@@ -637,7 +781,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "diagnostics.read": {
           return buildRpcMessage("diagnostics.report", {
             blocked: dependencies.policyViolations.read(),
-            permittedOrigins: [...MODEL_HOST_ORIGINS],
+            permittedOrigins: [...MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS],
           });
         }
 
@@ -653,22 +797,21 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
               throw new Error(`No model is installed under "${ref}".`);
             }
 
-            const activeWorker = getWorkerForDevice(device);
-            const session = await loadModelIntoWorker({
-              model,
-              database: openedDatabase,
-              worker: activeWorker,
-              device,
-            });
+            const session = await loadModelSession(model, device);
             const measurement = await measureEmbeddingThroughput({
               session,
               modelRef: ref,
               database: openedDatabase,
             });
 
+            // A local server keeps its own threads; there is nothing to report.
+            if (model.manifest.reference.hub === "ollama") {
+              return buildRpcMessage("benchmark.measured", { ref, ...measurement });
+            }
+
             // Asked again rather than remembered: the figure is only
             // interpretable beside the thread count that produced it.
-            const probe = await activeWorker.request("worker.ping", {});
+            const probe = await getWorkerForDevice(device).request("worker.ping", {});
             const threadCount = probe.type === "worker.pong" ? probe.payload.threadCount : 1;
 
             return buildRpcMessage("benchmark.measured", { ref, ...measurement, threadCount });
@@ -689,40 +832,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           const { ref } = request.payload;
 
           try {
-            let probes: ProbeResult[] = [];
-
-            const recorded = await activateModel({
-              ref,
-              database: await getDatabase(),
-              runConformance: async (model) => {
-                if (model.manifest.contract.family !== "embedding") {
-                  return {
-                    passed: false,
-                    probes: [],
-                    reason: `No conformance suite exists yet for a ${model.manifest.contract.family} model.`,
-                  };
-                }
-
-                const session = await loadModelIntoWorker({
-                  model,
-                  database: await getDatabase(),
-                  worker: getWorkerForDevice(device),
-                  device,
-                });
-                const outcome = await runEmbeddingConformance(
-                  model.manifest.contract,
-                  session.embed,
-                );
-
-                probes = outcome.probes;
-
-                return outcome;
-              },
-            });
-
-            if (recorded.active) {
-              void embedSnapshots();
-            }
+            const { recorded, probes } = await activateWithConformance(ref, device);
 
             return buildRpcMessage("model.activated", {
               ref: recorded.ref,
@@ -1004,6 +1114,129 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           });
 
           return buildRpcMessage("session.keptSeparate", {});
+        }
+
+        case "ollama.status": {
+          if (!(await dependencies.hasOllamaAccess())) {
+            return buildRpcMessage("ollama.state", { state: "notConnected", models: [] });
+          }
+
+          const status = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+
+          // The user is looking at it: if Ollama is back, so is similarity.
+          if (status.state === "running") {
+            void embedSnapshots();
+          }
+
+          return buildRpcMessage("ollama.state", {
+            state: status.state,
+            models:
+              status.state === "running"
+                ? listOllamaModelEntries(
+                    status.models,
+                    await listInstalledOllamaModels(await getDatabase()),
+                  )
+                : [],
+          });
+        }
+
+        case "ollama.register": {
+          const { name } = request.payload;
+
+          try {
+            return buildRpcMessage("ollama.registered", {
+              name,
+              ref: await registerOllamaModel(name),
+            });
+          } catch (error) {
+            return buildRpcMessage("ollama.registerFailed", {
+              name,
+              reason: getErrorMessage(error),
+            });
+          }
+        }
+
+        case "ollama.enable": {
+          // One action from the user's click: download if missing, register,
+          // check, activate — reporting which stage it is in.
+          const { name } = request.payload;
+          let stage: "downloading" | "checking" = "downloading";
+
+          try {
+            const status = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+
+            if (status.state !== "running") {
+              throw new Error(
+                status.state === "refused"
+                  ? "Ollama is refusing this extension."
+                  : "Ollama isn't running.",
+              );
+            }
+
+            const isPresent = (models: readonly { name: string }[]) =>
+              models.find((model) => model.name.split(":")[0] === name.split(":")[0]);
+            let present = isPresent(status.models);
+
+            if (present === undefined) {
+              await pullOllamaModel(dependencies.fetchResource, ollamaOrigin, name, (progress) => {
+                emit?.(
+                  buildRpcMessage("ollama.enableProgress", {
+                    name,
+                    stage: "downloading",
+                    ...(progress.total === undefined || progress.completed === undefined
+                      ? {}
+                      : { percent: Math.round((progress.completed / progress.total) * 100) }),
+                  }),
+                );
+              });
+
+              const after = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+
+              present = after.state === "running" ? isPresent(after.models) : undefined;
+
+              if (present === undefined) {
+                throw new Error(`Ollama finished downloading but does not list ${name}.`);
+              }
+            }
+
+            stage = "checking";
+            emit?.(buildRpcMessage("ollama.enableProgress", { name, stage }));
+
+            const ref = await registerOllamaModel(present.name);
+            const { recorded } = await activateWithConformance(ref, "local-server");
+
+            if (!recorded.active) {
+              throw new Error(recorded.conformanceReason ?? "It did not pass the quality check.");
+            }
+
+            return buildRpcMessage("ollama.enabled", { name, ref });
+          } catch (error) {
+            return buildRpcMessage("ollama.enableFailed", {
+              name,
+              stage,
+              reason: getErrorMessage(error),
+            });
+          }
+        }
+
+        case "ollama.pull": {
+          const { name } = request.payload;
+
+          try {
+            await pullOllamaModel(dependencies.fetchResource, ollamaOrigin, name, (progress) => {
+              emit?.(buildRpcMessage("ollama.pullProgress", { name, ...progress }));
+            });
+
+            return buildRpcMessage("ollama.pulled", { name });
+          } catch (error) {
+            return buildRpcMessage("ollama.pullFailed", { name, reason: getErrorMessage(error) });
+          }
+        }
+
+        case "ollama.health": {
+          return buildRpcMessage("ollama.healthReport", {
+            isPaused: await isLocalAiPaused(await getDatabase()),
+          });
         }
 
         case "recorded.open": {

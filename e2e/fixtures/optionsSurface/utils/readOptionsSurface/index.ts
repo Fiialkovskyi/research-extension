@@ -4,6 +4,7 @@ import {
   BENCHMARK_TEST_ID,
   CAPABILITIES_TEST_ID,
   EMPTY_LIST_TEST_ID,
+  OLLAMA_CARD_TEST_ID,
   POLICY_TEST_ID,
   PROBE_LIST_TEST_ID,
   PROBLEM_TEST_ID,
@@ -28,6 +29,9 @@ export interface OptionsSnapshot {
   policy: string;
   /** A refusal the surface is showing, if any. */
   problem: string;
+  /** Where the Ollama card says the local server stands, from its `data-state`. */
+  ollamaState: string;
+  ollamaText: string;
 }
 
 /**
@@ -52,6 +56,7 @@ export const readOptionsSurface = async (): Promise<OptionsSnapshot> => {
       benchmarkId: string,
       policyId: string,
       problemId: string,
+      ollamaId: string,
     ) => {
       const surface = document.querySelector(`[data-testid="${surfaceId}"]`);
 
@@ -77,6 +82,10 @@ export const readOptionsSurface = async (): Promise<OptionsSnapshot> => {
           document.querySelector(`[data-testid="${benchmarkId}"]`)?.textContent?.trim() ?? "",
         policy: document.querySelector(`[data-testid="${policyId}"]`)?.textContent?.trim() ?? "",
         problem: document.querySelector(`[data-testid="${problemId}"]`)?.textContent?.trim() ?? "",
+        ollamaState:
+          document.querySelector(`[data-testid="${ollamaId}"]`)?.getAttribute("data-state") ?? "",
+        ollamaText:
+          document.querySelector(`[data-testid="${ollamaId}"]`)?.textContent?.trim() ?? "",
       };
     },
     SURFACE_TEST_ID,
@@ -86,5 +95,6 @@ export const readOptionsSurface = async (): Promise<OptionsSnapshot> => {
     BENCHMARK_TEST_ID,
     POLICY_TEST_ID,
     PROBLEM_TEST_ID,
+    OLLAMA_CARD_TEST_ID,
   );
 };

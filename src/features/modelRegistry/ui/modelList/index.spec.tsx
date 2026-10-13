@@ -65,6 +65,23 @@ describe("ModelList", () => {
     expect(screen.getByText("Yes")).toBeInTheDocument();
   });
 
+  it("marks a model in use green and a failed one red at a glance", () => {
+    render(
+      <ModelList
+        models={[
+          model({ active: true, conformance: "passed" }),
+          model({ ref: "other", conformance: "failed" }),
+        ]}
+      />,
+    );
+
+    const [inUse, failed] = screen.getAllByTestId("model-list-item");
+
+    expect(inUse?.querySelector("[data-tone]")?.getAttribute("data-tone")).toBe("ok");
+    expect(screen.getByRole("img", { name: "In use" })).toBeInTheDocument();
+    expect(failed?.querySelector("[data-tone]")?.getAttribute("data-tone")).toBe("bad");
+  });
+
   it("lists every installed model", () => {
     render(
       <ModelList

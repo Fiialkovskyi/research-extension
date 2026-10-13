@@ -6,6 +6,7 @@ import { EXTENSION_ID, FIREFOX_MIN_VERSION } from "./src/shared/config";
 // also exports functions that import through the `@/` alias, which the config
 // loader does not resolve. The manifest only needs the origins anyway.
 import { MODEL_HOST_ORIGINS } from "./src/shared/huggingFace/constants";
+import { LOCAL_INFERENCE_ORIGINS } from "./src/shared/config/ollama/constants";
 
 export default defineConfig({
   srcDir: "src",
@@ -47,7 +48,12 @@ export default defineConfig({
     // Reading a session page's scroll, copies and text needs access to page
     // contents. Optional, so it is never granted at install: the popup asks for
     // it when a session starts, and capture carries on without it if refused.
-    optional_host_permissions: ["<all_urls>"],
+    // The local Ollama server is reached only once the user connects to it from
+    // the options page; loopback only, so nothing leaves the machine.
+    optional_host_permissions: [
+      "<all_urls>",
+      ...LOCAL_INFERENCE_ORIGINS.map((origin) => `${origin}/*`),
+    ],
     // Derived from one list so the policy and the permissions cannot drift
     // apart from each other, nor from the code that builds the request URLs.
     host_permissions: MODEL_HOST_ORIGINS.map((origin) => `${origin}/*`),
@@ -57,12 +63,13 @@ export default defineConfig({
       // code, so the no-remote-code guarantee is unaffected.
       //
       // `connect-src` is the enforcement point for no-egress: the add-on can
-      // reach itself and the model hosts, and nothing else. Widening it is a
+      // reach itself, the model hosts and the local inference server on
+      // loopback, and nothing else. Widening it is a
       // spec-level change, not a configuration tweak.
       extension_pages: [
         "script-src 'self' 'wasm-unsafe-eval'",
         "object-src 'none'",
-        `connect-src 'self' ${MODEL_HOST_ORIGINS.join(" ")}`,
+        `connect-src 'self' ${[...MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS].join(" ")}`,
       ].join("; "),
     },
   },

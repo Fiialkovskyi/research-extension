@@ -4,6 +4,7 @@ import "fake-indexeddb/auto";
 
 import { type BackgroundApp, createBackgroundApp, type BackgroundDependencies } from ".";
 import type { InferenceWorker } from "@/features/inference";
+import { PARAPHRASE_PROBES } from "@/features/modelConformance";
 import { SESSION_TAB_VALUE_KEY, type SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
@@ -117,6 +118,7 @@ const buildDependencies = (
       requestFlush: () => Promise.resolve(undefined),
     },
     readFocusedTab: () => Promise.resolve(undefined),
+    hasOllamaAccess: () => Promise.resolve(false),
     resumeApi: {
       createTab: () => Promise.reject(new Error("no tabs in this test")),
       groupTabs: () => Promise.reject(new Error("no groups in this test")),
@@ -2152,5 +2154,301 @@ describe("continuing a saved session through the background", () => {
       reattachDeclined: true,
     });
     expect((await database.get(SESSION_STORE, "old"))?.status).toBe("saved");
+  });
+});
+
+/** An answer from the fake Ollama below. */
+const answerJson = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
+
+/**
+ * A deterministic stand-in for a real embedding: each probe pair's anchor and
+ * paraphrase share an axis, as a working model would put them close, and any
+ * other text gets an axis of its own from its content.
+ */
+const embedLikeAModel = (rawText: string, dimensions: number): number[] => {
+  const text = rawText.replace(/^search_(query|document): /u, "");
+  const pairIndex = PARAPHRASE_PROBES.findIndex(
+    ({ anchor, paraphrase }) => text === anchor || text === paraphrase,
+  );
+  let axis = pairIndex;
+
+  if (axis === -1) {
+    axis = PARAPHRASE_PROBES.length;
+
+    for (const character of text) {
+      axis = (axis * 31 + character.charCodeAt(0)) % dimensions;
+    }
+
+    axis = PARAPHRASE_PROBES.length + (axis % (dimensions - PARAPHRASE_PROBES.length));
+  }
+
+  return Array.from({ length: dimensions }, (_, position) => (position === axis ? 1 : 0));
+};
+
+/** A fake Ollama, with nomic-embed-text pulled unless told otherwise, recording what it was asked. */
+const createFakeOllama = ({
+  isRunning = true,
+  hasModel = true,
+  isBroken = false,
+}: { isRunning?: boolean; hasModel?: boolean; isBroken?: boolean } = {}) => {
+  const state = { isRunning, hasModel, embedCalls: 0, pulls: 0 };
+  const DIGEST = "d".repeat(64);
+  const DIMENSIONS = 256;
+  const fetchResource = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+
+    if (!state.isRunning) {
+      return Promise.reject(new TypeError("NetworkError when attempting to fetch resource."));
+    }
+
+    if (url.endsWith("/api/tags")) {
+      return answerJson({
+        models: state.hasModel
+          ? [{ name: "nomic-embed-text:latest", digest: DIGEST, size: 274_000_000 }]
+          : [],
+      });
+    }
+
+    if (url.endsWith("/api/show")) {
+      return answerJson({
+        license: "Apache",
+        model_info: {
+          "general.architecture": "nomic-bert",
+          "nomic-bert.embedding_length": DIMENSIONS,
+          "nomic-bert.context_length": 2048,
+        },
+      });
+    }
+
+    if (url.endsWith("/api/pull")) {
+      state.pulls += 1;
+      state.hasModel = true;
+
+      return Promise.resolve(
+        new Response(
+          [
+            { status: "pulling manifest" },
+            { status: "downloading", total: 100, completed: 50 },
+            { status: "success" },
+          ]
+            .map((line) => JSON.stringify(line))
+            .join("\n"),
+        ),
+      );
+    }
+
+    if (url.endsWith("/api/embed")) {
+      state.embedCalls += 1;
+
+      const { input: texts } = JSON.parse(String(init?.body)) as { input: string[] };
+
+      return answerJson({
+        embeddings: texts.map((text, index) =>
+          isBroken
+            ? Array.from({ length: DIMENSIONS }, (_, position) => (position === 0 ? 1 : index))
+            : embedLikeAModel(text, DIMENSIONS),
+        ),
+      });
+    }
+
+    return Promise.reject(new Error(`Unexpected ${url}`));
+  }) as unknown as typeof fetch;
+
+  return { state, fetchResource, digest: DIGEST };
+};
+
+describe("Ollama through the background", () => {
+  it("says it is not connected until access is granted", async () => {
+    const { app } = await createSessionApp();
+
+    expect(await app.handleMessage(buildRpcMessage("ollama.status", {}))).toMatchObject({
+      type: "ollama.state",
+      payload: { state: "notConnected", models: [] },
+    });
+  });
+
+  it("says it is not running, then lists its models once it is", async () => {
+    const ollama = createFakeOllama({ isRunning: false });
+    const { app } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    expect(await app.handleMessage(buildRpcMessage("ollama.status", {}))).toMatchObject({
+      payload: { state: "unreachable" },
+    });
+
+    ollama.state.isRunning = true;
+
+    expect(await app.handleMessage(buildRpcMessage("ollama.status", {}))).toMatchObject({
+      payload: {
+        state: "running",
+        models: [expect.objectContaining({ name: "nomic-embed-text:latest", registeredRef: null })],
+      },
+    });
+  });
+
+  it("registers a model inactive, then runs its conformance through the server", async () => {
+    const ollama = createFakeOllama();
+    const { app, database } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+    const registered = await app.handleMessage(
+      buildRpcMessage("ollama.register", { name: "nomic-embed-text:latest" }),
+    );
+    const ref = `ollama:nomic-embed-text:latest@${ollama.digest}`;
+
+    expect(registered).toMatchObject({ type: "ollama.registered", payload: { ref } });
+    expect(await database.get(MODEL_STORE, ref)).toMatchObject({
+      active: false,
+      conformance: "pending",
+      manifest: { format: "local-server", contract: { dimensions: 256 } },
+    });
+
+    await app.handleMessage(buildRpcMessage("model.activate", { ref }));
+
+    expect(ollama.state.embedCalls).toBeGreaterThan(0);
+    expect((await database.get(MODEL_STORE, ref))?.conformance).not.toBe("pending");
+  });
+
+  it("embeds deep-read pages through Ollama, pauses while it is away, and resumes when it is back", async () => {
+    const ollama = createFakeOllama();
+    const { app, database, clock } = await createSignalsApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    await app.handleMessage(
+      buildRpcMessage("ollama.register", { name: "nomic-embed-text:latest" }),
+    );
+
+    const ref = `ollama:nomic-embed-text:latest@${ollama.digest}`;
+
+    await database.put(MODEL_STORE, {
+      ...(await database.get(MODEL_STORE, ref))!,
+      active: true,
+      conformance: "passed",
+    });
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    clock.focusedTabId = 7;
+    await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+    await app.handleContentMessage(extracted("Mid-drive motors sit at the cranks."), FROM_PAGE_A);
+
+    await vi.waitFor(async () => expect(await database.count(VECTOR_STORE)).toBe(1));
+    expect(await app.handleMessage(buildRpcMessage("ollama.health", {}))).toMatchObject({
+      payload: { isPaused: false },
+    });
+
+    ollama.state.isRunning = false;
+    await app.handleNavigationCommitted(commit("https://example.org/b"));
+    await app.handleContentMessage(batch(0.3, 1), { tabId: 7, url: "https://example.org/b" });
+    await app.handleContentMessage(extracted("Hub motors sit in the wheel."), {
+      tabId: 7,
+      url: "https://example.org/b",
+    });
+
+    await vi.waitFor(async () =>
+      expect(await app.handleMessage(buildRpcMessage("ollama.health", {}))).toMatchObject({
+        payload: { isPaused: true },
+      }),
+    );
+
+    // Ollama comes back; the next look at it resumes what waited.
+    ollama.state.isRunning = true;
+    await app.handleMessage(buildRpcMessage("ollama.status", {}));
+
+    await vi.waitFor(async () => expect(await database.count(VECTOR_STORE)).toBe(2));
+    expect(await app.handleMessage(buildRpcMessage("ollama.health", {}))).toMatchObject({
+      payload: { isPaused: false },
+    });
+  });
+});
+
+describe("Turning local AI on in one action", () => {
+  it("downloads the missing model with progress, then registers, checks and activates it", async () => {
+    const ollama = createFakeOllama({ hasModel: false });
+    const { app, database } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+    const { port, posted, send } = createFakePort();
+
+    app.attachPort(port);
+    send(buildRpcMessage("ollama.enable", { name: "nomic-embed-text" }));
+    await vi.waitFor(
+      () =>
+        expect(posted.map((message) => (message as { type: string }).type)).toContain(
+          "ollama.enabled",
+        ),
+      { timeout: 10_000 },
+    );
+
+    const ref = `ollama:nomic-embed-text:latest@${ollama.digest}`;
+
+    expect(posted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "ollama.enableProgress",
+          payload: { name: "nomic-embed-text", stage: "downloading", percent: 50 },
+        }),
+        expect.objectContaining({
+          type: "ollama.enableProgress",
+          payload: { name: "nomic-embed-text", stage: "checking" },
+        }),
+        expect.objectContaining({
+          type: "ollama.enabled",
+          payload: { name: "nomic-embed-text", ref },
+        }),
+      ]),
+    );
+    expect(ollama.state.pulls).toBe(1);
+    expect(await database.get(MODEL_STORE, ref)).toMatchObject({
+      active: true,
+      conformance: "passed",
+    });
+  });
+
+  it("does not download a model Ollama already has", async () => {
+    const ollama = createFakeOllama();
+    const { app } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "nomic-embed-text" })),
+    ).toMatchObject({ type: "ollama.enabled" });
+    expect(ollama.state.pulls).toBe(0);
+  });
+
+  it("says Ollama isn't running, before anything else", async () => {
+    const { app } = await createSessionApp({
+      fetchResource: createFakeOllama({ isRunning: false }).fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "nomic-embed-text" })),
+    ).toMatchObject({
+      type: "ollama.enableFailed",
+      payload: { stage: "downloading", reason: "Ollama isn't running." },
+    });
+  });
+
+  it("says the quality check failed, and leaves the model inactive", async () => {
+    const ollama = createFakeOllama({ isBroken: true });
+    const { app, database } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "nomic-embed-text" })),
+    ).toMatchObject({ type: "ollama.enableFailed", payload: { stage: "checking" } });
+    expect(
+      (await database.get(MODEL_STORE, `ollama:nomic-embed-text:latest@${ollama.digest}`))?.active,
+    ).toBe(false);
   });
 });
