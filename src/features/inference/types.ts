@@ -44,6 +44,11 @@ export interface GenerateRequest {
   messages: readonly ChatMessage[];
   maxTokens: number;
   temperature?: number;
+  /**
+   * A JSON schema the answer must follow. A runtime that can constrain output
+   * is asked to; the answer is validated by the caller either way.
+   */
+  responseSchema?: Record<string, unknown>;
   /** Cancels the run; the stream ends and the runtime is released. */
   signal?: AbortSignal;
 }

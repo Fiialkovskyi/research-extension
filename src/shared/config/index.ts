@@ -31,7 +31,11 @@ export {
   OLLAMA_ORIGIN,
   OLLAMA_PROFILES,
 } from "./ollama/constants";
-export type { OllamaProfile } from "./ollama/types";
+export type {
+  OllamaEmbeddingProfile,
+  OllamaGenerationProfile,
+  OllamaProfile,
+} from "./ollama/types";
 export { ONNX_RUNTIME_DIRECTORY, ONNX_RUNTIME_WASM_VARIANTS } from "./onnxRuntime/constants";
 export type { OnnxRuntimeVariant } from "./onnxRuntime/types";
 export { SEARCH_ENGINES } from "./searchEngines/constants";

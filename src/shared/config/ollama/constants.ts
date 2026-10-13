@@ -42,4 +42,11 @@ export const OLLAMA_PROFILES: readonly OllamaProfile[] = [
     isRecommended: false,
     approximateSize: "670 MB",
   },
+  {
+    // A 4B model, the band REQ-NFR-007 budgets for outside the extension.
+    name: "qwen3:4b",
+    family: "text-generation",
+    isRecommended: true,
+    approximateSize: "2.5 GB",
+  },
 ];

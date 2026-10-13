@@ -1,14 +1,8 @@
 import type { EmbeddingContract } from "@/shared/modelManifest";
 import { MINIMUM_ORDERED_PROBES, NORM_TOLERANCE, PARAPHRASE_PROBES } from "../../../../constants";
 import { getCosineSimilarity } from "../getCosineSimilarity";
+import type { ProbeResult } from "../../../../types";
 import { getVectorNorm } from "../getVectorNorm";
-
-/** One probe's verdict, named so a refusal can say what failed. */
-export interface ProbeResult {
-  name: string;
-  passed: boolean;
-  detail: string;
-}
 
 /**
  * Judges a model's vectors against the contract it declared.

@@ -1,6 +1,5 @@
-import { type EmbedForConformance } from "../../../../types";
 import { MINIMUM_DETERMINISM_SIMILARITY } from "../../../../constants";
-import type { ProbeResult } from "../buildProbeResults";
+import type { EmbedForConformance, ProbeResult } from "../../../../types";
 import { getCosineSimilarity } from "../getCosineSimilarity";
 
 /**

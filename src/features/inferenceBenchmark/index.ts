@@ -20,11 +20,20 @@
 export {
   BENCHMARK_CHUNK_COUNT,
   BENCHMARK_CHUNK_WORDS,
+  EXTRACTION_PROGRESS_INTERVAL_MS,
+  MAXIMUM_EXTRACTION_MS,
   MINIMUM_CHUNKS_PER_SECOND,
 } from "./constants";
-export { benchmarkRequestSchemas, benchmarkResponseSchemas } from "./schemas";
+export {
+  benchmarkRequestSchemas,
+  benchmarkResponseSchemas,
+  generationBenchmarkRequestSchemas,
+  generationBenchmarkResponseSchemas,
+} from "./schemas";
 export { buildBenchmarkChunks } from "./model/buildBenchmarkChunks";
 export { measureEmbeddingThroughput } from "./model/measureEmbeddingThroughput";
+export { measureExtractionTime } from "./model/measureExtractionTime";
+export type { ExtractionMeasurement } from "./model/measureExtractionTime";
 export type {
   MeasureEmbeddingThroughputOptions,
   ThroughputMeasurement,

@@ -20,6 +20,8 @@ export const ollamaTagsSchema = v.object({
 /** `POST /api/show`: a model's architecture details. */
 export const ollamaShowSchema = v.object({
   license: v.optional(v.string()),
+  /** What the model can do, such as `embedding` or `completion`; absent before Ollama 0.6. */
+  capabilities: v.optional(v.array(v.string())),
   model_info: v.record(v.string(), v.unknown()),
   details: v.optional(v.object({ quantization_level: v.optional(v.string()) })),
 });
@@ -27,6 +29,15 @@ export const ollamaShowSchema = v.object({
 /** `POST /api/embed`: one vector per input. */
 export const ollamaEmbedSchema = v.object({
   embeddings: v.array(v.array(v.number())),
+});
+
+/** One line of `POST /api/chat`'s stream: a piece of the answer, and how it ended on the last. */
+export const ollamaChatLineSchema = v.object({
+  message: v.optional(v.object({ content: v.string() })),
+  done: v.optional(v.boolean()),
+  /** `stop` when the model finished, `length` when it reached `num_predict`. */
+  done_reason: v.optional(v.string()),
+  error: v.optional(v.string()),
 });
 
 /** One line of `POST /api/pull`'s progress stream. */

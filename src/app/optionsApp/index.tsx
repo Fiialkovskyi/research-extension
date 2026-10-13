@@ -235,13 +235,16 @@ export function OptionsApp({
                 >
                   Check and activate
                 </Button>
-                <Button
-                  data-testid={`measure-${model.ref}`}
-                  disabled={state.isBusy}
-                  onClick={() => requestBenchmark(model.ref)}
-                >
-                  Measure
-                </Button>
+                {/* Throughput is an embedding figure; a generation model has its own measure. */}
+                {model.family === "embedding" && (
+                  <Button
+                    data-testid={`measure-${model.ref}`}
+                    disabled={state.isBusy}
+                    onClick={() => requestBenchmark(model.ref)}
+                  >
+                    Measure
+                  </Button>
+                )}
               </span>
             </li>
           ))}

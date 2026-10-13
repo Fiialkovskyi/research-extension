@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { benchmarkResponseSchemas } from "@/features/inferenceBenchmark";
+import {
+  benchmarkResponseSchemas,
+  type ExtractionMeasurement,
+  generationBenchmarkResponseSchemas,
+  MAXIMUM_EXTRACTION_MS,
+} from "@/features/inferenceBenchmark";
 import { modelRegistryResponseSchemas } from "@/features/modelRegistry";
 import { OLLAMA_DOWNLOAD_URL, OLLAMA_PROFILES } from "@/shared/config";
 import {
@@ -49,7 +54,7 @@ type ModelActivity =
   | { kind: "checking" }
   | { kind: "failed"; reason: string };
 
-/** Where turning local AI on has got to. */
+/** Where turning a model on has got to. */
 type EnableProgress =
   | { stage: "downloading"; percent: number | undefined }
   | { stage: "checking" }
@@ -59,13 +64,124 @@ const responseSchemas = {
   ...ollamaResponseSchemas,
   ...modelRegistryResponseSchemas,
   ...benchmarkResponseSchemas,
+  ...generationBenchmarkResponseSchemas,
   ...rpcResponseSchemas,
 } as const;
+
+/** How timing extraction from a page went. */
+type ExtractionState =
+  | { status: "running"; elapsedMs?: number; characters?: number }
+  | { status: "measured"; measurement: ExtractionMeasurement }
+  | { status: "failed"; reason: string };
 
 /** The model "Turn on local AI" uses: the recommended embedding model. */
 const RECOMMENDED = OLLAMA_PROFILES.find(
   ({ family, isRecommended }) => family === "embedding" && isRecommended,
 );
+
+/** The model "Turn on page summaries" uses: the recommended generation model. */
+const RECOMMENDED_GENERATION = OLLAMA_PROFILES.find(
+  ({ family, isRecommended }) => family === "text-generation" && isRecommended,
+);
+
+/** Says how far turning a model on has got, or why it failed. */
+const describeEnabling = (progress: EnableProgress): string => {
+  switch (progress.stage) {
+    case "downloading":
+      return `Downloading the model${progress.percent === undefined ? "…" : ` ${progress.percent}%`}`;
+    case "checking":
+      return "Checking the model's quality…";
+    case "failed":
+      return progress.reason;
+  }
+};
+
+/**
+ * Turns one model on: the button, then one progress, then — on failure — why,
+ * with the button back to try again.
+ */
+function EnableControl({
+  label,
+  progress,
+  onTurnOn,
+  testIds,
+}: {
+  label: string;
+  progress: EnableProgress | undefined;
+  onTurnOn: () => void;
+  testIds: { button: string; progress: string; failure: string };
+}) {
+  return (
+    <>
+      {progress === undefined || progress.stage === "failed" ? (
+        <Button data-testid={testIds.button} onClick={onTurnOn}>
+          {label}
+        </Button>
+      ) : (
+        <span data-testid={testIds.progress} className="flex items-center gap-2">
+          <StatusDot tone="busy" />
+          {describeEnabling(progress)}
+        </span>
+      )}
+      {progress?.stage === "failed" && (
+        <span className="flex items-start gap-2 text-red-700 dark:text-red-400">
+          <span className="mt-1.5">
+            <StatusDot tone="bad" />
+          </span>
+          <span data-testid={testIds.failure} role="alert">
+            {progress.reason}
+          </span>
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Says how timing extraction went, against the budget for it. */
+function ExtractionResult({ state }: { state: ExtractionState }) {
+  if (state.status === "running") {
+    return (
+      <span data-testid="ollama-extraction" className="flex items-center gap-2">
+        <StatusDot tone="busy" />
+        Extracting facts from a test page…
+        {state.elapsedMs !== undefined &&
+          ` ${Math.round(state.elapsedMs / 1000)} s, ${state.characters ?? 0} characters written`}
+      </span>
+    );
+  }
+
+  if (state.status === "failed") {
+    return (
+      <span
+        data-testid="ollama-extraction"
+        className="flex items-center gap-2 text-red-700 dark:text-red-400"
+      >
+        <StatusDot tone="bad" />
+        {state.reason}
+      </span>
+    );
+  }
+
+  const { measurement } = state;
+  const seconds = (measurement.durationMs / 1000).toFixed(1);
+  const budget = MAXIMUM_EXTRACTION_MS / 1000;
+
+  // Amber when fast enough but partly wrong: the time passed, the table did not.
+  const tone = !measurement.meetsBudget
+    ? "bad"
+    : measurement.correctCount === measurement.expectedCount
+      ? "ok"
+      : "attention";
+
+  return (
+    <span data-testid="ollama-extraction" className="flex items-center gap-2">
+      <StatusDot tone={tone} />
+      {measurement.isValid
+        ? `A comparison table from a ${measurement.wordCount}-word page in ${seconds} s — ${measurement.meetsBudget ? "within" : "over"} the ${budget} s budget; ${measurement.correctCount} of ${measurement.expectedCount} values right.`
+        : `The answer was discarded after ${seconds} s: ${measurement.reason ?? "it did not match the schema."}`}
+    </span>
+  );
+}
 
 /** A command the user runs themselves, with a button that copies it. */
 function Command({ text, testId }: { text: string; testId: string }) {
@@ -158,7 +274,8 @@ export function OllamaCard({
   const [server, setServer] = useState<ServerState>("loading");
   const [models, setModels] = useState<OllamaModelEntry[]>([]);
   const [activity, setActivity] = useState<Record<string, ModelActivity>>({});
-  const [enabling, setEnabling] = useState<EnableProgress | undefined>();
+  const [enabling, setEnabling] = useState<Record<string, EnableProgress>>({});
+  const [extraction, setExtraction] = useState<ExtractionState | undefined>();
   const [throughput, setThroughput] = useState<number | undefined>();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -191,26 +308,50 @@ export function OllamaCard({
           }
 
           break;
-        case "ollama.enableProgress":
-          setEnabling(
-            response.payload.stage === "downloading"
-              ? { stage: "downloading", percent: response.payload.percent }
-              : { stage: "checking" },
+        case "ollama.enableProgress": {
+          const { name, stage, percent } = response.payload;
+
+          setEnabling((previous) => ({
+            ...previous,
+            [name]: stage === "downloading" ? { stage, percent } : { stage },
+          }));
+          break;
+        }
+        case "ollama.enabled":
+          setEnabling(({ [response.payload.name]: _done, ...rest }) => rest);
+          client.send(buildRpcMessage("ollama.status", {}));
+          break;
+        case "ollama.enableFailed": {
+          const { name, stage, reason } = response.payload;
+
+          setEnabling((previous) => ({
+            ...previous,
+            [name]: {
+              stage: "failed",
+              reason:
+                stage === "downloading"
+                  ? `Downloading the model failed: ${reason}`
+                  : `The model did not pass its quality check: ${reason}`,
+            },
+          }));
+          client.send(buildRpcMessage("ollama.status", {}));
+          break;
+        }
+        case "generation.measured":
+          setExtraction({ status: "measured", measurement: response.payload });
+          break;
+        case "generation.measureProgress": {
+          const { elapsedMs, characters } = response.payload;
+
+          setExtraction((previous) =>
+            previous?.status === "running"
+              ? { status: "running", elapsedMs, characters }
+              : previous,
           );
           break;
-        case "ollama.enabled":
-          setEnabling(undefined);
-          client.send(buildRpcMessage("ollama.status", {}));
-          break;
-        case "ollama.enableFailed":
-          setEnabling({
-            stage: "failed",
-            reason:
-              response.payload.stage === "downloading"
-                ? `Downloading the model failed: ${response.payload.reason}`
-                : `The model did not pass its quality check: ${response.payload.reason}`,
-          });
-          client.send(buildRpcMessage("ollama.status", {}));
+        }
+        case "generation.measureFailed":
+          setExtraction({ status: "failed", reason: response.payload.reason });
           break;
         case "ollama.pullProgress": {
           const { name, completed, total } = response.payload;
@@ -296,6 +437,10 @@ export function OllamaCard({
 
   const embeddingModels = models.filter(({ family }) => family === "embedding");
   const activeModel = embeddingModels.find(({ isActive }) => isActive);
+  const activeGenerationModel = models.find(
+    ({ family, isActive }) => family === "text-generation" && isActive,
+  );
+  const listedModels = models.filter(({ family }) => family !== "unknown");
   const isConnected = server !== "loading" && server !== "notConnected";
 
   // While a step is not done, look again: starting Ollama shows up by itself.
@@ -317,13 +462,17 @@ export function OllamaCard({
     requestAccess().then(refresh, () => undefined);
   };
 
-  const turnOn = () => {
-    if (RECOMMENDED === undefined) {
-      return;
-    }
+  const turnOn = (name: string) => {
+    setEnabling((previous) => ({
+      ...previous,
+      [name]: { stage: "downloading", percent: undefined },
+    }));
+    client.send(buildRpcMessage("ollama.enable", { name }));
+  };
 
-    setEnabling({ stage: "downloading", percent: undefined });
-    client.send(buildRpcMessage("ollama.enable", { name: RECOMMENDED.name }));
+  const measureExtraction = () => {
+    setExtraction({ status: "running" });
+    client.send(buildRpcMessage("generation.measure", {}));
   };
 
   const isPresent = server === "refused" || server === "running";
@@ -366,6 +515,55 @@ export function OllamaCard({
             <StatusDot tone="ok" />
             Local AI is on, using {activeModel.name}.
           </p>
+        )}
+
+        {server === "running" && activeModel !== undefined && (
+          <div data-testid="ollama-summaries" className="flex flex-col items-start gap-1">
+            {activeGenerationModel === undefined ? (
+              RECOMMENDED_GENERATION !== undefined && (
+                <>
+                  <span className="font-medium">
+                    Page summaries <span className="font-normal">(optional)</span>
+                  </span>
+                  <span>
+                    Lets the extension write summaries and comparison tables from the pages you
+                    read. Downloads {RECOMMENDED_GENERATION.name} (
+                    {RECOMMENDED_GENERATION.approximateSize}) through Ollama.
+                  </span>
+                  <EnableControl
+                    label="Turn on page summaries"
+                    progress={enabling[RECOMMENDED_GENERATION.name]}
+                    onTurnOn={() => {
+                      turnOn(RECOMMENDED_GENERATION.name);
+                    }}
+                    testIds={{
+                      button: "ollama-turn-on-summaries",
+                      progress: "ollama-summaries-progress",
+                      failure: "ollama-summaries-failure",
+                    }}
+                  />
+                </>
+              )
+            ) : (
+              <>
+                <p
+                  data-testid="ollama-summaries-on"
+                  className="flex items-center gap-2 font-medium"
+                >
+                  <StatusDot tone="ok" />
+                  Page summaries are on, using {activeGenerationModel.name}.
+                </p>
+                <Button
+                  data-testid="ollama-measure-extraction"
+                  disabled={extraction?.status === "running"}
+                  onClick={measureExtraction}
+                >
+                  Measure extraction time
+                </Button>
+                {extraction !== undefined && <ExtractionResult state={extraction} />}
+              </>
+            )}
+          </div>
         )}
 
         {isConnected && activeModel === undefined && (
@@ -423,31 +621,23 @@ export function OllamaCard({
             >
               {server === "running" && (
                 <div className="flex flex-col items-start gap-1">
-                  {enabling === undefined || enabling.stage === "failed" ? (
-                    <Button data-testid="ollama-turn-on" onClick={turnOn}>
-                      Turn on local AI
-                    </Button>
-                  ) : (
-                    <span data-testid="ollama-enable-progress" className="flex items-center gap-2">
-                      <StatusDot tone="busy" />
-                      {enabling.stage === "downloading"
-                        ? `Downloading the model${enabling.percent === undefined ? "…" : ` ${enabling.percent}%`}`
-                        : "Checking the model's quality…"}
-                    </span>
+                  {RECOMMENDED !== undefined && (
+                    <EnableControl
+                      label="Turn on local AI"
+                      progress={enabling[RECOMMENDED.name]}
+                      onTurnOn={() => {
+                        turnOn(RECOMMENDED.name);
+                      }}
+                      testIds={{
+                        button: "ollama-turn-on",
+                        progress: "ollama-enable-progress",
+                        failure: "ollama-enable-failure",
+                      }}
+                    />
                   )}
                   {recommendedEntry === undefined && RECOMMENDED !== undefined && (
                     <span className="text-xs text-slate-500 dark:text-slate-400">
                       Downloads {RECOMMENDED.name} ({RECOMMENDED.approximateSize}) through Ollama.
-                    </span>
-                  )}
-                  {enabling?.stage === "failed" && (
-                    <span className="flex items-start gap-2 text-red-700 dark:text-red-400">
-                      <span className="mt-1.5">
-                        <StatusDot tone="bad" />
-                      </span>
-                      <span data-testid="ollama-enable-failure" role="alert">
-                        {enabling.reason}
-                      </span>
                     </span>
                   )}
                 </div>
@@ -481,14 +671,17 @@ export function OllamaCard({
               </span>
               {server === "running" && (
                 <ul data-testid="ollama-models" className="flex flex-col gap-2">
-                  {embeddingModels.length === 0 && <li>Ollama has no embedding model yet.</li>}
-                  {embeddingModels.map((model) => {
+                  {listedModels.length === 0 && (
+                    <li>Ollama has no model the extension can use yet.</li>
+                  )}
+                  {listedModels.map((model) => {
                     const step = activity[model.name];
 
                     return (
                       <li key={model.name} data-testid="ollama-model" data-model={model.name}>
                         <span className="font-medium">{model.name}</span>{" "}
                         <span className="text-slate-500 dark:text-slate-400">
+                          {model.family === "text-generation" ? "writes text · " : "embeddings · "}
                           {model.size}
                           {model.isRecommended && " · recommended"}
                         </span>
@@ -502,20 +695,22 @@ export function OllamaCard({
                                 <StatusDot tone="ok" />
                                 Active
                               </span>
-                              <Button
-                                data-testid="ollama-measure"
-                                onClick={() => {
-                                  if (model.registeredRef !== null) {
-                                    client.send(
-                                      buildRpcMessage("benchmark.run", {
-                                        ref: model.registeredRef,
-                                      }),
-                                    );
-                                  }
-                                }}
-                              >
-                                Measure speed
-                              </Button>
+                              {model.family === "embedding" && (
+                                <Button
+                                  data-testid="ollama-measure"
+                                  onClick={() => {
+                                    if (model.registeredRef !== null) {
+                                      client.send(
+                                        buildRpcMessage("benchmark.run", {
+                                          ref: model.registeredRef,
+                                        }),
+                                      );
+                                    }
+                                  }}
+                                >
+                                  Measure speed
+                                </Button>
+                              )}
                               {throughput !== undefined && (
                                 <span data-testid="ollama-throughput">
                                   {throughput.toFixed(1)} chunks/s

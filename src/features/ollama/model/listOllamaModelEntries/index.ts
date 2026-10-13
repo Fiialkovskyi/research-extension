@@ -3,6 +3,7 @@ import type { StoredModel } from "@/shared/storage";
 
 import type { OllamaModel, OllamaModelEntry } from "../../types";
 import { findOllamaProfile } from "../findOllamaProfile";
+import { matchesOllamaName } from "../matchesOllamaName";
 
 const formatSize = (bytes: number): string =>
   bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`;
@@ -29,7 +30,8 @@ export const listOllamaModelEntries = (
 
     return {
       name: model.name,
-      family: profile?.family ?? "unknown",
+      // A model registered without a profile was described by the server itself.
+      family: profile?.family ?? record?.manifest.contract.family ?? "unknown",
       isPulled: true,
       isRecommended: profile?.isRecommended ?? false,
       size: formatSize(model.size),
@@ -37,9 +39,9 @@ export const listOllamaModelEntries = (
       isActive: record?.active === true,
     };
   });
-  const pulledNames = new Set(pulled.map(({ name }) => name.split(":")[0]));
   const missing = OLLAMA_PROFILES.filter(
-    ({ isRecommended, name }) => isRecommended && !pulledNames.has(name),
+    (profile) =>
+      profile.isRecommended && !pulled.some(({ name }) => matchesOllamaName(profile.name, name)),
   ).map((profile): OllamaModelEntry => ({
     name: profile.name,
     family: profile.family,

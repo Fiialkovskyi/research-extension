@@ -23,7 +23,7 @@ describe("listOllamaModelEntries", () => {
           { name: "llama3.2:3b", digest: "b".repeat(64), size: 2_000_000_000 },
         ],
         [registered(true)],
-      ),
+      ).slice(0, 2),
     ).toEqual([
       {
         name: "nomic-embed-text:latest",
@@ -49,7 +49,22 @@ describe("listOllamaModelEntries", () => {
   it("offers each recommended model Ollama lacks, to download", () => {
     expect(listOllamaModelEntries([], [])).toEqual([
       expect.objectContaining({ name: "nomic-embed-text", isPulled: false, size: "274 MB" }),
+      expect.objectContaining({
+        name: "qwen3:4b",
+        family: "text-generation",
+        isPulled: false,
+        size: "2.5 GB",
+      }),
     ]);
+  });
+
+  it("does not take another tag of a tagged recommendation for it", () => {
+    const names = listOllamaModelEntries(
+      [{ name: "qwen3:0.6b", digest: DIGEST, size: 500_000_000 }],
+      [],
+    ).map(({ name }) => name);
+
+    expect(names).toContain("qwen3:4b");
   });
 
   it("does not take a re-pulled model for the registered one", () => {

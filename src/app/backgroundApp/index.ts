@@ -8,15 +8,21 @@ import {
 import {
   buildOllamaManifest,
   createOllamaEmbedder,
+  createOllamaGenerator,
   findOllamaProfile,
   isLocalAiPaused,
   listOllamaModelEntries,
+  matchesOllamaName,
   pullOllamaModel,
   readOllamaStatus,
   requeuePausedJobs,
 } from "@/features/ollama";
-import { measureEmbeddingThroughput } from "@/features/inferenceBenchmark";
-import { runEmbeddingConformance } from "@/features/modelConformance";
+import {
+  EXTRACTION_PROGRESS_INTERVAL_MS,
+  measureEmbeddingThroughput,
+  measureExtractionTime,
+} from "@/features/inferenceBenchmark";
+import { runEmbeddingConformance, runGenerationConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
 import {
   injectPageObserver,
@@ -565,8 +571,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   };
 
   /**
-   * Runs a model's conformance suite and activates it if and only if it
-   * passes, then starts embedding what waits.
+   * Runs a model's conformance suite — its family's — and activates it if and
+   * only if it passes; an embedding model then starts on what waits.
    */
   const activateWithConformance = async (ref: string, device: InferenceDevice) => {
     let probes: ProbeResult[] = [];
@@ -575,16 +581,33 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       ref,
       database: await getDatabase(),
       runConformance: async (model) => {
-        if (model.manifest.contract.family !== "embedding") {
-          return {
-            passed: false,
-            probes: [],
-            reason: `No conformance suite exists yet for a ${model.manifest.contract.family} model.`,
-          };
+        const { contract } = model.manifest;
+
+        if (contract.family === "text-generation") {
+          // Generation runs only through the local server: the extension's own
+          // runtime stopped at the first spike's gate.
+          if (model.manifest.reference.hub !== "ollama") {
+            return {
+              passed: false,
+              probes: [],
+              reason: "Text generation runs only through the local inference server for now.",
+            };
+          }
+
+          const generator = createOllamaGenerator(
+            dependencies.fetchResource,
+            ollamaOrigin,
+            model.manifest,
+          );
+          const outcome = await runGenerationConformance(generator.generate);
+
+          probes = outcome.probes;
+
+          return outcome;
         }
 
         const session = await loadModelSession(model, device);
-        const outcome = await runEmbeddingConformance(model.manifest.contract, session.embed);
+        const outcome = await runEmbeddingConformance(contract, session.embed);
 
         probes = outcome.probes;
 
@@ -592,7 +615,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       },
     });
 
-    if (recorded.active) {
+    // Only an embedding model has snapshots waiting for it.
+    if (recorded.active && recorded.manifest.contract.family === "embedding") {
       void embedSnapshots();
     }
 
@@ -795,6 +819,12 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
             if (model === undefined) {
               throw new Error(`No model is installed under "${ref}".`);
+            }
+
+            if (model.manifest.contract.family !== "embedding") {
+              throw new Error(
+                "Throughput is measured for embedding models. A text-generation model is measured by its extraction time, under Ollama's page summaries.",
+              );
             }
 
             const session = await loadModelSession(model, device);
@@ -1174,7 +1204,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             }
 
             const isPresent = (models: readonly { name: string }[]) =>
-              models.find((model) => model.name.split(":")[0] === name.split(":")[0]);
+              models.find((model) => matchesOllamaName(name, model.name));
             let present = isPresent(status.models);
 
             if (present === undefined) {
@@ -1237,6 +1267,56 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("ollama.healthReport", {
             isPaused: await isLocalAiPaused(await getDatabase()),
           });
+        }
+
+        case "generation.measure": {
+          const model = await getActiveModel(await getDatabase(), "text-generation");
+
+          if (model === undefined) {
+            return buildRpcMessage("generation.measureFailed", {
+              reason: "Page summaries are not on: no text-generation model is active.",
+            });
+          }
+
+          const generator = createOllamaGenerator(
+            dependencies.fetchResource,
+            ollamaOrigin,
+            model.manifest,
+          );
+          const startedAt = getNow();
+          let characters = 0;
+          // Reports every second while the answer is written. Firefox unloads
+          // an event page after 30 s without activity, an open port
+          // notwithstanding, and a long answer is that long; posting to the
+          // port is activity, as an install's progress already showed.
+          const progress = setInterval(() => {
+            emit?.(
+              buildRpcMessage("generation.measureProgress", {
+                elapsedMs: getNow() - startedAt,
+                characters,
+              }),
+            );
+          }, EXTRACTION_PROGRESS_INTERVAL_MS);
+
+          try {
+            const measured = await measureExtractionTime((generateRequest) => {
+              const stream = generator.generate(generateRequest);
+
+              void (async () => {
+                for await (const { delta } of stream) {
+                  characters += delta.length;
+                }
+              })().catch(() => undefined);
+
+              return stream;
+            });
+
+            return buildRpcMessage("generation.measured", { ref: model.ref, ...measured });
+          } catch (error) {
+            return buildRpcMessage("generation.measureFailed", { reason: getErrorMessage(error) });
+          } finally {
+            clearInterval(progress);
+          }
         }
 
         case "recorded.open": {

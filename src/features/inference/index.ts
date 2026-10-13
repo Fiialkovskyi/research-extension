@@ -50,6 +50,8 @@ export type { InferenceWorker } from "./model/createInferenceWorker";
 // path, so the cost lands in the one context that runs models.
 export { createModelFileCache } from "./model/createModelFileCache";
 export type { ModelFileContents } from "./model/createModelFileCache";
+export { generateStructured } from "./model/generateStructured";
+export type { GenerateStructuredOptions, StructuredOutcome } from "./model/generateStructured";
 export { getAvailableDevices } from "./model/getAvailableDevices";
 export { loadModelIntoWorker } from "./model/loadModelIntoWorker";
 export type { WorkerModelSession } from "./model/loadModelIntoWorker";

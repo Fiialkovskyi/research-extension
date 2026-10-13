@@ -4,7 +4,7 @@ import type { ModelManifest } from "@/shared/modelManifest";
 
 import { ollamaEmbedSchema } from "../../schemas";
 import type { OllamaFetch } from "../../types";
-import { readOllamaStatus } from "../readOllamaStatus";
+import { assertOllamaServesModel } from "../assertOllamaServesModel";
 
 /** Embeds texts in one role, with the model's prefix for it. */
 export interface OllamaEmbedder {
@@ -15,8 +15,7 @@ export interface OllamaEmbedder {
  * Embeds through the local Ollama server with a registered model.
  *
  * Before each call the model is checked to still be the one registered — same
- * name, same digest — since a model re-pulled under its name is different
- * weights, and its vectors would not belong to the registered space. Each
+ * name, same digest (`assertOllamaServesModel`). Each
  * answer is checked against the contract: one vector per text, of the declared
  * dimensions.
  *
@@ -36,23 +35,7 @@ export const createOllamaEmbedder = (
 
   return {
     embed: async (texts, role) => {
-      const status = await readOllamaStatus(fetchResource, origin);
-
-      if (status.state !== "running") {
-        throw new Error(
-          status.state === "refused"
-            ? `Ollama at ${origin} refused this extension.`
-            : `Ollama is not running at ${origin}.`,
-        );
-      }
-
-      const current = status.models.find(({ name }) => name === reference.repository);
-
-      if (current?.digest !== reference.revision) {
-        throw new Error(
-          `${reference.repository} changed in Ollama since it was registered; register it again.`,
-        );
-      }
+      await assertOllamaServesModel(fetchResource, origin, reference);
 
       const response = await fetchResource(`${origin}/api/embed`, {
         method: "POST",

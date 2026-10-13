@@ -716,6 +716,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 - [ ] Egress test suite, performance gates, accessibility audit. (Section 13)
 - [ ] Passphrase lock and denylist editor. (SEC-006, SEC-007)
+- [ ] Page access granted at install: move `<all_urls>` from `optional_host_permissions` to `host_permissions`, so a session no longer needs an "Allow page access" click; keep the popup's re-request for access revoked in about:addons. Open details: the stricter install prompt and AMO review, whether temporary installs (`npm run dev`) get the grant, and the `extension-shell` and `research-session` spec changes. Added by the maintainer's request (2026-10-13). (RT-002)
 - [ ] AMO submission with source and build instructions; beta onboarding. (RT-007)
 
 **Last: Export and import**

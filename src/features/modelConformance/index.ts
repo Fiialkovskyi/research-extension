@@ -14,11 +14,19 @@
  */
 
 export {
+  EXTRACTION_PROBES,
   MINIMUM_DETERMINISM_SIMILARITY,
   MINIMUM_ORDERED_PROBES,
   NORM_TOLERANCE,
   PARAPHRASE_PROBES,
 } from "./constants";
-export type { EmbedForConformance, ParaphraseProbe } from "./types";
+export type {
+  ConformanceOutcome,
+  EmbedForConformance,
+  ExtractionProbe,
+  GenerateForConformance,
+  ParaphraseProbe,
+  ProbeResult,
+} from "./types";
 export { runEmbeddingConformance } from "./model/runEmbeddingConformance";
-export type { ConformanceOutcome, ProbeResult } from "./model/runEmbeddingConformance";
+export { runGenerationConformance } from "./model/runGenerationConformance";

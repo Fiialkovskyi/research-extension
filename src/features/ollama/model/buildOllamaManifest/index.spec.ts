@@ -13,12 +13,27 @@ const MODEL = {
   details: { family: "nomic-bert", quantization_level: "F16" },
 };
 
-const show = (modelInfo: Record<string, unknown>, license = "Apache License\nVersion 2.0") =>
+const show = (
+  modelInfo: Record<string, unknown>,
+  license = "Apache License\nVersion 2.0",
+  capabilities?: string[],
+) =>
   vi.fn(() =>
     Promise.resolve(
-      new Response(JSON.stringify({ license, model_info: modelInfo }), { status: 200 }),
+      new Response(JSON.stringify({ license, model_info: modelInfo, capabilities }), {
+        status: 200,
+      }),
     ),
   );
+
+const QWEN = { name: "qwen3:4b", digest: "b".repeat(64), size: 2_500_000_000 };
+
+/** What `/api/show` answers for a chat model: it has an embedding length too, its hidden size. */
+const QWEN_INFO = {
+  "general.architecture": "qwen3",
+  "qwen3.embedding_length": 2560,
+  "qwen3.context_length": 40960,
+};
 
 describe("buildOllamaManifest", () => {
   it("pins the model to its digest, with dimensions and context from Ollama and prefixes from its profile", async () => {
@@ -75,5 +90,56 @@ describe("buildOllamaManifest", () => {
     await expect(
       buildOllamaManifest(show({ "general.architecture": "llama" }), ORIGIN, MODEL, undefined),
     ).rejects.toThrow("how many dimensions");
+  });
+
+  it("describes a model the server says completes text as a generation model", async () => {
+    const manifest = await buildOllamaManifest(
+      show(QWEN_INFO, "Apache License", ["completion", "tools", "thinking"]),
+      ORIGIN,
+      QWEN,
+      undefined,
+    );
+
+    expect(manifest.contract).toEqual({
+      family: "text-generation",
+      contextWindow: 40960,
+      maxNewTokens: 2048,
+      chatTemplate: "server",
+      structuredOutput: "json_schema",
+    });
+    expect(v.safeParse(modelManifestSchema, manifest).success).toBe(true);
+  });
+
+  it("believes the server over a profile", async () => {
+    const manifest = await buildOllamaManifest(
+      show(QWEN_INFO, "Apache License", ["embedding"]),
+      ORIGIN,
+      QWEN,
+      OLLAMA_PROFILES.find(({ name }) => name === "qwen3:4b"),
+    );
+
+    expect(manifest.contract).toMatchObject({ family: "embedding", dimensions: 2560 });
+  });
+
+  it("falls back to the profile when the server does not say what the model does", async () => {
+    const manifest = await buildOllamaManifest(
+      show(QWEN_INFO),
+      ORIGIN,
+      QWEN,
+      OLLAMA_PROFILES.find(({ name }) => name === "qwen3:4b"),
+    );
+
+    expect(manifest.contract.family).toBe("text-generation");
+  });
+
+  it("keeps a generation model's token limit within a small context window", async () => {
+    const manifest = await buildOllamaManifest(
+      show({ "general.architecture": "tiny", "tiny.context_length": 1024 }, "MIT", ["completion"]),
+      ORIGIN,
+      QWEN,
+      undefined,
+    );
+
+    expect(manifest.contract).toMatchObject({ contextWindow: 1024, maxNewTokens: 1024 });
   });
 });

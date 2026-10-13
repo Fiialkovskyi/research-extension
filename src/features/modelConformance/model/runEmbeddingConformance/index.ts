@@ -1,18 +1,9 @@
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import type { EmbeddingContract } from "@/shared/modelManifest";
-import { type EmbedForConformance } from "../../types";
+import type { ConformanceOutcome, EmbedForConformance, ProbeResult } from "../../types";
 import { PARAPHRASE_PROBES } from "../../constants";
 import { buildDeterminismProbe } from "./utils/buildDeterminismProbe";
-import { buildProbeResults, type ProbeResult } from "./utils/buildProbeResults";
-
-export type ConformanceOutcome =
-  | { passed: true; probes: ProbeResult[] }
-  | {
-      passed: false;
-      probes: ProbeResult[];
-      /** Why the suite failed, suitable for showing a user. */
-      reason: string;
-    };
+import { buildProbeResults } from "./utils/buildProbeResults";
 
 /**
  * Runs the embedding family's conformance suite.
@@ -78,6 +69,3 @@ const runProbes = async (
 
   return { passed: false, probes, reason: failed.map((probe) => probe.detail).join("; ") };
 };
-
-export type { EmbedForConformance } from "../../types";
-export type { ProbeResult } from "./utils/buildProbeResults";

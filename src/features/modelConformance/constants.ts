@@ -1,4 +1,4 @@
-import type { ParaphraseProbe } from "./types";
+import type { ExtractionProbe, ParaphraseProbe } from "./types";
 
 /**
  * The bundled conformance suite for the embedding family.
@@ -128,3 +128,70 @@ export const MINIMUM_DETERMINISM_SIMILARITY = 0.999;
 
 /** How far a normalized vector's length may stray from one. */
 export const NORM_TOLERANCE = 1e-3;
+
+/**
+ * The bundled conformance suite for the text-generation family: passages that
+ * each describe one product, to be extracted into a schema.
+ *
+ * Each carries a distractor — a second price, a second weight, a figure in
+ * other units — because a model that copies the first number it sees would
+ * otherwise pass. One gives its weight in grams, to be answered in kilograms.
+ */
+export const EXTRACTION_PROBES: readonly ExtractionProbe[] = [
+  {
+    passage:
+      "The Brewline K2 kettle sells for $49.99, down from its launch price of $64. It holds 1.7 litres and weighs 1.2 kg empty; the box adds another 400 g.",
+    expected: { name: "Brewline K2", priceUsd: 49.99, weightKg: 1.2 },
+  },
+  {
+    passage:
+      "Trailhead's Ridge 30 backpack is a 30-litre daypack priced at $129. At 850 g it is lighter than the Ridge 40, which weighs 1.1 kg and costs $159.",
+    expected: { name: "Ridge 30", priceUsd: 129, weightKg: 0.85 },
+  },
+  {
+    passage:
+      "We tested the Volta E5 e-bike over 300 km. It weighs 23.5 kg with its 500 Wh battery and costs $2,399, plus $80 for delivery.",
+    expected: { name: "Volta E5", priceUsd: 2399, weightKg: 23.5 },
+  },
+  {
+    passage:
+      "The Lumen Desk 14 laptop starts at $1,049 for 16 GB of memory. It weighs 1.35 kg, and its 65 W charger adds 0.3 kg to a travel bag.",
+    expected: { name: "Lumen Desk 14", priceUsd: 1049, weightKg: 1.35 },
+  },
+  {
+    passage:
+      "Priced at $349, the Northwind 2 tent sleeps two and packs down to 2.1 kg. Its footprint, sold separately for $45, weighs 0.4 kg.",
+    expected: { name: "Northwind 2", priceUsd: 349, weightKg: 2.1 },
+  },
+];
+
+/** Extraction probes a generation model must get right, of five. */
+export const MINIMUM_EXTRACTED_PROBES = 4;
+
+/** How far an extracted number may be from the expected one, relative to it. */
+export const EXTRACTION_TOLERANCE = 0.01;
+
+/** The JSON schema extraction answers are constrained to; mirrors `extractedProductSchema`. */
+export const EXTRACTED_PRODUCT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    priceUsd: { type: "number" },
+    weightKg: { type: "number" },
+  },
+  required: ["name", "priceUsd", "weightKg"],
+} as const;
+
+/** Instructions for each extraction probe. */
+export const EXTRACTION_INSTRUCTIONS =
+  "Extract the main product the passage describes. Answer with JSON only: its name, its price in US dollars as a number, and its own weight in kilograms as a number.";
+
+/** A request whose honest answer is far longer than any limit the stopping probes set. */
+export const LONG_ANSWER_PROMPT =
+  "Count from 1 to 500, writing every number in words, separated by commas.";
+
+/** The token limit the limit probe sets: well below what the long answer needs. */
+export const TOKEN_LIMIT_PROBE_TOKENS = 16;
+
+/** How soon a cancelled run must report that it stopped. */
+export const CANCELLATION_DEADLINE_MS = 5_000;

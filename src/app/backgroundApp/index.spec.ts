@@ -4,7 +4,7 @@ import "fake-indexeddb/auto";
 
 import { type BackgroundApp, createBackgroundApp, type BackgroundDependencies } from ".";
 import type { InferenceWorker } from "@/features/inference";
-import { PARAPHRASE_PROBES } from "@/features/modelConformance";
+import { EXTRACTION_PROBES, PARAPHRASE_PROBES } from "@/features/modelConformance";
 import { SESSION_TAB_VALUE_KEY, type SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
@@ -2186,13 +2186,97 @@ const embedLikeAModel = (rawText: string, dimensions: number): number[] => {
 };
 
 /** A fake Ollama, with nomic-embed-text pulled unless told otherwise, recording what it was asked. */
+/** One NDJSON line of a chat answer. */
+const chatLine = (content: string, doneReason?: string) =>
+  `${JSON.stringify({
+    message: { role: "assistant", content },
+    done: doneReason !== undefined,
+    ...(doneReason === undefined ? {} : { done_reason: doneReason }),
+  })}\n`;
+
+/**
+ * What a chat model answers: an extraction probe's product when asked in a
+ * schema, else a long count that stops at `num_predict` or, given room, runs
+ * until the request is aborted — as a real connection does.
+ */
+const answerChat = (init: RequestInit | undefined, isChatBroken: boolean) => {
+  const body = JSON.parse(String(init?.body)) as {
+    messages: { content: string }[];
+    format?: unknown;
+    options: { num_predict: number };
+  };
+  const encoder = new TextEncoder();
+  const signal = init?.signal ?? undefined;
+
+  if (body.format !== undefined) {
+    const passage = body.messages.at(-1)?.content;
+    const probe = EXTRACTION_PROBES.find((candidate) => candidate.passage === passage);
+    // Any other passage is the timed article, answered with facts.
+    const answer = isChatBroken
+      ? "I think it costs a lot."
+      : JSON.stringify(
+          probe?.expected ?? {
+            products: [
+              {
+                name: "Volta E5",
+                priceUsd: 2399,
+                weightKg: 23.5,
+                batteryWh: 500,
+                torqueNm: 85,
+                rangeKm: 96,
+              },
+            ],
+          },
+        );
+
+    return Promise.resolve(new Response(chatLine(answer) + chatLine("", "stop")));
+  }
+
+  const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
+    start(controller) {
+      controller.enqueue(encoder.encode(chatLine("one, two, ")));
+
+      if (body.options.num_predict <= 16) {
+        controller.enqueue(encoder.encode(chatLine("", "length")));
+        controller.close();
+      } else {
+        signal?.addEventListener("abort", () => {
+          controller.error(new DOMException("Aborted", "AbortError"));
+        });
+      }
+    },
+  });
+
+  return Promise.resolve(new Response(stream));
+};
+
 const createFakeOllama = ({
   isRunning = true,
   hasModel = true,
   isBroken = false,
-}: { isRunning?: boolean; hasModel?: boolean; isBroken?: boolean } = {}) => {
-  const state = { isRunning, hasModel, embedCalls: 0, pulls: 0 };
+  chatModels = [] as string[],
+  isChatBroken = false,
+  chatDelayMs = 0,
+}: {
+  isRunning?: boolean;
+  hasModel?: boolean;
+  isBroken?: boolean;
+  /** Chat models Ollama has pulled, such as `qwen3:0.6b`. */
+  chatModels?: string[];
+  isChatBroken?: boolean;
+  /** How long a chat takes before it answers, as a long answer does. */
+  chatDelayMs?: number;
+} = {}) => {
+  const state = {
+    isRunning,
+    hasModel,
+    chatModels: [...chatModels],
+    embedCalls: 0,
+    chatCalls: 0,
+    pulls: 0,
+  };
   const DIGEST = "d".repeat(64);
+  const CHAT_DIGEST = "e".repeat(64);
   const DIMENSIONS = 256;
   const fetchResource = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -2203,15 +2287,33 @@ const createFakeOllama = ({
 
     if (url.endsWith("/api/tags")) {
       return answerJson({
-        models: state.hasModel
-          ? [{ name: "nomic-embed-text:latest", digest: DIGEST, size: 274_000_000 }]
-          : [],
+        models: [
+          ...(state.hasModel
+            ? [{ name: "nomic-embed-text:latest", digest: DIGEST, size: 274_000_000 }]
+            : []),
+          ...state.chatModels.map((name) => ({ name, digest: CHAT_DIGEST, size: 2_500_000_000 })),
+        ],
       });
     }
 
     if (url.endsWith("/api/show")) {
+      const { model } = JSON.parse(String(init?.body)) as { model: string };
+
+      if (state.chatModels.includes(model)) {
+        return answerJson({
+          license: "Apache",
+          capabilities: ["completion", "thinking"],
+          model_info: {
+            "general.architecture": "qwen3",
+            "qwen3.embedding_length": 2560,
+            "qwen3.context_length": 40960,
+          },
+        });
+      }
+
       return answerJson({
         license: "Apache",
+        capabilities: ["embedding"],
         model_info: {
           "general.architecture": "nomic-bert",
           "nomic-bert.embedding_length": DIMENSIONS,
@@ -2221,8 +2323,15 @@ const createFakeOllama = ({
     }
 
     if (url.endsWith("/api/pull")) {
+      const { model } = JSON.parse(String(init?.body)) as { model: string };
+
       state.pulls += 1;
-      state.hasModel = true;
+
+      if (model.includes("qwen")) {
+        state.chatModels.push(model);
+      } else {
+        state.hasModel = true;
+      }
 
       return Promise.resolve(
         new Response(
@@ -2251,10 +2360,18 @@ const createFakeOllama = ({
       });
     }
 
+    if (url.endsWith("/api/chat")) {
+      state.chatCalls += 1;
+
+      return new Promise<void>((resolve) => {
+        setTimeout(resolve, chatDelayMs);
+      }).then(() => answerChat(init, isChatBroken));
+    }
+
     return Promise.reject(new Error(`Unexpected ${url}`));
   }) as unknown as typeof fetch;
 
-  return { state, fetchResource, digest: DIGEST };
+  return { state, fetchResource, digest: DIGEST, chatDigest: CHAT_DIGEST };
 };
 
 describe("Ollama through the background", () => {
@@ -2283,7 +2400,10 @@ describe("Ollama through the background", () => {
     expect(await app.handleMessage(buildRpcMessage("ollama.status", {}))).toMatchObject({
       payload: {
         state: "running",
-        models: [expect.objectContaining({ name: "nomic-embed-text:latest", registeredRef: null })],
+        models: [
+          expect.objectContaining({ name: "nomic-embed-text:latest", registeredRef: null }),
+          expect.objectContaining({ name: "qwen3:4b", isPulled: false }),
+        ],
       },
     });
   });
@@ -2451,4 +2571,183 @@ describe("Turning local AI on in one action", () => {
       (await database.get(MODEL_STORE, `ollama:nomic-embed-text:latest@${ollama.digest}`))?.active,
     ).toBe(false);
   });
+});
+
+describe("Page summaries through Ollama", () => {
+  it("registers a chat model as a generation model and checks it by generating", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const { app, database } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+    const ref = `ollama:qwen3:4b@${ollama.chatDigest}`;
+
+    expect(
+      await app.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" })),
+    ).toMatchObject({ type: "ollama.registered", payload: { ref } });
+    expect(await database.get(MODEL_STORE, ref)).toMatchObject({
+      active: false,
+      manifest: { contract: { family: "text-generation", contextWindow: 40960 } },
+    });
+
+    const activated = await app.handleMessage(buildRpcMessage("model.activate", { ref }));
+
+    expect(activated).toMatchObject({
+      type: "model.activated",
+      payload: {
+        active: true,
+        probes: [
+          expect.objectContaining({ name: "stops when cancelled", passed: true }),
+          expect.objectContaining({ name: "stops at its token limit", passed: true }),
+          expect.objectContaining({
+            name: "extracts products into a schema",
+            detail: "5 of 5 extracted correctly, 4 required",
+          }),
+        ],
+      },
+    });
+    expect(ollama.state.embedCalls).toBe(0);
+  });
+
+  it("keeps the embedding model active beside the generation model", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const { app, database } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "nomic-embed-text" }));
+    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
+
+    const active = (await database.getAll(MODEL_STORE))
+      .filter(({ active: isActive }) => isActive)
+      .map(({ manifest }) => manifest.contract.family);
+
+    expect(active.toSorted()).toEqual(["embedding", "text-generation"]);
+  });
+
+  it("downloads the tagged model even when Ollama has another tag of it", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:0.6b"] });
+    const { app } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" })),
+    ).toMatchObject({
+      type: "ollama.enabled",
+      payload: { ref: `ollama:qwen3:4b@${ollama.chatDigest}` },
+    });
+    expect(ollama.state.pulls).toBe(1);
+  });
+
+  it("refuses a model that does not answer in the schema, at the checking stage", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"], isChatBroken: true });
+    const { app } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    expect(
+      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" })),
+    ).toMatchObject({
+      type: "ollama.enableFailed",
+      payload: {
+        stage: "checking",
+        reason: expect.stringMatching(/^extracts products into a schema: 0 of 5/u),
+      },
+    });
+  });
+
+  it("times extraction from a page with the active generation model", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const { app } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
+
+    expect(await app.handleMessage(buildRpcMessage("generation.measure", {}))).toMatchObject({
+      type: "generation.measured",
+      payload: {
+        ref: `ollama:qwen3:4b@${ollama.chatDigest}`,
+        isValid: true,
+        correctCount: 5,
+        expectedCount: 15,
+        meetsBudget: true,
+      },
+    });
+  });
+
+  it("says page summaries are not on when no generation model is active", async () => {
+    const { app } = await createSessionApp({
+      fetchResource: createFakeOllama().fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    expect(await app.handleMessage(buildRpcMessage("generation.measure", {}))).toMatchObject({
+      type: "generation.measureFailed",
+      payload: { reason: expect.stringMatching(/^Page summaries are not on/u) },
+    });
+  });
+
+  it("does not measure throughput for a generation model, and says where its measure is", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const { app } = await createSessionApp({
+      fetchResource: ollama.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
+
+    expect(
+      await app.handleMessage(
+        buildRpcMessage("benchmark.run", { ref: `ollama:qwen3:4b@${ollama.chatDigest}` }),
+      ),
+    ).toMatchObject({
+      type: "benchmark.failed",
+      payload: { reason: expect.stringMatching(/measured by its extraction time/u) },
+    });
+  });
+
+  it("reports progress every second while extraction runs, which keeps the event page alive", async () => {
+    const slow = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 2_300 });
+    const { app: slowApp, database } = await createSessionApp({
+      fetchResource: slow.fetchResource,
+      hasOllamaAccess: () => Promise.resolve(true),
+    });
+
+    // Registered and marked as having passed, rather than checked: the
+    // checks would wait on the slow chat seven times.
+    await slowApp.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" }));
+
+    const registered = await database.get(MODEL_STORE, `ollama:qwen3:4b@${slow.chatDigest}`);
+
+    if (registered === undefined) {
+      throw new Error("The model was not registered.");
+    }
+
+    await database.put(MODEL_STORE, { ...registered, active: true, conformance: "passed" });
+
+    const { port, posted, send } = createFakePort();
+
+    slowApp.attachPort(port);
+    send(buildRpcMessage("generation.measure", {}));
+    await vi.waitFor(
+      () =>
+        expect(posted.map((message) => (message as { type: string }).type)).toContain(
+          "generation.measured",
+        ),
+      { timeout: 10_000 },
+    );
+
+    const types = posted.map((message) => (message as { type: string }).type);
+
+    expect(types.filter((type) => type === "generation.measureProgress").length).toBeGreaterThan(1);
+    expect(types.indexOf("generation.measureProgress")).toBeLessThan(
+      types.indexOf("generation.measured"),
+    );
+  }, 15_000);
 });

@@ -263,6 +263,23 @@ describe("OptionsApp, choosing a device and measuring", () => {
     threadCount: 1,
   };
 
+  it("offers a throughput measurement only for an embedding model", async () => {
+    const { client, answer } = createStubClient();
+    const generator = {
+      ...installed,
+      ref: "ollama:qwen3:4b@x",
+      repository: "qwen3:4b",
+      family: "text-generation" as const,
+    };
+
+    render(<OptionsApp client={client} />);
+    answer("model.listed", { models: [installed, generator] });
+
+    await waitFor(() => expect(screen.getByTestId(`measure-${installed.ref}`)).toBeInTheDocument());
+    expect(screen.queryByTestId(`measure-${generator.ref}`)).not.toBeInTheDocument();
+    expect(screen.getByTestId(`activate-${generator.ref}`)).toBeInTheDocument();
+  });
+
   it("offers the software path and the accelerated one", () => {
     const { client } = createStubClient();
 

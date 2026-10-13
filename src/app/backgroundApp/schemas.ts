@@ -1,6 +1,9 @@
 import { diagnosticsRequestSchemas } from "@/features/diagnostics";
 import { inferenceRequestSchemas } from "@/features/inference";
-import { benchmarkRequestSchemas } from "@/features/inferenceBenchmark";
+import {
+  benchmarkRequestSchemas,
+  generationBenchmarkRequestSchemas,
+} from "@/features/inferenceBenchmark";
 import { modelInstallRequestSchemas } from "@/features/modelInstall";
 import { modelRegistryRequestSchemas } from "@/features/modelRegistry";
 import { ollamaRequestSchemas } from "@/features/ollama";
@@ -14,6 +17,7 @@ import { tabGroupRequestSchemas } from "@/features/tabGroups";
 export const requestSchemas = {
   ...benchmarkRequestSchemas,
   ...diagnosticsRequestSchemas,
+  ...generationBenchmarkRequestSchemas,
   ...inferenceRequestSchemas,
   ...modelInstallRequestSchemas,
   ...modelRegistryRequestSchemas,

@@ -141,6 +141,20 @@ checklist then walks you through the rest, and each step ticks itself when it is
 4. **Turn on local AI.** One button downloads the recommended model through Ollama (about 274 MB),
    checks its quality, and switches it on.
 
+### Page summaries, if you want them
+
+Once local AI is on, the same section offers **Page summaries (optional)**. They let the extension
+write summaries and comparison tables from the pages you read. **Turn on page summaries** downloads a
+second, larger model through Ollama — `qwen3:4b`, about 2.5 GB — checks that it extracts facts
+correctly and stops when told, and switches it on. Check that your computer has the free disk space
+first.
+
+With summaries on, **Measure extraction time** has the model fill a small comparison table from a
+test page of about 1,500 words, and shows how long it took against the 20-second budget and how many
+of the table's 15 values it got right: green when both are good, amber when it was fast enough but
+got some wrong, red when it was too slow. The first measurement includes Ollama loading the model;
+measure again for the usual figure.
+
 If Ollama is closed later nothing breaks: pages are still recorded, the popup says local AI is
 paused, and the pages waiting for similarity are processed once Ollama is open again. If the
 checklist asks to allow the extension again — after reinstalling the extension, or if Ollama started

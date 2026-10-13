@@ -242,4 +242,138 @@ describe("OllamaCard", () => {
 
     expect(sent.at(-1)).toMatchObject({ type: "model.activate", payload: { ref } });
   });
+
+  it("offers page summaries once local AI is on, saying what it downloads", () => {
+    const { client, sent, push } = createStubClient();
+
+    renderCard(client);
+    pushState(push, "running", [{ ...MODEL, registeredRef: "ollama:x", isActive: true }]);
+
+    expect(screen.getByTestId("ollama-summaries").textContent).toContain("qwen3:4b (2.5 GB)");
+
+    fireEvent.click(screen.getByTestId("ollama-turn-on-summaries"));
+
+    expect(sent.at(-1)).toMatchObject({ type: "ollama.enable", payload: { name: "qwen3:4b" } });
+
+    push(
+      buildRpcMessage("ollama.enableProgress", {
+        name: "qwen3:4b",
+        stage: "downloading",
+        percent: 12,
+      }),
+    );
+
+    expect(screen.getByTestId("ollama-summaries-progress").textContent).toBe(
+      "Downloading the model 12%",
+    );
+    // The first step's progress is its own.
+    expect(screen.getByTestId("ollama-on").textContent).toContain("Local AI is on");
+  });
+
+  it("does not offer page summaries before local AI is on", () => {
+    const { client, push } = createStubClient();
+
+    renderCard(client);
+    pushState(push, "running", [MODEL]);
+
+    expect(screen.queryByTestId("ollama-summaries")).toBeNull();
+  });
+
+  it("says why page summaries could not be turned on", () => {
+    const { client, push } = createStubClient();
+
+    renderCard(client);
+    pushState(push, "running", [{ ...MODEL, registeredRef: "ollama:x", isActive: true }]);
+    fireEvent.click(screen.getByTestId("ollama-turn-on-summaries"));
+    push(
+      buildRpcMessage("ollama.enableFailed", {
+        name: "qwen3:4b",
+        stage: "checking",
+        reason: 'stops at its token limit: it reported "model"',
+      }),
+    );
+
+    expect(screen.getByTestId("ollama-summaries-failure").textContent).toBe(
+      'The model did not pass its quality check: stops at its token limit: it reported "model"',
+    );
+    expect(screen.getByTestId("ollama-turn-on-summaries")).not.toBeNull();
+  });
+
+  it("measures extraction time once summaries are on, against the budget", () => {
+    const { client, sent, push } = createStubClient();
+
+    renderCard(client);
+    pushState(push, "running", [
+      { ...MODEL, registeredRef: "ollama:x", isActive: true },
+      {
+        ...MODEL,
+        name: "qwen3:4b",
+        family: "text-generation",
+        size: "2.5 GB",
+        registeredRef: "ollama:y",
+        isActive: true,
+      },
+    ]);
+
+    expect(screen.getByTestId("ollama-summaries-on").textContent).toContain(
+      "Page summaries are on, using qwen3:4b.",
+    );
+
+    fireEvent.click(screen.getByTestId("ollama-measure-extraction"));
+
+    expect(sent.at(-1)).toMatchObject({ type: "generation.measure" });
+    expect(screen.getByTestId("ollama-extraction").textContent).toContain("Extracting facts");
+
+    push(buildRpcMessage("generation.measureProgress", { elapsedMs: 12_400, characters: 1840 }));
+
+    expect(screen.getByTestId("ollama-extraction").textContent).toBe(
+      "Extracting facts from a test page… 12 s, 1840 characters written",
+    );
+
+    push(
+      buildRpcMessage("generation.measured", {
+        ref: "ollama:y",
+        wordCount: 1492,
+        durationMs: 14_250,
+        isValid: true,
+        correctCount: 15,
+        expectedCount: 15,
+        meetsBudget: true,
+      }),
+    );
+
+    const result = screen.getByTestId("ollama-extraction");
+
+    expect(result.textContent).toBe(
+      "A comparison table from a 1492-word page in 14.3 s — within the 20 s budget; 15 of 15 values right.",
+    );
+    expect(result.querySelector("[data-tone]")).toHaveAttribute("data-tone", "ok");
+  });
+
+  it("marks a discarded extraction red", () => {
+    const { client, push } = createStubClient();
+
+    renderCard(client);
+    pushState(push, "running", [
+      { ...MODEL, registeredRef: "ollama:x", isActive: true },
+      { ...MODEL, name: "qwen3:4b", family: "text-generation", isActive: true },
+    ]);
+    fireEvent.click(screen.getByTestId("ollama-measure-extraction"));
+    push(
+      buildRpcMessage("generation.measured", {
+        ref: "ollama:y",
+        wordCount: 1492,
+        durationMs: 9_000,
+        isValid: false,
+        correctCount: 0,
+        expectedCount: 15,
+        reason: "The answer was not JSON.",
+        meetsBudget: false,
+      }),
+    );
+
+    expect(screen.getByTestId("ollama-extraction").textContent).toBe(
+      "The answer was discarded after 9.0 s: The answer was not JSON.",
+    );
+  });
 });
