@@ -12,6 +12,7 @@ export const buildSummariesReaderScript = (): string => `
     needsModel: has(document, "summaries-no-model"),
     tableEmpty: has(document, "table-empty"),
     hasRejected: has(document, "table-rejected"),
+    questionsNeedModel: has(document, "questions-no-model"),
     gaps: Array.from(
       document.querySelectorAll('[data-testid="gap"] > span'),
       (gap) => gap.textContent ?? "",

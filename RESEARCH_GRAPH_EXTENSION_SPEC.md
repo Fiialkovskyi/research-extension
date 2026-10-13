@@ -519,6 +519,7 @@ interface Fact {
   - An entity is confirmed when facts about it come from at least two pages, and only the comparison table's shown columns are checked. At most 20 cell gaps are listed.
   - `domain_category` comes from the bundled `domainCategories@1` host table, and manufacturer sites are not recognised.
   - The search opens on the engine the session's searches used most, or DuckDuckGo, in a new tab added to the session's group. Each bundled engine carries a `searchUrl`, guarded to be one that capture recognises.
+  - The open questions (`add-open-questions`) come from one `openQuestions@1` run over up to 60 of the session's facts, rejected ones left out. A `suggestQuestions` job keyed by the session's fact set queues them 60 s after the facts settle, inside the generation gate. They are stored encrypted, labelled as suggestions, and stale when the facts or the model change.
 - **REQ-SYN-010:** All prompts SHALL live in versioned files (`prompts/<id>@<version>.md`) with JSON schemas alongside. A prompt change SHALL bump the version, which appears in provenance.
 - **REQ-SYN-011:** Page text SHALL be passed to the model as delimited data with an instruction to ignore embedded instructions. Outputs are schema-validated, so injected text can at worst yield a wrong but grounded fact, never an action.
 
@@ -705,7 +706,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 - [x] Entity resolution and unit normalization. (SYN pipeline step 6)
 - [x] Cluster summaries with citations and staleness. (SYN-003, SYN-004, LIN-006) Shown on a "Summaries" extension page opened from the popup until the sidebar exists (`add-cluster-summaries`).
 - [x] Generic comparison table with conflicts and CSV export. (SYN-005 to SYN-007) On the Synthesis page, below the summaries (`add-comparison-table`).
-- [ ] Gaps and open questions with "search this". (SYN-008, SYN-009) Rule-based gaps and "search this" are done (`add-research-gaps`), on the Synthesis page. The open questions the model may propose are still to do.
+- [x] Gaps and open questions with "search this". (SYN-008, SYN-009) Rule-based gaps (`add-research-gaps`) and the questions the model suggests (`add-open-questions`), on the Synthesis page.
 - [x] Rejections. (LIN-008) Per session, on the Synthesis page (`add-rejections`).
 
 **M5: Native host and model swap**

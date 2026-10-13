@@ -21,6 +21,7 @@ import type {
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
+  QUESTION_STORE,
   VECTOR_STORE,
 } from "./constants";
 
@@ -378,6 +379,22 @@ export interface StoredRejection {
   createdAt: number;
 }
 
+/**
+ * The open questions the model suggested for a session (REQ-SYN-008): what
+ * they were built from and by what, readable, and the questions, encrypted.
+ */
+export interface StoredQuestions {
+  sessionId: string;
+  factSetHash: string;
+  modelRef: string;
+  prompt: string;
+  generatedAt: number;
+  keyId: string;
+  iv: Uint8Array;
+  /** JSON `{ question, query }[]`, encrypted. */
+  encryptedQuestions: ArrayBuffer;
+}
+
 /** How fact extraction of one snapshot went: progress and counts, no content. */
 export interface StoredExtraction {
   snapshotId: string;
@@ -662,5 +679,9 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: string;
     value: StoredRejection;
     indexes: { sessionId: string };
+  };
+  [QUESTION_STORE]: {
+    key: string;
+    value: StoredQuestions;
   };
 }

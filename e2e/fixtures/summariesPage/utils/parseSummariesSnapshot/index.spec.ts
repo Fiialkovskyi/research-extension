@@ -10,6 +10,7 @@ describe("parseSummariesSnapshot", () => {
       needsModel: true,
       tableEmpty: true,
       hasRejected: false,
+      questionsNeedModel: true,
       gaps: ["No reviews read yet"],
       clusters: [{ label: "Bikes", hasNoFacts: true, statements: [] }],
     };

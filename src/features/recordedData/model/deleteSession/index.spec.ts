@@ -21,6 +21,7 @@ import {
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
+  QUESTION_STORE,
   VECTOR_STORE,
 } from "@/shared/storage";
 
@@ -38,6 +39,7 @@ const STORES = [
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
+  QUESTION_STORE,
   JOB_STORE,
   CLUSTERING_STORE,
   SESSION_STORE,
@@ -84,6 +86,7 @@ const record = async (sessionId: string) => {
   await database.put(SUMMARY_STORE, { id: `${sessionId}:cluster`, sessionId } as never);
   await database.put(TABLE_COLUMNS_STORE, { id: `${sessionId}:product`, sessionId } as never);
   await database.put(REJECTION_STORE, { id: `${sessionId}:k`, sessionId } as never);
+  await database.put(QUESTION_STORE, { sessionId } as never);
   await database.put(JOB_STORE, {
     id: `${sessionId}-j`,
     sessionId,
@@ -126,6 +129,7 @@ describe("deleteSession", () => {
     expect(await database.count(SUMMARY_STORE)).toBe(1);
     expect(await database.count(TABLE_COLUMNS_STORE)).toBe(1);
     expect(await database.count(REJECTION_STORE)).toBe(1);
+    expect(await database.count(QUESTION_STORE)).toBe(1);
     expect(await database.count(SPACE_STORE)).toBe(1);
   });
 

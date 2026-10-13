@@ -95,6 +95,14 @@ import { readComparisonTable, saveTableColumns } from "@/features/comparisonTabl
 import { openGapSearch, readResearchGaps } from "@/features/researchGaps";
 import { rejectFacts, restoreRejections } from "@/features/factRejections";
 import {
+  enqueueOpenQuestions,
+  getQuestionsProducer,
+  readOpenQuestions,
+  requestOpenQuestions,
+  runOpenQuestionsJob,
+  SUGGEST_QUESTIONS_JOB,
+} from "@/features/openQuestions";
+import {
   enqueueEntityResolutions,
   RESOLVE_ENTITIES_JOB,
   runEntityResolutionJob,
@@ -209,7 +217,11 @@ const isRequested = (job: StoredJob): boolean => {
 const requestedPayloadSchema = v.object({ requestedAt: v.optional(v.number()) });
 
 /** Jobs that run text generation, and so only while the user is away or asked (REQ-MOD-008). */
-const GENERATION_JOBS: ReadonlySet<string> = new Set([EXTRACT_FACTS_JOB, SUMMARIZE_CLUSTER_JOB]);
+const GENERATION_JOBS: ReadonlySet<string> = new Set([
+  EXTRACT_FACTS_JOB,
+  SUMMARIZE_CLUSTER_JOB,
+  SUGGEST_QUESTIONS_JOB,
+]);
 
 /** The models registered from the local Ollama server. */
 const listInstalledOllamaModels = async (
@@ -433,6 +445,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       await reclusterActiveSession(openedDatabase, getNow());
       // Clusters may have gained or lost pages, and with them facts.
       await enqueueClusterSummaries(openedDatabase, getNow());
+      await enqueueOpenQuestions(openedDatabase, getNow());
     });
     pushGraphSnapshot();
     // A summary just queued must not wait for the next wake-up to be claimed.
@@ -707,8 +720,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           : { embed: (texts: readonly string[]) => session.embed(texts, "document") }),
         now: getNow,
       });
-      // The page's facts are settled: its cluster's summary is due in a while.
+      // The page's facts are settled: its cluster's summary is due in a while,
+      // and the session's open questions.
       await enqueueClusterSummaries(openedDatabase, getNow());
+      await enqueueOpenQuestions(openedDatabase, getNow());
     }),
     [SUMMARIZE_CLUSTER_JOB]: runHeld(async (job) => {
       const openedDatabase = await getDatabase();
@@ -735,6 +750,28 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         job,
         modelRef: model.ref,
         generate: generator.generate,
+        now: getNow,
+      });
+    }),
+    [SUGGEST_QUESTIONS_JOB]: runHeld(async (job) => {
+      const openedDatabase = await getDatabase();
+      const model = await getActiveModel(openedDatabase, "text-generation");
+
+      // Queued for a model no longer active: the active one has jobs of its own.
+      if (
+        model === undefined ||
+        model.manifest.reference.hub !== "ollama" ||
+        job.producerVersion !== getQuestionsProducer(model.ref)
+      ) {
+        return;
+      }
+
+      await runOpenQuestionsJob({
+        database: openedDatabase,
+        job,
+        modelRef: model.ref,
+        generate: createOllamaGenerator(dependencies.fetchResource, ollamaOrigin, model.manifest)
+          .generate,
         now: getNow,
       });
     }),
@@ -1122,6 +1159,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
             // A cluster's fact set may have changed: its summary is due again.
             await enqueueClusterSummaries(openedDatabase, getNow());
+            await enqueueOpenQuestions(openedDatabase, getNow());
 
             return count;
           });
@@ -1139,6 +1177,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
               session === undefined ? 0 : await restoreRejections(openedDatabase, session.id);
 
             await enqueueClusterSummaries(openedDatabase, getNow());
+            await enqueueOpenQuestions(openedDatabase, getNow());
 
             return count;
           });
@@ -1146,6 +1185,24 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           void runJobs();
 
           return buildRpcMessage("facts.rejectionsRestored", { restoredCount });
+        }
+
+        case "questions.read": {
+          return buildRpcMessage("questions.view", {
+            view: (await readOpenQuestions(await getDatabase())) ?? null,
+          });
+        }
+
+        case "questions.refresh": {
+          const queued = await serializeWork(async () =>
+            requestOpenQuestions(await getDatabase(), getNow()),
+          );
+
+          if (queued) {
+            void runJobs();
+          }
+
+          return buildRpcMessage("questions.refreshing", { queued });
         }
 
         case "gaps.read": {

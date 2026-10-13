@@ -13,7 +13,7 @@ export const DATABASE_NAME = "research-graph";
  * rather than editing an existing one, so a profile that has already migrated
  * is never asked to migrate differently.
  */
-export const DATABASE_VERSION = 18;
+export const DATABASE_VERSION = 19;
 
 export const MODEL_STORE = "models";
 export const MODEL_FILE_STORE = "modelFiles";
@@ -42,6 +42,8 @@ export const SUMMARY_STORE = "summaries";
 export const TABLE_COLUMNS_STORE = "tableColumns";
 /** Facts the user marked wrong, by a hash of what they state. */
 export const REJECTION_STORE = "rejections";
+/** The open questions the model suggested for a session; encrypted. */
+export const QUESTION_STORE = "questions";
 
 /**
  * How many runs the log keeps. Runs are written on every embedding job and

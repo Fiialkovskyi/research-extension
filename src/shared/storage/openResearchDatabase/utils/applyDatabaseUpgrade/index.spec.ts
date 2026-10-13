@@ -24,6 +24,7 @@ import {
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
+  QUESTION_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -427,6 +428,20 @@ describe("applyDatabaseUpgrade", () => {
     expect(after.version).toBe(18);
     expect(await after.count(REJECTION_STORE)).toBe(0);
     expect([...after.transaction(REJECTION_STORE).store.indexNames]).toEqual(["sessionId"]);
+
+    after.close();
+  });
+
+  it("adds an empty question store, keyed by session, to a version-18 profile", async () => {
+    const name = getNextDatabaseName();
+
+    (await openAt(name, 18)).close();
+
+    const after = await openAt(name, 19);
+
+    expect(after.version).toBe(19);
+    expect(await after.count(QUESTION_STORE)).toBe(0);
+    expect(after.transaction(QUESTION_STORE).store.keyPath).toBe("sessionId");
 
     after.close();
   });

@@ -104,6 +104,22 @@ const createClient = (hasSession = true) => {
           );
         case "gaps.search":
           return Promise.resolve(buildRpcMessage("gaps.searchOpened", { url: "https://x" }));
+        case "questions.read":
+          return Promise.resolve(
+            buildRpcMessage("questions.view", {
+              view: hasSession
+                ? {
+                    questions: [{ question: "Warranty?", query: "volta warranty" }],
+                    hasQuestions: true,
+                    isStale: true,
+                    isPending: false,
+                    canSuggest: true,
+                  }
+                : null,
+            }),
+          );
+        case "questions.refresh":
+          return Promise.resolve(buildRpcMessage("questions.refreshing", { queued: true }));
         case "facts.reject":
           return Promise.resolve(buildRpcMessage("facts.rejected", { rejectionCount: 1 }));
         case "facts.restoreRejections":
@@ -183,7 +199,7 @@ describe("SummariesApp", () => {
     const { client, sent } = createClient();
 
     render(<SummariesApp client={client} />);
-    fireEvent.click(await screen.findByRole("button", { name: "Search this" }));
+    fireEvent.click((await screen.findAllByTestId("gap-search"))[0]!);
 
     await vi.waitFor(() => expect(sent).toContain("gaps.search"));
     expect(client.request).toHaveBeenCalledWith(
@@ -211,6 +227,23 @@ describe("SummariesApp", () => {
       expect.objectContaining({ type: "facts.reject", payload: { factIds: ["a"] } }),
     );
     expect(sent.filter((type) => type === "summaries.read").length).toBeGreaterThan(1);
+  });
+
+  it("shows suggested questions, searches one, and refreshes stale ones", async () => {
+    const { client, sent } = createClient();
+
+    render(<SummariesApp client={client} />);
+
+    expect(await screen.findByText("Warranty?")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Search this" }).at(-1)!);
+    await vi.waitFor(() =>
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "gaps.search", payload: { query: "volta warranty" } }),
+      ),
+    );
+
+    fireEvent.click(screen.getByTestId("questions-suggest"));
+    await vi.waitFor(() => expect(sent).toContain("questions.refresh"));
   });
 
   it("says there is nothing to show without a session", async () => {

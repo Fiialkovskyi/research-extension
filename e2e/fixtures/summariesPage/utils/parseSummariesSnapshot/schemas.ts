@@ -9,6 +9,8 @@ export const summariesSnapshotSchema = v.object({
   tableEmpty: v.boolean(),
   /** Whether the page says values were marked wrong. */
   hasRejected: v.boolean(),
+  /** Whether the questions section says a generation model is needed. */
+  questionsNeedModel: v.boolean(),
   /** The gaps listed, by their text. */
   gaps: v.array(v.string()),
   clusters: v.array(

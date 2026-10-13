@@ -23,7 +23,7 @@ import { getFactSetHash } from "../getFactSetHash";
 import { readClusterFactIds } from "../readClusterFactIds";
 import { readSummaryAnswer } from "../readSummaryAnswer";
 import { selectSummaryFacts } from "../selectSummaryFacts";
-import { readSummaryFacts } from "./utils/readSummaryFacts";
+import { readSummaryFacts } from "../readSummaryFacts";
 
 export interface RunClusterSummaryJobOptions {
   database: IDBPDatabase<ResearchDatabaseSchema>;

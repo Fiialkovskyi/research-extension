@@ -11,14 +11,15 @@ const escapeField = (text: string): string =>
     .trim();
 
 /**
- * Builds the request for one summary (REQ-SYN-011): the prompt as the system
- * message, and the facts as data — one labelled line each, `F1` upwards,
+ * Builds the request for one summary (REQ-SYN-011) — or another prompt over the
+ * same facts, given its instructions: the prompt as the system message, and the facts as data — one labelled line each, `F1` upwards,
  * between the facts delimiters.
  *
  * @returns The messages, and the fact id each label stands for.
  */
 export const buildSummaryMessages = (
   facts: readonly SummaryFact[],
+  instructions: string = CLUSTER_SUMMARY_PROMPT.instructions,
 ): { messages: ChatMessage[]; labels: Map<string, string> } => {
   const labels = new Map(facts.map(({ id }, index) => [`F${index + 1}`, id]));
   const lines = facts.map(
@@ -30,7 +31,7 @@ export const buildSummaryMessages = (
 
   return {
     messages: [
-      { role: "system", content: CLUSTER_SUMMARY_PROMPT.instructions },
+      { role: "system", content: instructions },
       { role: "user", content: `${FACTS_OPEN}\n${lines.join("\n")}\n${FACTS_CLOSE}` },
     ],
     labels,

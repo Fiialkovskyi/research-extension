@@ -32,6 +32,7 @@ import {
   REJECTION_STORE,
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
+  QUESTION_STORE,
   type StoredSession,
 } from "@/shared/storage";
 
@@ -189,6 +190,7 @@ const createFreshDatabase = async () => {
   await database.clear(SUMMARY_STORE);
   await database.clear(REJECTION_STORE);
   await database.clear(TABLE_COLUMNS_STORE);
+  await database.clear(QUESTION_STORE);
 
   return database;
 };
@@ -2287,6 +2289,23 @@ const answerChat = (init: RequestInit | undefined, isChatBroken: boolean) => {
   if (body.format !== undefined) {
     const passage = body.messages.at(-1)?.content;
 
+    // An open-questions request: the facts as data, under the questions prompt.
+    if (
+      passage?.startsWith("<facts>\n") === true &&
+      body.messages[0]?.content.includes("decide what to look up next") === true &&
+      !isChatBroken
+    ) {
+      return Promise.resolve(
+        new Response(
+          chatLine(
+            JSON.stringify({
+              questions: [{ question: "Is the motor serviceable?", query: "motor service" }],
+            }),
+          ) + chatLine("", "stop"),
+        ),
+      );
+    }
+
     // A summary request: one statement citing the first fact, one inventing one.
     if (passage?.startsWith("<facts>\n") === true && !isChatBroken) {
       return Promise.resolve(
@@ -3545,6 +3564,30 @@ describe("fact extraction through the background", () => {
       payload: { restoredCount: 1 },
     });
     expect((await rows()).rows).toHaveLength(1);
+  });
+
+  it("suggests open questions once facts settle while the user is away, and on request", async () => {
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await database.count(QUESTION_STORE)).toBe(1), {
+      timeout: 5_000,
+    });
+    expect(await app.handleMessage(buildRpcMessage("questions.read", {}))).toMatchObject({
+      type: "questions.view",
+      payload: {
+        view: {
+          questions: [{ question: "Is the motor serviceable?", query: "motor service" }],
+          isStale: false,
+        },
+      },
+    });
+    expect(await app.handleMessage(buildRpcMessage("questions.refresh", {}))).toMatchObject({
+      type: "questions.refreshing",
+      payload: { queued: true },
+    });
   });
 
   it("opens the Summaries page", async () => {

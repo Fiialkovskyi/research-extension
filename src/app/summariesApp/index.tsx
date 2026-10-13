@@ -9,6 +9,8 @@ import {
 } from "@/features/comparisonTable";
 import { ComparisonTable } from "@/features/comparisonTable/ui/comparisonTable";
 import { factRejectionResponseSchemas } from "@/features/factRejections";
+import { type OpenQuestionsView, openQuestionResponseSchemas } from "@/features/openQuestions";
+import { SuggestedQuestions } from "@/features/openQuestions/ui/suggestedQuestions";
 import { type ResearchGaps as Gaps, researchGapResponseSchemas } from "@/features/researchGaps";
 import { ResearchGaps } from "@/features/researchGaps/ui/researchGaps";
 import { getErrorMessage } from "@/shared/getErrorMessage";
@@ -37,6 +39,7 @@ const responseSchemas = {
   ...comparisonTableResponseSchemas,
   ...researchGapResponseSchemas,
   ...factRejectionResponseSchemas,
+  ...openQuestionResponseSchemas,
   ...rpcResponseSchemas,
 } as const;
 
@@ -69,6 +72,7 @@ export function SummariesApp({
   const [table, setTable] = useState<Table>();
   const [entityType, setEntityType] = useState<string>();
   const [gaps, setGaps] = useState<Gaps>();
+  const [questions, setQuestions] = useState<OpenQuestionsView>();
   const [failure, setFailure] = useState<string>();
 
   /** Sends a request and returns its answer, or records why it failed. */
@@ -91,7 +95,17 @@ export function SummariesApp({
     [client],
   );
 
+  const loadQuestions = useCallback(async () => {
+    const answer = await ask(buildRpcMessage("questions.read", {}));
+
+    if (answer?.type === "questions.view") {
+      setQuestions(answer.payload.view ?? undefined);
+    }
+  }, [ask]);
+
   const load = useCallback(async () => {
+    await loadQuestions();
+
     const answer = await ask(buildRpcMessage("summaries.read", {}));
 
     if (answer?.type === "summaries.view") {
@@ -101,11 +115,31 @@ export function SummariesApp({
           : { status: "ready", view: answer.payload.session },
       );
     }
-  }, [ask]);
+  }, [ask, loadQuestions]);
 
   useEffect(() => {
     let isCurrent = true;
 
+    client.request(buildRpcMessage("questions.read", {})).then(
+      (answer) => {
+        try {
+          const response = parseRpcMessage(answer, responseSchemas);
+
+          if (isCurrent && response.type === "questions.view") {
+            setQuestions(response.payload.view ?? undefined);
+          }
+        } catch (error) {
+          if (isCurrent) {
+            setFailure(getErrorMessage(error));
+          }
+        }
+      },
+      (error: unknown) => {
+        if (isCurrent) {
+          setFailure(getErrorMessage(error));
+        }
+      },
+    );
     client.request(buildRpcMessage("summaries.read", {})).then(
       (answer) => {
         if (!isCurrent) {
@@ -141,7 +175,8 @@ export function SummariesApp({
   }, [client]);
 
   const isPending =
-    state.status === "ready" && state.view.clusters.some(({ isPending: pending }) => pending);
+    (state.status === "ready" && state.view.clusters.some(({ isPending: pending }) => pending)) ||
+    questions?.isPending === true;
 
   // A summary asked for is written in the background: read again until it is.
   useEffect(() => {
@@ -272,6 +307,11 @@ export function SummariesApp({
     await reloadAll();
   }, [ask, reloadAll]);
 
+  const suggestQuestions = useCallback(async () => {
+    await ask(buildRpcMessage("questions.refresh", {}));
+    await loadQuestions();
+  }, [ask, loadQuestions]);
+
   const searchGap = useCallback(
     async (query: string) => {
       await ask(buildRpcMessage("gaps.search", { query }));
@@ -325,6 +365,13 @@ export function SummariesApp({
       )}
       {state.status === "ready" && gaps !== undefined && (
         <ResearchGaps gaps={gaps} onSearch={(query) => void searchGap(query)} />
+      )}
+      {state.status === "ready" && questions !== undefined && (
+        <SuggestedQuestions
+          view={questions}
+          onSearch={(query) => void searchGap(query)}
+          onSuggest={() => void suggestQuestions()}
+        />
       )}
     </main>
   );

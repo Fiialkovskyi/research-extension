@@ -20,6 +20,7 @@ describe("readSummariesPage", () => {
       needsModel: false,
       tableEmpty: false,
       hasRejected: false,
+      questionsNeedModel: false,
       gaps: [],
       clusters: [],
     };

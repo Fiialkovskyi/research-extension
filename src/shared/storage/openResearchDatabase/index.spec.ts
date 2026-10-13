@@ -24,6 +24,7 @@ import {
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
+  QUESTION_STORE,
   VECTOR_STORE,
 } from "../constants";
 
@@ -54,6 +55,7 @@ describe("openResearchDatabase", () => {
         SUMMARY_STORE,
         TABLE_COLUMNS_STORE,
         REJECTION_STORE,
+        QUESTION_STORE,
       ].toSorted(),
     );
 

@@ -75,6 +75,8 @@ describe("summaries", () => {
     expect(snapshot?.clusters.flatMap(({ statements }) => statements)).toEqual([]);
     // The comparison table follows, with nothing to compare yet.
     expect(snapshot?.tableEmpty).toBe(true);
+    // Without a generation model, the questions say what to turn on.
+    expect(snapshot?.questionsNeedModel).toBe(true);
     // Nothing was marked wrong yet, so no count is shown.
     expect(snapshot?.hasRejected).toBe(false);
     // Nothing was read, so every kind of source is a gap.

@@ -2,6 +2,7 @@ import { clusterSummaryRequestSchemas } from "@/features/clusterSummaries";
 import { comparisonTableRequestSchemas } from "@/features/comparisonTable";
 import { researchGapRequestSchemas } from "@/features/researchGaps";
 import { factRejectionRequestSchemas } from "@/features/factRejections";
+import { openQuestionRequestSchemas } from "@/features/openQuestions";
 import { diagnosticsRequestSchemas } from "@/features/diagnostics";
 import { entityResolutionRequestSchemas } from "@/features/entityResolution";
 import { factExtractionRequestSchemas } from "@/features/factExtraction";
@@ -26,6 +27,7 @@ export const requestSchemas = {
   ...comparisonTableRequestSchemas,
   ...researchGapRequestSchemas,
   ...factRejectionRequestSchemas,
+  ...openQuestionRequestSchemas,
   ...diagnosticsRequestSchemas,
   ...entityResolutionRequestSchemas,
   ...factExtractionRequestSchemas,

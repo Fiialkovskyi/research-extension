@@ -4,7 +4,7 @@ import type { DataKey } from "@/features/dataProtection";
 import { readSealedFact } from "@/features/factExtraction";
 import { ENTITY_STORE, FACT_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 
-import type { SummaryFact } from "../../../../types";
+import type { SummaryFact } from "../../types";
 
 /**
  * Reads facts as a summary is built from them: decrypted, each grouped under

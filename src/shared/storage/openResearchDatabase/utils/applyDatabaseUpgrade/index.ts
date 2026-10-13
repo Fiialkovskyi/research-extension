@@ -20,6 +20,7 @@ import {
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
+  QUESTION_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -186,6 +187,9 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     database
       .createObjectStore(REJECTION_STORE, { keyPath: "id" })
       .createIndex("sessionId", "sessionId");
+  },
+  19: (database) => {
+    database.createObjectStore(QUESTION_STORE, { keyPath: "sessionId" });
   },
 };
 

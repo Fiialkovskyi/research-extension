@@ -15,6 +15,7 @@ import {
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
+  QUESTION_STORE,
   VECTOR_STORE,
 } from "@/shared/storage";
 
@@ -47,7 +48,7 @@ export const deleteSession = async (
   sessionId: string,
 ): Promise<boolean> => {
   const transaction = database.transaction(
-    [...SESSION_SCOPED_STORES, CLUSTERING_STORE, SESSION_STORE] as const,
+    [...SESSION_SCOPED_STORES, CLUSTERING_STORE, QUESTION_STORE, SESSION_STORE] as const,
     "readwrite",
   );
   const sessions = transaction.objectStore(SESSION_STORE);
@@ -69,6 +70,7 @@ export const deleteSession = async (
   await Promise.all([
     ...deletions.flat(),
     transaction.objectStore(CLUSTERING_STORE).delete(sessionId),
+    transaction.objectStore(QUESTION_STORE).delete(sessionId),
     sessions.delete(sessionId),
     transaction.done,
   ]);

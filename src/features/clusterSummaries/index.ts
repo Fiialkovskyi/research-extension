@@ -21,10 +21,15 @@ export {
   summarizeClusterPayloadSchema,
 } from "./schemas";
 export type { ClusterSummaryView, SummaryCitation, SummaryFact, SummaryStatement } from "./types";
+export { buildSummaryMessages } from "./model/buildSummaryMessages";
 export { enqueueClusterSummaries } from "./model/enqueueClusterSummaries";
+export { getFactSetHash } from "./model/getFactSetHash";
+export { readClusterFactIds } from "./model/readClusterFactIds";
 export { readSummariesView, type SummariesView } from "./model/readSummariesView";
 export { requestClusterSummary } from "./model/requestClusterSummary";
 export {
   runClusterSummaryJob,
   type RunClusterSummaryJobOptions,
 } from "./model/runClusterSummaryJob";
+export { readSummaryFacts } from "./model/readSummaryFacts";
+export { selectSummaryFacts } from "./model/selectSummaryFacts";
