@@ -84,6 +84,14 @@ import {
   runNextJob,
 } from "@/features/jobQueue";
 import {
+  CLUSTER_SUMMARY_PROMPT,
+  enqueueClusterSummaries,
+  readSummariesView,
+  requestClusterSummary,
+  runClusterSummaryJob,
+  SUMMARIZE_CLUSTER_JOB,
+} from "@/features/clusterSummaries";
+import {
   enqueueEntityResolutions,
   RESOLVE_ENTITIES_JOB,
   runEntityResolutionJob,
@@ -92,7 +100,6 @@ import {
 import {
   enqueueFactExtractions,
   EXTRACT_FACTS_JOB,
-  extractFactsPayloadSchema,
   getFactProducerVersion,
   runFactExtractionJob,
 } from "@/features/factExtraction";
@@ -190,10 +197,16 @@ const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown>
 
 /** Whether a job was asked for by the user, which lets it run while they are active. */
 const isRequested = (job: StoredJob): boolean => {
-  const payload = v.safeParse(extractFactsPayloadSchema, job.payload);
+  const payload = v.safeParse(requestedPayloadSchema, job.payload);
 
   return payload.success && payload.output.requestedAt !== undefined;
 };
+
+/** The part of a generation job's payload that says the user asked for it. */
+const requestedPayloadSchema = v.object({ requestedAt: v.optional(v.number()) });
+
+/** Jobs that run text generation, and so only while the user is away or asked (REQ-MOD-008). */
+const GENERATION_JOBS: ReadonlySet<string> = new Set([EXTRACT_FACTS_JOB, SUMMARIZE_CLUSTER_JOB]);
 
 /** The models registered from the local Ollama server. */
 const listInstalledOllamaModels = async (
@@ -413,8 +426,14 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
   /** Clusters the active session again, then pushes the graph with its clusters. */
   const recluster = async (): Promise<void> => {
-    await enqueueCapture((openedDatabase) => reclusterActiveSession(openedDatabase, getNow()));
+    await enqueueCapture(async (openedDatabase) => {
+      await reclusterActiveSession(openedDatabase, getNow());
+      // Clusters may have gained or lost pages, and with them facts.
+      await enqueueClusterSummaries(openedDatabase, getNow());
+    });
     pushGraphSnapshot();
+    // A summary just queued must not wait for the next wake-up to be claimed.
+    void runJobs();
   };
 
   /**
@@ -685,6 +704,36 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           : { embed: (texts: readonly string[]) => session.embed(texts, "document") }),
         now: getNow,
       });
+      // The page's facts are settled: its cluster's summary is due in a while.
+      await enqueueClusterSummaries(openedDatabase, getNow());
+    }),
+    [SUMMARIZE_CLUSTER_JOB]: runHeld(async (job) => {
+      const openedDatabase = await getDatabase();
+      const model = await getActiveModel(openedDatabase, "text-generation");
+
+      // Queued for a model no longer active: the active one has jobs of its own.
+      if (
+        model === undefined ||
+        model.manifest.reference.hub !== "ollama" ||
+        job.producerVersion !==
+          `${CLUSTER_SUMMARY_PROMPT.id}@${CLUSTER_SUMMARY_PROMPT.version}|${model.ref}`
+      ) {
+        return;
+      }
+
+      const generator = createOllamaGenerator(
+        dependencies.fetchResource,
+        ollamaOrigin,
+        model.manifest,
+      );
+
+      await runClusterSummaryJob({
+        database: openedDatabase,
+        job,
+        modelRef: model.ref,
+        generate: generator.generate,
+        now: getNow,
+      });
     }),
     [LIFETIME_PROBE_JOB]: async (job) => {
       const openedDatabase = await getDatabase();
@@ -765,7 +814,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
               const isAway = await isUserAway();
 
               return (job: StoredJob) =>
-                job.type !== EXTRACT_FACTS_JOB || isAway || isRequested(job);
+                !GENERATION_JOBS.has(job.type) || isAway || isRequested(job);
             })(),
           })
         ) {
@@ -1061,6 +1110,31 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("model.listed", {
             models: await listInstalledModels(await getDatabase()),
           });
+        }
+
+        case "summaries.read": {
+          return buildRpcMessage("summaries.view", {
+            session: (await readSummariesView(await getDatabase())) ?? null,
+          });
+        }
+
+        case "summaries.refresh": {
+          const { clusterId } = request.payload;
+          const queued = await serializeWork(async () =>
+            requestClusterSummary(await getDatabase(), clusterId, getNow()),
+          );
+
+          if (queued) {
+            void runJobs();
+          }
+
+          return buildRpcMessage("summaries.refreshing", { clusterId, queued });
+        }
+
+        case "summaries.open": {
+          await dependencies.openSummariesPage();
+
+          return buildRpcMessage("summaries.opened", {});
         }
 
         case "entity.separate": {

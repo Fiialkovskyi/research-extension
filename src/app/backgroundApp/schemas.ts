@@ -1,3 +1,4 @@
+import { clusterSummaryRequestSchemas } from "@/features/clusterSummaries";
 import { diagnosticsRequestSchemas } from "@/features/diagnostics";
 import { entityResolutionRequestSchemas } from "@/features/entityResolution";
 import { factExtractionRequestSchemas } from "@/features/factExtraction";
@@ -18,6 +19,7 @@ import { tabGroupRequestSchemas } from "@/features/tabGroups";
 /** Every message a surface may send, contributed by the features that own them. */
 export const requestSchemas = {
   ...benchmarkRequestSchemas,
+  ...clusterSummaryRequestSchemas,
   ...diagnosticsRequestSchemas,
   ...entityResolutionRequestSchemas,
   ...factExtractionRequestSchemas,

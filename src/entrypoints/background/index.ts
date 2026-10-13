@@ -3,6 +3,7 @@ import { defineBackground } from "wxt/utils/define-background";
 import type { ScriptPublicPath } from "wxt/utils/inject-script";
 
 import { createBackgroundApp } from "@/app/backgroundApp";
+import { SUMMARIES_PAGE_PATH } from "@/features/clusterSummaries";
 import { HOLD_PAGE_PATH } from "@/features/diagnostics";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
 import { JOB_WAKE_ALARM } from "@/features/jobQueue";
@@ -98,6 +99,16 @@ export default defineBackground(() => {
           ungroupTab: (tabId) => browser.tabs.ungroup(tabId),
         },
         browser.runtime.getURL(RECORDED_PAGE_PATH),
+      ),
+    openSummariesPage: () =>
+      openMapTab(
+        {
+          queryTabs: async () => (await browser.tabs.query({})).map(readMapTab),
+          createTab: async (url) => readMapTab(await browser.tabs.create({ url })),
+          focusTab: (tab) => focusBrowserTab(tab.id, tab.windowId),
+          ungroupTab: (tabId) => browser.tabs.ungroup(tabId),
+        },
+        browser.runtime.getURL(SUMMARIES_PAGE_PATH),
       ),
     sessionTabs: {
       // Firefox's per-tab session values, which the shared (Chrome) typings do

@@ -71,6 +71,23 @@ describe("enqueueJob", () => {
     expect(again.payload).toEqual({ snapshotId: "snapshot-1" });
   });
 
+  it("holds a job back until its earliest start", async () => {
+    const before = Date.now();
+    const queued = await enqueueJob(database, { ...work, notBefore: before + 60_000 });
+
+    expect(queued.nextAttemptAt).toBe(before + 60_000);
+    expect(queued).not.toHaveProperty("notBefore");
+  });
+
+  it("holds a requeued failed job back until its earliest start", async () => {
+    const id = await buildJobId(work);
+    const later = Date.now() + 60_000;
+
+    await database.put(JOB_STORE, job({ id, status: "failed", attempts: 4 }));
+
+    expect((await enqueueJob(database, { ...work, notBefore: later })).nextAttemptAt).toBe(later);
+  });
+
   it("queues a failed job again, attempts reset and checkpoint kept", async () => {
     const id = await buildJobId(work);
     await database.put(

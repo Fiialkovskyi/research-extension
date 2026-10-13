@@ -32,6 +32,7 @@ export {
   SESSION_STORE,
   SNAPSHOT_STORE,
   SPACE_STORE,
+  SUMMARY_STORE,
   VECTOR_STORE,
 } from "./constants";
 export type {
@@ -64,6 +65,7 @@ export type {
   StoredFocusVisit,
   StoredSession,
   StoredSnapshot,
+  StoredSummary,
   StoredSpace,
   StoredChunk,
   StoredVector,

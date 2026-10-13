@@ -18,6 +18,7 @@ import type {
   SESSION_STORE,
   SNAPSHOT_STORE,
   SPACE_STORE,
+  SUMMARY_STORE,
   VECTOR_STORE,
 } from "./constants";
 
@@ -322,6 +323,30 @@ export interface StoredEntity {
   createdAt: number;
 }
 
+/**
+ * A cluster's summary (REQ-SYN-003): what it was built from and by what, all
+ * readable, and its statements, encrypted — they restate page content.
+ */
+export interface StoredSummary {
+  /** `<sessionId>:<clusterId>`: one summary per cluster, replaced when regenerated. */
+  id: string;
+  sessionId: string;
+  clusterId: string;
+  /** The hash of the cluster's fact ids it was built from; a different one now means stale. */
+  factSetHash: string;
+  citedFactIds: string[];
+  inputFactCount: number;
+  /** Facts of the cluster left out to fit the model. */
+  omittedFactCount: number;
+  modelRef: string;
+  prompt: string;
+  generatedAt: number;
+  keyId: string;
+  iv: Uint8Array;
+  /** JSON `{ text, factIds }[]`, encrypted. */
+  encryptedStatements: ArrayBuffer;
+}
+
 /** How fact extraction of one snapshot went: progress and counts, no content. */
 export interface StoredExtraction {
   snapshotId: string;
@@ -591,5 +616,10 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: string;
     value: StoredExtraction;
     indexes: { sessionId: string; nodeId: string };
+  };
+  [SUMMARY_STORE]: {
+    key: string;
+    value: StoredSummary;
+    indexes: { sessionId: string };
   };
 }

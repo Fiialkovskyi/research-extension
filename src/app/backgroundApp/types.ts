@@ -59,6 +59,8 @@ export interface BackgroundDependencies {
   openMap: () => Promise<void>;
   /** Selects the "What was recorded" tab, opening one outside any tab group if none is open. */
   openRecordedPage: () => Promise<void>;
+  /** Selects the Summaries tab, opening one outside any tab group if none is open. */
+  openSummariesPage: () => Promise<void>;
   /** The browser calls resuming a saved session uses: opening, grouping and selecting tabs. */
   resumeApi: ResumeApi;
   /** The browser calls closing a saved session's tabs uses, keeping their window open. */

@@ -606,6 +606,39 @@ describe("PopupApp", () => {
     });
   });
 
+  describe("summaries", () => {
+    it("are offered beside what was recorded, during a session and for a closed one", async () => {
+      const client = createClient({ active: "E-bike motors" });
+
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
+      fireEvent.click(await screen.findByTestId("open-summaries"));
+
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "summaries.open" }),
+      );
+    });
+
+    it("are offered for a closed session, and not without one", async () => {
+      const { unmount } = render(
+        <PopupApp
+          graph={buildGraph()}
+          client={createClient({ closed: "E-bike motors" })}
+          pageAccess={buildPageAccess()}
+        />,
+      );
+
+      expect(await screen.findByTestId("open-summaries")).toBeInTheDocument();
+      unmount();
+
+      render(
+        <PopupApp graph={buildGraph()} client={createClient()} pageAccess={buildPageAccess()} />,
+      );
+      await screen.findByLabelText("Session title");
+
+      expect(screen.queryByTestId("open-summaries")).toBeNull();
+    });
+  });
+
   describe("saving and resuming", () => {
     it("saves the session, then offers it in the library", async () => {
       const client = createLibraryClient({});

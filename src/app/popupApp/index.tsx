@@ -457,6 +457,13 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
     });
   }, [client]);
 
+  // Opened like the recorded page, beside it.
+  const openSummaries = useCallback(() => {
+    client.request(buildRpcMessage("summaries.open", {})).catch((error: unknown) => {
+      setMapFailure(getErrorMessage(error));
+    });
+  }, [client]);
+
   // The background finds the map's tab or opens one, outside the session's group.
   const openMap = useCallback(() => {
     client
@@ -480,6 +487,9 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
         <div className="mt-2">
           <Button data-testid="open-recorded" onClick={openRecorded}>
             What was recorded
+          </Button>{" "}
+          <Button data-testid="open-summaries" onClick={openSummaries}>
+            Summaries
           </Button>
         </div>
       )}
@@ -541,6 +551,9 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
           </Button>{" "}
           <Button data-testid="open-recorded" onClick={openRecorded}>
             What was recorded
+          </Button>{" "}
+          <Button data-testid="open-summaries" onClick={openSummaries}>
+            Summaries
           </Button>{" "}
           <Button data-testid="save-session" onClick={saveSession}>
             Save research

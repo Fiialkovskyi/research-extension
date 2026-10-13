@@ -64,6 +64,8 @@
 - [x] 6.1 Update `RESEARCH_GRAPH_EXTENSION_SPEC.md`: tick "Entity resolution and unit normalization", and record the unit table and the separation rule in the SYN section. Verify that `openspec validate add-entity-resolution --strict` passes.
 - [x] 6.2 Run `npm run verify` and confirm that it passes.
 
-## 7. Manual run (the maintainer's machine)
+## Deferred
 
-- [ ] 7.1 With `qwen3:4b` and `nomic-embed-text` active, extract two pages about the same product from different shops. Record in design.md Findings the entities produced, any wrong merges or misses, and whether "Separate" fixed them.
+The maintainer deferred the manual run on 2026-10-13 ("оставь ручные проверки на потом"); it is carried to follow-up work rather than left open here.
+
+- With `qwen3:4b` and `nomic-embed-text` active, extract two pages about the same product from different shops. Record in design.md Findings the entities produced, any wrong merges or misses, and whether "Separate" fixed them.

@@ -17,6 +17,7 @@ import {
   SESSION_STORE,
   SNAPSHOT_STORE,
   SPACE_STORE,
+  SUMMARY_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -168,6 +169,11 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
       .createObjectStore(ENTITY_STORE, { keyPath: "id" })
       .createIndex("sessionId", "sessionId");
     transaction.objectStore(FACT_STORE).createIndex("entityId", "entityId");
+  },
+  16: (database) => {
+    database
+      .createObjectStore(SUMMARY_STORE, { keyPath: "id" })
+      .createIndex("sessionId", "sessionId");
   },
 };
 

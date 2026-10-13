@@ -14,4 +14,6 @@ export interface NewJob extends JobIdentity {
   priority?: number;
   /** What the job works on beyond its identity, such as a record id; its type validates it. */
   payload?: unknown;
+  /** The earliest time the job may run; now when absent. Used to debounce work. */
+  notBefore?: number;
 }

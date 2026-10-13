@@ -21,6 +21,7 @@ import {
   SESSION_STORE,
   SNAPSHOT_STORE,
   SPACE_STORE,
+  SUMMARY_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -382,6 +383,20 @@ describe("applyDatabaseUpgrade", () => {
     expect(await after.count(FACT_STORE)).toBe(1);
     expect([...after.transaction(FACT_STORE).store.indexNames]).toContain("entityId");
     expect([...after.transaction(ENTITY_STORE).store.indexNames]).toEqual(["sessionId"]);
+
+    after.close();
+  });
+
+  it("adds an empty summary store, indexed by session, to a version-15 profile", async () => {
+    const name = getNextDatabaseName();
+
+    (await openAt(name, 15)).close();
+
+    const after = await openAt(name, 16);
+
+    expect(after.version).toBe(16);
+    expect(await after.count(SUMMARY_STORE)).toBe(0);
+    expect([...after.transaction(SUMMARY_STORE).store.indexNames]).toEqual(["sessionId"]);
 
     after.close();
   });

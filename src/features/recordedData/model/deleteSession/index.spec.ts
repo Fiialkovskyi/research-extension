@@ -18,6 +18,7 @@ import {
   SESSION_STORE,
   SNAPSHOT_STORE,
   SPACE_STORE,
+  SUMMARY_STORE,
   VECTOR_STORE,
 } from "@/shared/storage";
 
@@ -32,6 +33,7 @@ const STORES = [
   FACT_STORE,
   EXTRACTION_STORE,
   ENTITY_STORE,
+  SUMMARY_STORE,
   JOB_STORE,
   CLUSTERING_STORE,
   SESSION_STORE,
@@ -75,6 +77,7 @@ const record = async (sessionId: string) => {
     nodeId: `${sessionId}-n`,
   } as never);
   await database.put(ENTITY_STORE, { id: `${sessionId}-entity`, sessionId } as never);
+  await database.put(SUMMARY_STORE, { id: `${sessionId}:cluster`, sessionId } as never);
   await database.put(JOB_STORE, {
     id: `${sessionId}-j`,
     sessionId,
@@ -114,6 +117,7 @@ describe("deleteSession", () => {
     expect(await database.count(VECTOR_STORE)).toBe(1);
     expect(await database.count(FACT_STORE)).toBe(1);
     expect(await database.count(ENTITY_STORE)).toBe(1);
+    expect(await database.count(SUMMARY_STORE)).toBe(1);
     expect(await database.count(SPACE_STORE)).toBe(1);
   });
 

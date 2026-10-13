@@ -12,6 +12,7 @@ import {
   type ResearchDatabaseSchema,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  SUMMARY_STORE,
   VECTOR_STORE,
 } from "@/shared/storage";
 
@@ -25,6 +26,7 @@ const SESSION_SCOPED_STORES = [
   FACT_STORE,
   EXTRACTION_STORE,
   ENTITY_STORE,
+  SUMMARY_STORE,
   JOB_STORE,
 ] as const;
 

@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "statements": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "facts": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["text", "facts"]
+      }
+    }
+  },
+  "required": ["statements"]
+}

@@ -510,7 +510,7 @@ interface Fact {
 - **REQ-SYN-001:** Only `deep_read` nodes, or nodes the user explicitly marks "include", SHALL feed fact extraction.
 - **REQ-SYN-002:** Facts without a verified quote SHALL NOT be stored.
 - **REQ-SYN-003 (summary):** A cluster summary SHALL be at most 8 statements. Each statement SHALL cite at least 1 fact ID and render as a link to the source page and quote. Statements that cite no valid fact SHALL be discarded after generation.
-- **REQ-SYN-004:** Summaries SHALL be regenerated in the background, debounced to 60 s after the cluster's fact set changes, and only while the scheduler permits text generation (REQ-MOD-008).
+- **REQ-SYN-004:** Summaries SHALL be regenerated in the background, debounced to 60 s after the cluster's fact set changes, and only while the scheduler permits text generation (REQ-MOD-008). As built (`add-cluster-summaries`), the `clusterSummary@1` prompt receives up to 60 of the cluster's facts as labelled lines (`F1`…), spread across entities and pages, and cites labels that are mapped back to fact ids. A summary's job is identified by its fact set, so a change within the 60 s supersedes it. Staleness (REQ-LIN-006) is computed when summaries are read, from the fact set and the installed models, so no record is marked.
 - **REQ-SYN-005 (generic comparison table):** Rows SHALL be entities of one `entity_type` chosen per table. Columns SHALL be proposed from the most frequent normalized attributes for that type (for example motor, battery capacity, range, weight and price for e-bikes) and editable by the user.
 - **REQ-SYN-006:** Each cell SHALL show the selected value plus a count of alternatives. WHEN sources disagree beyond tolerance (numeric: more than 5% after unit normalization; text: not equal after normalization), the cell SHALL be flagged "conflict" and list every value with its source.
 - **REQ-SYN-007:** The table SHALL export to CSV with a provenance column per cell (source URLs), saved locally through a Blob download from an extension page (no extra permission).
@@ -700,7 +700,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 - [x] Versioned prompts and schemas; fact extraction with grounding. (SYN-001, SYN-002, SYN-010, SYN-011) The user's "include" mark for pages that are not deep read is still open.
 - [x] Entity resolution and unit normalization. (SYN pipeline step 6)
-- [ ] Cluster summaries with citations and staleness. (SYN-003, SYN-004, LIN-006)
+- [x] Cluster summaries with citations and staleness. (SYN-003, SYN-004, LIN-006) Shown on a "Summaries" extension page opened from the popup until the sidebar exists (`add-cluster-summaries`).
 - [ ] Generic comparison table with conflicts and CSV export. (SYN-005 to SYN-007)
 - [ ] Gaps and open questions with "search this". (SYN-008, SYN-009)
 - [ ] Rejections. (LIN-008)

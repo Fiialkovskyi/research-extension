@@ -29,6 +29,7 @@ import {
   openResearchDatabase,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  SUMMARY_STORE,
   type StoredSession,
 } from "@/shared/storage";
 
@@ -116,6 +117,7 @@ const buildDependencies = (
     focusTab: () => Promise.resolve(),
     openMap: () => Promise.resolve(),
     openRecordedPage: () => Promise.resolve(),
+    openSummariesPage: () => Promise.resolve(),
     pageSignals: {
       executeScript: () => Promise.resolve([]),
       requestPageText: () => Promise.resolve(undefined),
@@ -179,6 +181,10 @@ const createFreshDatabase = async () => {
   await database.clear(SPACE_STORE);
   await database.clear(CHUNK_STORE);
   await database.clear(VECTOR_STORE);
+  await database.clear(FACT_STORE);
+  await database.clear(EXTRACTION_STORE);
+  await database.clear(ENTITY_STORE);
+  await database.clear(SUMMARY_STORE);
 
   return database;
 };
@@ -2274,6 +2280,22 @@ const answerChat = (init: RequestInit | undefined, isChatBroken: boolean) => {
   if (body.format !== undefined) {
     const passage = body.messages.at(-1)?.content;
 
+    // A summary request: one statement citing the first fact, one inventing one.
+    if (passage?.startsWith("<facts>\n") === true && !isChatBroken) {
+      return Promise.resolve(
+        new Response(
+          chatLine(
+            JSON.stringify({
+              statements: [
+                { text: "Mid-drive motors sit at the cranks.", facts: ["F1"] },
+                { text: "Invented.", facts: ["F99"] },
+              ],
+            }),
+          ) + chatLine("", "stop"),
+        ),
+      );
+    }
+
     // A fact-extraction request: one fact quoting the passage's first words,
     // and one the passage does not say.
     if (passage?.startsWith("<page_text>\n") === true && !isChatBroken) {
@@ -3317,6 +3339,107 @@ describe("fact extraction through the background", () => {
       await app.handleMessage(buildRpcMessage("entity.separate", { entityId: "neo" })),
     ).toMatchObject({ type: "entity.separated", payload: { entityId: "neo", separated: true } });
     expect((await database.get(ENTITY_STORE, "neo"))?.mergedInto).toBeUndefined();
+  });
+
+  it("summarises a cluster once its page's facts are in, while the user is away", async () => {
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await database.clear(SUMMARY_STORE);
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await database.count(ENTITY_STORE)).toBeGreaterThan(0));
+    await app.reconcileSession();
+
+    await vi.waitFor(async () => expect(await database.count(SUMMARY_STORE)).toBe(1), {
+      timeout: 5_000,
+    });
+
+    const view = await app.handleMessage(buildRpcMessage("summaries.read", {}));
+
+    expect(view).toMatchObject({
+      type: "summaries.view",
+      payload: {
+        session: {
+          canSummarize: true,
+          clusters: expect.arrayContaining([
+            expect.objectContaining({
+              factCount: 1,
+              summary: expect.objectContaining({
+                isStale: false,
+                statements: [
+                  {
+                    text: "Mid-drive motors sit at the cranks.",
+                    citations: [expect.objectContaining({ url: "https://example.org/a" })],
+                  },
+                ],
+              }),
+            }),
+          ]),
+        },
+      },
+    });
+  });
+
+  it("writes no summary while the user is active, until asked", async () => {
+    const { app, database, clock } = await createExtractionApp();
+
+    await database.clear(SUMMARY_STORE);
+    await readPageDeeply(app, clock);
+    await app.handleMessage(buildRpcMessage("facts.extractNow", {}));
+    await vi.waitFor(async () => expect(await database.count(ENTITY_STORE)).toBeGreaterThan(0));
+    await app.reconcileSession();
+
+    expect(await database.count(SUMMARY_STORE)).toBe(0);
+
+    const [cluster] = (await database.get(CLUSTERING_STORE, "session-1"))?.clusters ?? [];
+
+    expect(
+      await app.handleMessage(
+        buildRpcMessage("summaries.refresh", { clusterId: cluster?.id ?? "" }),
+      ),
+    ).toMatchObject({ type: "summaries.refreshing", payload: { queued: true } });
+    await vi.waitFor(async () => expect(await database.count(SUMMARY_STORE)).toBe(1), {
+      timeout: 5_000,
+    });
+  });
+
+  it("shows a summary as stale once its cluster's facts change", async () => {
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await database.clear(SUMMARY_STORE);
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await database.count(ENTITY_STORE)).toBeGreaterThan(0));
+    await app.reconcileSession();
+    await vi.waitFor(async () => expect(await database.count(SUMMARY_STORE)).toBe(1), {
+      timeout: 5_000,
+    });
+
+    const [fact] = await database.getAll(FACT_STORE);
+
+    await database.put(FACT_STORE, { ...fact!, id: `${fact!.id}-more` });
+
+    expect(await app.handleMessage(buildRpcMessage("summaries.read", {}))).toMatchObject({
+      payload: {
+        session: {
+          clusters: expect.arrayContaining([
+            expect.objectContaining({ summary: expect.objectContaining({ isStale: true }) }),
+          ]),
+        },
+      },
+    });
+  });
+
+  it("opens the Summaries page", async () => {
+    const openSummariesPage = vi.fn(() => Promise.resolve());
+    const { app } = await createExtractionApp({ openSummariesPage });
+
+    expect(await app.handleMessage(buildRpcMessage("summaries.open", {}))).toMatchObject({
+      type: "summaries.opened",
+    });
+    expect(openSummariesPage).toHaveBeenCalledTimes(1);
   });
 
   it("queues no extraction without an active generation model", async () => {
