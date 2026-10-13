@@ -15,9 +15,18 @@ export {
 } from "./schemas";
 export type { SavedSessionSummary } from "./types";
 export { closeTabsKeepingWindow } from "./model/closeTabsKeepingWindow";
+export { declineReattach } from "./model/declineReattach";
+export { findReattachCandidate } from "./model/findReattachCandidate";
+export type {
+  FindReattachCandidateOptions,
+  ReattachCandidate,
+} from "./model/findReattachCandidate";
+export { reattachSession } from "./model/reattachSession";
+export type { ReattachSessionOptions } from "./model/reattachSession";
 export type { CloseTabsApi } from "./model/closeTabsKeepingWindow";
 export { listSavedSessions } from "./model/listSavedSessions";
 export { resumeSession } from "./model/resumeSession";
 export type { ResumeApi, ResumeSessionOptions } from "./model/resumeSession";
 export { saveActiveSession } from "./model/saveActiveSession";
+export { suggestReattach } from "./model/suggestReattach";
 export type { SavedSession, SaveActiveSessionOptions } from "./model/saveActiveSession";

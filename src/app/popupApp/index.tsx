@@ -84,6 +84,7 @@ type PopupState =
       title: string;
       pageCount: number;
       lastPosition?: { title: string; readFraction: number };
+      reattachSuggestion?: { sessionId: string; title: string };
     };
 
 /** Turns the background's answer into what the popup shows. */
@@ -100,6 +101,9 @@ const readAnswer = (answer: unknown): PopupState => {
           ...(response.payload.session.lastPosition === undefined
             ? {}
             : { lastPosition: response.payload.session.lastPosition }),
+          ...(response.payload.session.reattachSuggestion === undefined
+            ? {}
+            : { reattachSuggestion: response.payload.session.reattachSuggestion }),
         };
       }
 
@@ -164,6 +168,7 @@ const readLibraryFailure = (answer: unknown): string | undefined => {
   switch (response.type) {
     case "session.saveFailed":
     case "session.resumeFailed":
+    case "session.reattachFailed":
     case "rpc.refused":
     case "rpc.failed":
       return response.payload.reason;
@@ -375,6 +380,27 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
     [client],
   );
 
+  /** Answers the offer to continue a saved session, then shows the session as it is now. */
+  const answerReattach = useCallback(
+    (message: RpcMessage<string, unknown>) => {
+      client
+        .request(message)
+        .then(async (answer) => {
+          const failure = readLibraryFailure(answer);
+
+          if (failure !== undefined) {
+            setMapFailure(failure);
+          }
+
+          setState(readAnswer(await client.request(buildRpcMessage("session.getActive", {}))));
+        })
+        .catch((error: unknown) => {
+          setMapFailure(getErrorMessage(error));
+        });
+    },
+    [client],
+  );
+
   /** Deletes a saved session, then lists the library again. */
   const deleteSaved = useCallback(
     (sessionId: string) => {
@@ -439,6 +465,33 @@ export function PopupApp({ client, pageAccess, graph }: PopupAppProps) {
             {state.pageCount === 1 ? "1 page recorded" : `${state.pageCount} pages recorded`}
           </span>
         </p>
+      )}
+      {state.status === "active" && state.reattachSuggestion !== undefined && (
+        <div data-testid="reattach-offer" role="group" className="mt-2 text-sm">
+          <p>This looks like “{state.reattachSuggestion.title}”. Continue that research here?</p>
+          <div className="mt-1 flex gap-2">
+            <Button
+              data-testid="reattach-continue"
+              onClick={() => {
+                answerReattach(
+                  buildRpcMessage("session.reattach", {
+                    savedSessionId: state.reattachSuggestion?.sessionId ?? "",
+                  }),
+                );
+              }}
+            >
+              Continue
+            </Button>
+            <Button
+              data-testid="reattach-keep-separate"
+              onClick={() => {
+                answerReattach(buildRpcMessage("session.keepSeparate", {}));
+              }}
+            >
+              Keep separate
+            </Button>
+          </div>
+        </div>
       )}
       {state.status === "active" && state.lastPosition !== undefined && (
         <p data-testid="left-off" className="mt-1 text-sm">

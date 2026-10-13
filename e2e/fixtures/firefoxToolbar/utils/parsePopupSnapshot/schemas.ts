@@ -47,4 +47,6 @@ export const popupSnapshotSchema = v.object({
   savedSessions: v.array(v.string()),
   /** "You left off at …", or null when the popup does not say it. */
   leftOff: v.nullable(v.string()),
+  /** The offer to continue a saved session, or null when none is made. */
+  reattachOffer: v.nullable(v.string()),
 });

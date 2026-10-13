@@ -27,8 +27,17 @@ import {
   readRecordedSession,
   readRecordedText,
 } from "@/features/recordedData";
-import { countSessionNodes, readSessionGraph, readTabNode } from "@/features/researchGraph";
 import {
+  countSessionNodes,
+  readSessionGraph,
+  readSessionRoot,
+  readTabNode,
+} from "@/features/researchGraph";
+import {
+  declineReattach,
+  findReattachCandidate,
+  reattachSession,
+  suggestReattach,
   closeTabsKeepingWindow,
   listSavedSessions,
   resumeSession,
@@ -41,7 +50,7 @@ import {
   runNextEmbeddingJob,
 } from "@/features/snapshotEmbeddings";
 import { requeueRunningJobs } from "@/features/jobQueue";
-import { activateModel, listInstalledModels } from "@/features/modelRegistry";
+import { activateModel, getActiveModel, listInstalledModels } from "@/features/modelRegistry";
 import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
 import {
   buildSessionSummary,
@@ -59,6 +68,7 @@ import {
 import {
   closeTabNode,
   followTabMembership,
+  linkRefinement,
   reconcileSessionTabs,
   recordNavigation,
   recordTabFocus,
@@ -76,7 +86,12 @@ import {
   type RpcMessage,
   RpcMessageError,
 } from "@/shared/rpc";
-import { MODEL_STORE, type ResearchDatabaseSchema, type StoredModel } from "@/shared/storage";
+import {
+  MODEL_STORE,
+  NODE_STORE,
+  type ResearchDatabaseSchema,
+  type StoredModel,
+} from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
 import { requestSchemas } from "./schemas";
 import type { PageSender } from "@/features/pageSignals";
@@ -461,6 +476,50 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   const embedSnapshots = async (): Promise<void> => {
     await enqueueCapture((openedDatabase) => enqueueSnapshotEmbeddings(openedDatabase, getNow()));
     await runJobs();
+  };
+
+  /**
+   * Offers the active session a saved session to continue, once its first
+   * search is recorded (REQ-STO-006). Off the capture queue — matching by
+   * meaning loads the model — except for the write, which is re-checked there.
+   */
+  const checkReattach = async (searchNodeId: string): Promise<void> => {
+    try {
+      const openedDatabase = await getDatabase();
+      const session = await getActiveSession(openedDatabase);
+
+      if (
+        session === undefined ||
+        session.reattachSuggestion !== undefined ||
+        session.reattachDeclined === true ||
+        (await readSessionRoot(openedDatabase, session.id))?.id !== searchNodeId
+      ) {
+        return;
+      }
+
+      const model = await getActiveModel(openedDatabase, "embedding");
+      const candidate = await findReattachCandidate({
+        database: openedDatabase,
+        sessionId: session.id,
+        ...(model === undefined
+          ? {}
+          : {
+              embedQueries: async (queries: readonly string[]) =>
+                (await loadEmbeddingSession(model)).embed(queries, "query"),
+            }),
+      });
+
+      if (candidate !== undefined) {
+        await enqueueCapture((databaseInQueue) =>
+          suggestReattach(databaseInQueue, session.id, {
+            sessionId: candidate.sessionId,
+            title: candidate.title,
+          }),
+        );
+      }
+    } catch (error) {
+      dependencies.reportError(error);
+    }
   };
 
   /** Answers a session page's observer. Runs on the capture queue. */
@@ -882,6 +941,71 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           }
         }
 
+        case "session.reattach": {
+          const { savedSessionId } = request.payload;
+          let continued: Awaited<ReturnType<typeof reattachSession>> | undefined;
+          let failure: string | undefined;
+
+          await captureAndPush(async (openedDatabase) => {
+            const active = await getActiveSession(openedDatabase);
+
+            if (active === undefined) {
+              failure = "No session is active.";
+              return;
+            }
+
+            const searches = (
+              await openedDatabase.getAllFromIndex(NODE_STORE, "sessionId", active.id)
+            ).filter((node) => node.kind === "serp");
+
+            try {
+              continued = await reattachSession({
+                database: openedDatabase,
+                activeSessionId: active.id,
+                savedSessionId,
+                now: getNow(),
+              });
+            } catch (error) {
+              failure = getErrorMessage(error);
+              return;
+            }
+
+            // The searches carried over now share the saved session's first
+            // search as their root, and refine it.
+            for (const search of searches) {
+              await linkRefinement(openedDatabase, { ...search, sessionId: savedSessionId });
+            }
+          });
+
+          if (continued === undefined) {
+            return buildRpcMessage("session.reattachFailed", {
+              reason: failure ?? "The session could not be continued.",
+            });
+          }
+
+          await dependencies.tabGroups
+            .updateGroup(continued.groupId, { title: continued.title })
+            .catch(dependencies.reportError);
+
+          return buildRpcMessage("session.reattached", {
+            sessionId: continued.id,
+            title: continued.title,
+          });
+        }
+
+        case "session.keepSeparate": {
+          await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const active = await getActiveSession(openedDatabase);
+
+            if (active !== undefined) {
+              await declineReattach(openedDatabase, active.id);
+            }
+          });
+
+          return buildRpcMessage("session.keptSeparate", {});
+        }
+
         case "recorded.open": {
           await dependencies.openRecordedPage();
 
@@ -1087,6 +1211,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         if (node !== undefined) {
           observeTab(node.tabId);
+
+          if (node.kind === "serp") {
+            void checkReattach(node.id);
+          }
         } else if (navigation.frameId === 0) {
           // A page the tab's node already had, loaded again — a resumed tab
           // loading when shown — is observed like a new one.

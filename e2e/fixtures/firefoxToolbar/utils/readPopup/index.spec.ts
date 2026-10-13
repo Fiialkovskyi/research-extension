@@ -34,6 +34,7 @@ const SNAPSHOT = JSON.stringify({
   unreadPages: [],
   savedSessions: [],
   leftOff: null,
+  reattachOffer: null,
 });
 
 describe("readPopup", () => {

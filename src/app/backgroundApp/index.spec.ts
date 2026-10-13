@@ -2038,3 +2038,119 @@ describe("saving and resuming through the background", () => {
     });
   });
 });
+
+/** A saved session whose first search was "e-bike motors", and an active one. */
+const createReattachApp = async () => {
+  const signals = await createSignalsApp();
+  const { database } = signals;
+
+  await database.put(SESSION_STORE, {
+    ...activeSession,
+    id: "old",
+    title: "E-bike motors",
+    groupId: 4,
+    status: "saved",
+  });
+  await database.put(NODE_STORE, {
+    id: "old-root",
+    sessionId: "old",
+    tabId: 3,
+    kind: "serp",
+    query: "e-bike motors",
+    url: "https://duckduckgo.com/?q=e-bike+motors",
+    domain: "duckduckgo.com",
+    title: "e-bike motors",
+    parentNodeId: null,
+    openerNodeId: null,
+    transitionType: "typed",
+    signals: {
+      activeDwellMs: 0,
+      maxScroll: 0,
+      copyEvents: 0,
+      focusCount: 1,
+      revisitCount: 0,
+      quickReturnCount: 0,
+    },
+    tabState: "closed",
+    createdAt: 1,
+  });
+
+  return signals;
+};
+
+const search = (query: string) =>
+  commit(`https://duckduckgo.com/?q=${encodeURIComponent(query).replaceAll("%20", "+")}`);
+
+describe("continuing a saved session through the background", () => {
+  it("offers to continue the saved session once a matching first search is recorded", async () => {
+    const { app, database } = await createReattachApp();
+
+    await app.handleNavigationCommitted(search("e-bike mid-drive motors"));
+
+    await vi.waitFor(async () =>
+      expect((await database.get(SESSION_STORE, "session-1"))?.reattachSuggestion).toEqual({
+        sessionId: "old",
+        title: "E-bike motors",
+      }),
+    );
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      payload: { session: { reattachSuggestion: { sessionId: "old" } } },
+    });
+  });
+
+  it("offers nothing for an unrelated first search", async () => {
+    const { app, database } = await createReattachApp();
+
+    await app.handleNavigationCommitted(search("sourdough starter"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect((await database.get(SESSION_STORE, "session-1"))?.reattachSuggestion).toBeUndefined();
+  });
+
+  it("continues the saved session with the new search as a refinement of its first", async () => {
+    const updateGroup = vi.fn(() => Promise.resolve());
+    const { app, database } = await createReattachApp();
+
+    await app.handleNavigationCommitted(search("e-bike mid-drive motors"));
+
+    const reattaching = createBackgroundApp(
+      buildDependencies({
+        openDatabase: () => Promise.resolve(database),
+        tabGroups: createStubTabGroups({ updateGroup }),
+      }),
+    );
+
+    expect(
+      await reattaching.handleMessage(
+        buildRpcMessage("session.reattach", { savedSessionId: "old" }),
+      ),
+    ).toMatchObject({ type: "session.reattached", payload: { title: "E-bike motors" } });
+    expect(await database.get(SESSION_STORE, "session-1")).toBeUndefined();
+    expect(await database.get(SESSION_STORE, "old")).toMatchObject({
+      status: "active",
+      groupId: 42,
+    });
+    expect((await database.getAll(NODE_STORE)).every(({ sessionId }) => sessionId === "old")).toBe(
+      true,
+    );
+    expect((await database.getAll(EDGE_STORE)).map(({ kind }) => kind)).toContain("refinement");
+    expect(updateGroup).toHaveBeenCalledWith(42, { title: "E-bike motors" });
+  });
+
+  it("keeps the sessions apart, and stops offering", async () => {
+    const { app, database } = await createReattachApp();
+
+    await app.handleNavigationCommitted(search("e-bike mid-drive motors"));
+    await vi.waitFor(async () =>
+      expect((await database.get(SESSION_STORE, "session-1"))?.reattachSuggestion).toBeDefined(),
+    );
+
+    expect(await app.handleMessage(buildRpcMessage("session.keepSeparate", {}))).toMatchObject({
+      type: "session.keptSeparate",
+    });
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      reattachDeclined: true,
+    });
+    expect((await database.get(SESSION_STORE, "old"))?.status).toBe("saved");
+  });
+});

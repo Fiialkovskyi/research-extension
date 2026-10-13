@@ -556,6 +556,14 @@ All research data lives in one IndexedDB database in the extension's origin. Sma
   - **Resume.** It reopens the tabs in a new group, every tab but the left-off page `discarded`. It reopens the same nodes rather than recording new ones; a commit of a tab's current URL is not a new page. The popup shows "You left off at …" until the user moves on.
 
 - **REQ-STO-006 (reattach):** WHEN the user starts a session whose root query embeds within 0.8 cosine of a saved session's root (same space), or shares at least 60% of normalized query terms, the system SHALL offer to continue that session instead.
+
+  **Built (OpenSpec change `add-session-reattach`).** The check runs when the new session records its first search.
+
+  - **Terms.** They are lowercased and split on whitespace and punctuation other than inner hyphens, with stop words dropped. "60% of terms" is read as Jaccard overlap.
+  - **Meaning.** With an active model, both queries are embedded in one call with the query role.
+  - **The offer.** It is made in the popup, once.
+  - **Continuing.** It moves the new session's records into the saved one, which becomes active on the current group under its own title. The new searches become refinements of its root. Its old tabs are not reopened.
+
 - **REQ-STO-007 (export and import):** A session SHALL export to a single `.rgsession` file: a zip with JSON stores, snapshots, model and space manifests, and optionally vectors, encrypted with a user passphrase (AES-GCM, PBKDF2 with at least 600,000 iterations or Argon2id via WASM). Import SHALL validate schemas and apply REQ-LIN-009.
 - **REQ-STO-008 (deletion):** Deleting a session SHALL remove every record keyed by its `session_id`, including vectors, snapshots and jobs, in one transaction. Deleting a node SHALL cascade to its snapshots, chunks, vectors and facts, and mark dependent statements stale. Both cascades are built, each as one transaction, through `sessionId` and `nodeId` indexes. Embedding spaces are kept as shared definitions. A deleted active session leaves its tab group open and unfollowed (OpenSpec change `add-recorded-data-view`).
 - **REQ-STO-009:** The system SHALL call `navigator.storage.persist()` at first session start and SHALL show total disk use, with a per-session breakdown, in options.

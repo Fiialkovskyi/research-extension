@@ -9,6 +9,8 @@ export const sessionSummarySchema = v.object({
   pageCount: v.number(),
   /** Where the user left off before saving, until they move on; absent otherwise. */
   lastPosition: v.optional(v.object({ title: v.string(), readFraction: v.number() })),
+  /** A saved session this one looks like a continuation of, offered until answered. */
+  reattachSuggestion: v.optional(v.object({ sessionId: v.string(), title: v.string() })),
 });
 
 /** Messages about the session. Starting one is still `tabGroup.create`. */

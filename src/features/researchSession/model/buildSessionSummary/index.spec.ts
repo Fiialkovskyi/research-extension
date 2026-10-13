@@ -37,4 +37,22 @@ describe("buildSessionSummary", () => {
       ).lastPosition,
     ).toEqual({ title: "Page B", readFraction: 0.4 });
   });
+
+  it("offers the saved session this one looks like a continuation of", () => {
+    expect(
+      buildSessionSummary(
+        {
+          id: "session-1",
+          title: "Mid-drive",
+          groupId: 42,
+          formerGroupIds: [],
+          status: "active",
+          reattachSuggestion: { sessionId: "old", title: "E-bike motors" },
+          createdAt: 1,
+          updatedAt: 2,
+        },
+        1,
+      ).reattachSuggestion,
+    ).toEqual({ sessionId: "old", title: "E-bike motors" });
+  });
 });

@@ -9,7 +9,7 @@ import type { SessionSummary } from "../../types";
  * record for the background's own use does not leak into the protocol.
  */
 export const buildSessionSummary = (
-  { id, title, groupId, lastPosition }: StoredSession,
+  { id, title, groupId, lastPosition, reattachSuggestion }: StoredSession,
   pageCount: number,
 ): SessionSummary => {
   return {
@@ -20,5 +20,13 @@ export const buildSessionSummary = (
     ...(lastPosition === undefined
       ? {}
       : { lastPosition: { title: lastPosition.title, readFraction: lastPosition.readFraction } }),
+    ...(reattachSuggestion === undefined
+      ? {}
+      : {
+          reattachSuggestion: {
+            sessionId: reattachSuggestion.sessionId,
+            title: reattachSuggestion.title,
+          },
+        }),
   };
 };

@@ -127,6 +127,10 @@ export interface StoredSession {
   lastPosition?: StoredLastPosition;
   /** When the session was last saved. */
   savedAt?: number;
+  /** A saved session this one looks like a continuation of, offered once (REQ-STO-006). */
+  reattachSuggestion?: { sessionId: string; title: string };
+  /** The user chose to keep this session apart: no offer is made again. */
+  reattachDeclined?: boolean;
   createdAt: number;
   updatedAt: number;
 }

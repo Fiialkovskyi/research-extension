@@ -15,6 +15,7 @@ describe("POPUP_SNAPSHOT_SCRIPT", () => {
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="unread-page"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="saved-session"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="left-off"]');
+    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="reattach-offer"]');
   });
 
   // Only simple values survive the actor boundary reliably.

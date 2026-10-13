@@ -637,4 +637,78 @@ describe("PopupApp", () => {
       );
     });
   });
+
+  describe("continuing a saved session", () => {
+    it("offers it, and continues it on request", async () => {
+      let suggestion: unknown = { sessionId: "old", title: "E-bike motors" };
+      const client: PopupClient = {
+        request: vi.fn((message: RpcMessage<string, unknown>) => {
+          if (message.type === "session.reattach") {
+            suggestion = undefined;
+            return Promise.resolve(
+              buildRpcMessage("session.reattached", { sessionId: "old", title: "E-bike motors" }),
+            );
+          }
+
+          return Promise.resolve(
+            buildRpcMessage("session.active", {
+              session: {
+                id: suggestion === undefined ? "old" : "new",
+                title: suggestion === undefined ? "E-bike motors" : "Mid-drive",
+                groupId: 42,
+                pageCount: 1,
+                ...(suggestion === undefined ? {} : { reattachSuggestion: suggestion }),
+              },
+              closedSession: null,
+            }),
+          );
+        }),
+      };
+
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
+
+      expect(await screen.findByTestId("reattach-offer")).toHaveTextContent("E-bike motors");
+
+      fireEvent.click(screen.getByTestId("reattach-continue"));
+
+      expect(await screen.findByTestId("session-active")).toHaveTextContent("E-bike motors");
+      expect(screen.queryByTestId("reattach-offer")).toBeNull();
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "session.reattach", payload: { savedSessionId: "old" } }),
+      );
+    });
+
+    it("keeps the sessions apart on request, and stops offering", async () => {
+      let isOffered = true;
+      const client: PopupClient = {
+        request: vi.fn((message: RpcMessage<string, unknown>) => {
+          if (message.type === "session.keepSeparate") {
+            isOffered = false;
+            return Promise.resolve(buildRpcMessage("session.keptSeparate", {}));
+          }
+
+          return Promise.resolve(
+            buildRpcMessage("session.active", {
+              session: {
+                id: "new",
+                title: "Mid-drive",
+                groupId: 42,
+                pageCount: 1,
+                ...(isOffered
+                  ? { reattachSuggestion: { sessionId: "old", title: "E-bike motors" } }
+                  : {}),
+              },
+              closedSession: null,
+            }),
+          );
+        }),
+      };
+
+      render(<PopupApp graph={buildGraph()} client={client} pageAccess={buildPageAccess()} />);
+      fireEvent.click(await screen.findByTestId("reattach-keep-separate"));
+
+      await vi.waitFor(() => expect(screen.queryByTestId("reattach-offer")).toBeNull());
+      expect(screen.getByTestId("session-active")).toHaveTextContent("Mid-drive");
+    });
+  });
 });
