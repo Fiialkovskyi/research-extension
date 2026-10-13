@@ -93,6 +93,7 @@ import {
 } from "@/features/clusterSummaries";
 import { readComparisonTable, saveTableColumns } from "@/features/comparisonTable";
 import { openGapSearch, readResearchGaps } from "@/features/researchGaps";
+import { rejectFacts, restoreRejections } from "@/features/factRejections";
 import {
   enqueueEntityResolutions,
   RESOLVE_ENTITIES_JOB,
@@ -1112,6 +1113,39 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("model.listed", {
             models: await listInstalledModels(await getDatabase()),
           });
+        }
+
+        case "facts.reject": {
+          const rejectionCount = await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const count = await rejectFacts(openedDatabase, request.payload.factIds, getNow());
+
+            // A cluster's fact set may have changed: its summary is due again.
+            await enqueueClusterSummaries(openedDatabase, getNow());
+
+            return count;
+          });
+
+          void runJobs();
+
+          return buildRpcMessage("facts.rejected", { rejectionCount });
+        }
+
+        case "facts.restoreRejections": {
+          const restoredCount = await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const session = await getActiveSession(openedDatabase);
+            const count =
+              session === undefined ? 0 : await restoreRejections(openedDatabase, session.id);
+
+            await enqueueClusterSummaries(openedDatabase, getNow());
+
+            return count;
+          });
+
+          void runJobs();
+
+          return buildRpcMessage("facts.rejectionsRestored", { restoredCount });
         }
 
         case "gaps.read": {

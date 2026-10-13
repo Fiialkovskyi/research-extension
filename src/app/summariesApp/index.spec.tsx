@@ -61,6 +61,7 @@ const createClient = (hasSession = true) => {
                     entityType: type,
                     columns: [{ key: "weight", label: "weight" }],
                     otherColumns: [],
+                    rejectedCount: 0,
                     rows: [
                       {
                         entityId: "volta",
@@ -103,6 +104,10 @@ const createClient = (hasSession = true) => {
           );
         case "gaps.search":
           return Promise.resolve(buildRpcMessage("gaps.searchOpened", { url: "https://x" }));
+        case "facts.reject":
+          return Promise.resolve(buildRpcMessage("facts.rejected", { rejectionCount: 1 }));
+        case "facts.restoreRejections":
+          return Promise.resolve(buildRpcMessage("facts.rejectionsRestored", { restoredCount: 1 }));
         case "table.setColumns":
           return Promise.resolve(buildRpcMessage("table.columnsSaved", { entityType: "product" }));
         case "summaries.refresh":
@@ -193,6 +198,19 @@ describe("SummariesApp", () => {
     fireEvent.change(await screen.findByTestId("table-type"), { target: { value: "company" } });
 
     await vi.waitFor(() => expect(sent.filter((type) => type === "gaps.read")).toHaveLength(2));
+  });
+
+  it("marks a value wrong, then reads summaries, the table and the gaps again", async () => {
+    const { client, sent } = createClient();
+
+    render(<SummariesApp client={client} />);
+    fireEvent.click((await screen.findAllByTestId("table-reject"))[0]!);
+
+    await vi.waitFor(() => expect(sent.filter((type) => type === "gaps.read")).toHaveLength(2));
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "facts.reject", payload: { factIds: ["a"] } }),
+    );
+    expect(sent.filter((type) => type === "summaries.read").length).toBeGreaterThan(1);
   });
 
   it("says there is nothing to show without a session", async () => {

@@ -22,6 +22,7 @@ const TABLE: Table = {
     { key: "price", label: "price" },
   ],
   otherColumns: [{ key: "colour", label: "colour" }],
+  rejectedCount: 0,
   rows: [
     {
       entityId: "volta",
@@ -49,7 +50,13 @@ const TABLE: Table = {
 };
 
 const renderTable = (table = TABLE) => {
-  const handlers = { onChooseType: vi.fn(), onSetColumns: vi.fn(), onExport: vi.fn() };
+  const handlers = {
+    onChooseType: vi.fn(),
+    onSetColumns: vi.fn(),
+    onExport: vi.fn(),
+    onReject: vi.fn(),
+    onRestore: vi.fn(),
+  };
 
   render(<ComparisonTable table={table} {...handlers} />);
 
@@ -80,7 +87,7 @@ describe("ComparisonTable", () => {
       within(price!)
         .getAllByTestId("table-value")
         .map((value) => value.textContent),
-    ).toEqual(["1749 USDhttps://a: quote b", "1999 USDhttps://b: quote c"]);
+    ).toEqual(["1749 USD Wronghttps://a: quote b", "1999 USD Wronghttps://b: quote c"]);
     expect(within(price!).getAllByRole("link")[1]).toHaveAttribute("href", "https://b");
   });
 
@@ -100,6 +107,28 @@ describe("ComparisonTable", () => {
 
     fireEvent.change(screen.getByTestId("table-add-column"), { target: { value: "colour" } });
     expect(onSetColumns).toHaveBeenLastCalledWith("product", ["weight", "price", "colour"]);
+  });
+
+  it("marks every fact behind a value wrong", () => {
+    const { onReject } = renderTable();
+
+    fireEvent.click(screen.getAllByTestId("table-reject")[2]!);
+
+    expect(onReject).toHaveBeenCalledWith(["c"]);
+  });
+
+  it("counts rejected values and restores them, and shows nothing when there are none", () => {
+    const { onRestore } = renderTable({ ...TABLE, rejectedCount: 2 });
+
+    expect(screen.getByTestId("table-rejected")).toHaveTextContent("2 values marked wrong");
+    fireEvent.click(screen.getByTestId("table-restore"));
+    expect(onRestore).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows no rejection count before any rejection", () => {
+    renderTable();
+
+    expect(screen.queryByTestId("table-rejected")).toBeNull();
   });
 
   it("exports on request", () => {

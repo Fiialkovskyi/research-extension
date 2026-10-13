@@ -42,7 +42,7 @@ export const requestClusterSummary = async (
     return false;
   }
 
-  const factIds = await readClusterFactIds(database, cluster);
+  const factIds = await readClusterFactIds(database, cluster, session.id);
 
   if (factIds.length === 0) {
     return false;

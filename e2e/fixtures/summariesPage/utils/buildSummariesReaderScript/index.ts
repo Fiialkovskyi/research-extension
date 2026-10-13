@@ -11,6 +11,7 @@ export const buildSummariesReaderScript = (): string => `
     title: document.querySelector('[data-testid="summaries-title"]')?.textContent ?? null,
     needsModel: has(document, "summaries-no-model"),
     tableEmpty: has(document, "table-empty"),
+    hasRejected: has(document, "table-rejected"),
     gaps: Array.from(
       document.querySelectorAll('[data-testid="gap"] > span'),
       (gap) => gap.textContent ?? "",

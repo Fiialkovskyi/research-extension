@@ -9,10 +9,32 @@ export interface ComparisonTableProps {
   /** Replaces the type's columns, by attribute key; an empty list returns to the proposal. */
   onSetColumns: (entityType: string, columns: string[]) => void;
   onExport: () => void;
+  /** Marks the facts behind a value wrong (REQ-LIN-008). */
+  onReject: (factIds: string[]) => void;
+  /** Undoes every rejection of the session. */
+  onRestore: () => void;
+}
+
+/** How many values were marked wrong, and the way back. */
+function Rejected({ count, onRestore }: { count: number; onRestore: () => void }) {
+  return count === 0 ? null : (
+    <p data-testid="table-rejected" className="mt-1 flex items-center gap-2 text-xs">
+      {count} {count === 1 ? "value" : "values"} marked wrong
+      <Button data-testid="table-restore" onClick={onRestore}>
+        Restore all
+      </Button>
+    </p>
+  );
 }
 
 /** One cell: the chosen value, its alternatives or conflict, and every value with its sources. */
-function Cell({ cell }: { cell: ComparisonCell | undefined }) {
+function Cell({
+  cell,
+  onReject,
+}: {
+  cell: ComparisonCell | undefined;
+  onReject: (factIds: string[]) => void;
+}) {
   if (cell === undefined) {
     return (
       <td
@@ -50,7 +72,17 @@ function Cell({ cell }: { cell: ComparisonCell | undefined }) {
         <ul className="mt-1 flex flex-col gap-1 text-xs">
           {cell.groups.map((group) => (
             <li key={group.value} data-testid="table-value">
-              <span className="font-medium">{group.value}</span>
+              <span className="font-medium">{group.value}</span>{" "}
+              <button
+                type="button"
+                data-testid="table-reject"
+                className="cursor-pointer text-xs text-red-700 underline dark:text-red-400"
+                onClick={() => {
+                  onReject(group.sources.map(({ factId }) => factId));
+                }}
+              >
+                Wrong
+              </button>
               <ul>
                 {group.sources.map((source) => (
                   <li key={source.factId}>
@@ -80,6 +112,8 @@ export function ComparisonTable({
   onChooseType,
   onSetColumns,
   onExport,
+  onReject,
+  onRestore,
 }: ComparisonTableProps) {
   const { entityType } = table;
 
@@ -92,6 +126,7 @@ export function ComparisonTable({
         <p data-testid="table-empty" className="mt-1 text-sm">
           No entities with facts yet.
         </p>
+        <Rejected count={table.rejectedCount} onRestore={onRestore} />
       </section>
     );
   }
@@ -147,6 +182,7 @@ export function ComparisonTable({
           Export CSV
         </Button>
       </header>
+      <Rejected count={table.rejectedCount} onRestore={onRestore} />
       <div className="mt-2 overflow-x-auto">
         <table data-testid="comparison-table" className="border-collapse text-sm">
           <thead>
@@ -186,7 +222,7 @@ export function ComparisonTable({
                   {row.name}
                 </th>
                 {table.columns.map(({ key }) => (
-                  <Cell key={key} cell={row.cells[key]} />
+                  <Cell key={key} cell={row.cells[key]} onReject={onReject} />
                 ))}
               </tr>
             ))}

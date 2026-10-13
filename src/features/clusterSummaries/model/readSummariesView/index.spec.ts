@@ -11,9 +11,12 @@ import {
   MODEL_STORE,
   NODE_STORE,
   openResearchDatabase,
+  REJECTION_STORE,
   SESSION_STORE,
   SUMMARY_STORE,
 } from "@/shared/storage";
+
+import { rejectFacts } from "@/features/factRejections";
 
 import { getFactSetHash } from "../getFactSetHash";
 
@@ -75,6 +78,7 @@ beforeEach(async () => {
         NODE_STORE,
         SESSION_STORE,
         SUMMARY_STORE,
+        REJECTION_STORE,
       ] as const
     ).map((store) => database.clear(store)),
   );
@@ -165,6 +169,21 @@ describe("readSummariesView", () => {
     expect(
       (await readSummariesView(await openResearchDatabase()))?.clusters[0]?.summary?.isStale,
     ).toBe(true);
+  });
+
+  it("drops a rejected fact's citation and shows its summary stale", async () => {
+    const database = await openResearchDatabase();
+
+    await storeSummary(await getFactSetHash(["a:0:0"]));
+    await rejectFacts(database, ["a:0:0"]);
+
+    const [bikes] = (await readSummariesView(database))?.clusters ?? [];
+
+    expect(bikes?.factCount).toBe(0);
+    expect(bikes?.summary).toMatchObject({
+      isStale: true,
+      statements: [{ text: "Volta weighs 23.5 kg.", citations: [] }],
+    });
   });
 
   it("shows a requested summary as pending", async () => {

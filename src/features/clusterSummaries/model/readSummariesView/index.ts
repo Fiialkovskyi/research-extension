@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { decryptBytes, getDataKey } from "@/features/dataProtection";
 import { readSealedFact } from "@/features/factExtraction";
+import { getFactKey, readRejectedKeys } from "@/features/factRejections";
 import { getActiveModel } from "@/features/modelRegistry";
 import { readClustering } from "@/features/researchClusters";
 import { getLiveSession } from "@/features/researchSession";
@@ -33,7 +34,8 @@ export interface SummariesView {
 /**
  * Reads the live session's clusters as the Summaries page shows them: each
  * with its fact count and its summary, decrypted, every citation resolved to
- * its page and quote — a citation whose fact is gone is left out — and
+ * its page and quote — a citation whose fact is gone or rejected is left
+ * out — and
  * whether the summary is stale (REQ-LIN-006) or a requested one is pending.
  *
  * @returns The view, or `undefined` without a live session.
@@ -47,11 +49,12 @@ export const readSummariesView = async (
     return undefined;
   }
 
-  const [clustering, model, installed, jobs] = await Promise.all([
+  const [clustering, model, installed, jobs, rejectedKeys] = await Promise.all([
     readClustering(database, session.id),
     getActiveModel(database, "text-generation"),
     database.getAllKeys(MODEL_STORE),
     database.getAllFromIndex(JOB_STORE, "sessionId", session.id),
+    readRejectedKeys(database, session.id),
   ]);
   const installedRefs = new Set(installed);
   const pending = new Set(
@@ -95,11 +98,18 @@ export const readSummariesView = async (
                 return undefined;
               }
 
+              const sealed = await readSealedFact(dataKey, fact);
+
+              // A fact the user marked wrong is not shown as a source.
+              if (rejectedKeys.has(await getFactKey(sealed))) {
+                return undefined;
+              }
+
               return {
                 factId,
                 pageTitle: node.title.trim() === "" ? node.url : node.title,
                 url: node.url,
-                quote: (await readSealedFact(dataKey, fact)).quote,
+                quote: sealed.quote,
               };
             }),
           )
@@ -110,7 +120,7 @@ export const readSummariesView = async (
 
   const clusters = await Promise.all(
     (clustering?.clusters ?? []).map(async (cluster): Promise<ClusterSummaryView> => {
-      const factIds = await readClusterFactIds(database, cluster);
+      const factIds = await readClusterFactIds(database, cluster, session.id);
       const summary = await database.get(SUMMARY_STORE, `${session.id}:${cluster.id}`);
 
       return {

@@ -9,9 +9,12 @@ import {
   FACT_STORE,
   NODE_STORE,
   openResearchDatabase,
+  REJECTION_STORE,
   SESSION_STORE,
   TABLE_COLUMNS_STORE,
 } from "@/shared/storage";
+
+import { rejectFacts } from "@/features/factRejections";
 
 import { saveTableColumns } from "../saveTableColumns";
 
@@ -74,9 +77,16 @@ beforeEach(async () => {
   const database = await openResearchDatabase();
 
   await Promise.all(
-    ([ENTITY_STORE, FACT_STORE, NODE_STORE, SESSION_STORE, TABLE_COLUMNS_STORE] as const).map(
-      (store) => database.clear(store),
-    ),
+    (
+      [
+        ENTITY_STORE,
+        FACT_STORE,
+        NODE_STORE,
+        SESSION_STORE,
+        TABLE_COLUMNS_STORE,
+        REJECTION_STORE,
+      ] as const
+    ).map((store) => database.clear(store)),
   );
   await database.put(SESSION_STORE, {
     id: "s",
@@ -128,6 +138,43 @@ describe("readComparisonTable", () => {
     expect(volta?.cells["price"]?.groups.map(({ sources }) => sources[0]?.url)).toEqual([
       "https://example.org/review",
       "https://shop.example/volta",
+    ]);
+  });
+
+  it("leaves out a rejected value, which ends the cell's conflict, and counts rejections", async () => {
+    const database = await openResearchDatabase();
+    // The shop page's facts are its weight, then its price.
+    const [, shopPrice] = (await database.getAllFromIndex(FACT_STORE, "nodeId", "shop")).toSorted(
+      (a, b) => Number(a.id.split(":")[2]) - Number(b.id.split(":")[2]),
+    );
+
+    await rejectFacts(database, [shopPrice!.id]);
+
+    const view = await readComparisonTable(database);
+
+    expect(view?.table.rows[0]?.cells["price"]).toMatchObject({
+      value: "1749 USD",
+      isConflict: false,
+    });
+    expect(view?.table.rejectedCount).toBe(1);
+  });
+
+  it("leaves out a record that fails to decrypt, rather than failing", async () => {
+    const database = await openResearchDatabase();
+
+    await database.put(FACT_STORE, {
+      id: "review:0:999",
+      sessionId: "s",
+      nodeId: "review",
+      entityId: "volta",
+      keyId: "k",
+      iv: new Uint8Array(12),
+      encryptedFact: new ArrayBuffer(32),
+    } as never);
+
+    expect((await readComparisonTable(database))?.table.rows.map(({ name }) => name)).toEqual([
+      "Volta E5",
+      "Corsa",
     ]);
   });
 

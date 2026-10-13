@@ -42,7 +42,7 @@ export const enqueueClusterSummaries = async (
   const jobs: StoredJob[] = [];
 
   for (const cluster of clustering?.clusters ?? []) {
-    const factIds = await readClusterFactIds(database, cluster);
+    const factIds = await readClusterFactIds(database, cluster, session.id);
 
     if (factIds.length > 0) {
       const factSetHash = await getFactSetHash(factIds);

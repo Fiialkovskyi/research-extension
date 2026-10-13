@@ -9,6 +9,8 @@ export interface ClusterSummariesProps {
   canSummarize: boolean;
   /** Asks for a cluster's summary now. */
   onSummarize: (clusterId: string) => void;
+  /** Marks a cited fact wrong (REQ-LIN-008). */
+  onReject: (factIds: string[]) => void;
 }
 
 const formatTime = (epochMs: number): string => new Date(epochMs).toLocaleString();
@@ -18,10 +20,12 @@ function Cluster({
   cluster,
   canSummarize,
   onSummarize,
+  onReject,
 }: {
   cluster: ClusterSummaryView;
   canSummarize: boolean;
   onSummarize: (clusterId: string) => void;
+  onReject: (factIds: string[]) => void;
 }) {
   const { summary } = cluster;
   const summarizeLabel = summary === null ? "Summarize now" : "Refresh";
@@ -75,7 +79,17 @@ function Cluster({
                       <a href={citation.url} target="_blank" rel="noreferrer" className="underline">
                         {citation.pageTitle}
                       </a>
-                      : <q>{citation.quote}</q>
+                      : <q>{citation.quote}</q>{" "}
+                      <button
+                        type="button"
+                        data-testid="summary-reject"
+                        className="cursor-pointer text-red-700 underline dark:text-red-400"
+                        onClick={() => {
+                          onReject([citation.factId]);
+                        }}
+                      >
+                        Wrong
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -103,6 +117,7 @@ export function ClusterSummaries({
   clusters,
   canSummarize,
   onSummarize,
+  onReject,
 }: ClusterSummariesProps) {
   return (
     <section aria-labelledby="summaries-heading">
@@ -127,6 +142,7 @@ export function ClusterSummaries({
               cluster={cluster}
               canSummarize={canSummarize}
               onSummarize={onSummarize}
+              onReject={onReject}
             />
           ))}
         </ul>

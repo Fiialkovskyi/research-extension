@@ -29,6 +29,8 @@ const SUMMARIZED: ClusterSummaryView = {
   },
 };
 
+const onReject = vi.fn();
+
 const renderSummaries = (clusters: ClusterSummaryView[], canSummarize = true) => {
   const onSummarize = vi.fn();
 
@@ -38,6 +40,7 @@ const renderSummaries = (clusters: ClusterSummaryView[], canSummarize = true) =>
       clusters={clusters}
       canSummarize={canSummarize}
       onSummarize={onSummarize}
+      onReject={onReject}
     />,
   );
 
@@ -55,6 +58,13 @@ describe("ClusterSummaries", () => {
     expect(link).toHaveAttribute("href", "https://example.org/volta");
     expect(within(statement).getByTestId("summary-citation")).toHaveTextContent("weighs 23.5 kg");
     expect(screen.queryByTestId("summary-summarize")).toBeNull();
+  });
+
+  it("marks a cited fact wrong", () => {
+    renderSummaries([SUMMARIZED]);
+    fireEvent.click(screen.getByTestId("summary-reject"));
+
+    expect(onReject).toHaveBeenCalledWith(["a:0:0"]);
   });
 
   it("dims a stale summary and offers to refresh it", () => {

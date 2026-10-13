@@ -453,7 +453,7 @@ Provenance is attached to every fact, summary statement, cluster label, comparis
 - **REQ-LIN-005 (generation swap):** WHEN the active text-generation model or a prompt version changes, existing statements SHALL remain visible and labeled with their producer. They SHALL be regenerated only on user request or when their inputs change.
 - **REQ-LIN-006 (staleness):** A generated artifact SHALL be marked `stale` WHEN any input `content_hash` changes, an input node is deleted, or its producer model is removed. Stale artifacts are shown dimmed with a "refresh" action.
 - **REQ-LIN-007:** A single summary SHALL be produced by one model run. Comparison-table cells MAY come from different runs; each cell shows its own provenance on hover.
-- **REQ-LIN-008 (rejections):** WHEN the user marks a statement wrong, the system SHALL store a rejection keyed by a normalized hash of (subject, attribute, value) and SHALL suppress matching statements from any future model.
+- **REQ-LIN-008 (rejections):** WHEN the user marks a statement wrong, the system SHALL store a rejection keyed by a normalized hash of (subject, attribute, value) and SHALL suppress matching statements from any future model. As built (`add-rejections`), the key is `factKey@1`: SHA-256 of the normalised subject and attribute and the value, in its base unit for a number, exact rather than within tolerance. A rejected fact is left out on read: in table cells, gaps, the CSV and a cluster's fact set. So summaries citing it turn stale and drop the citation. Rejections are kept per session, and "Restore all" undoes them.
 - **REQ-LIN-009 (portability):** Saved sessions and exports SHALL include the manifests of every model and space referenced. WHEN a session is opened and a referenced model is missing, the system SHALL show the graph and existing synthesis read-only, fall back to structural clustering, and offer to re-embed with the currently active model.
 - **REQ-LIN-010:** A local, content-free run log SHALL record each inference run (`run_id`, model ref, provider, device, duration, token counts, outcome) for debugging and lineage queries.
 
@@ -706,7 +706,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 - [x] Cluster summaries with citations and staleness. (SYN-003, SYN-004, LIN-006) Shown on a "Summaries" extension page opened from the popup until the sidebar exists (`add-cluster-summaries`).
 - [x] Generic comparison table with conflicts and CSV export. (SYN-005 to SYN-007) On the Synthesis page, below the summaries (`add-comparison-table`).
 - [ ] Gaps and open questions with "search this". (SYN-008, SYN-009) Rule-based gaps and "search this" are done (`add-research-gaps`), on the Synthesis page. The open questions the model may propose are still to do.
-- [ ] Rejections. (LIN-008)
+- [x] Rejections. (LIN-008) Per session, on the Synthesis page (`add-rejections`).
 
 **M5: Native host and model swap**
 

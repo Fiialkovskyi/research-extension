@@ -7,6 +7,8 @@ export const summariesSnapshotSchema = v.object({
   needsModel: v.boolean(),
   /** Whether the comparison table says it has nothing to compare yet. */
   tableEmpty: v.boolean(),
+  /** Whether the page says values were marked wrong. */
+  hasRejected: v.boolean(),
   /** The gaps listed, by their text. */
   gaps: v.array(v.string()),
   clusters: v.array(

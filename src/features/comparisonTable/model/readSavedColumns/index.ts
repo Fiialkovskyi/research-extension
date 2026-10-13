@@ -13,7 +13,7 @@ export const getTableColumnsId = (sessionId: string, entityType: string): string
  * Reads the columns the user chose for a session's table of a type.
  *
  * @returns The attribute keys, in the user's order, or `undefined` when none
- *   were chosen.
+ *   were chosen or the choice cannot be read.
  */
 export const readSavedColumns = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
@@ -27,12 +27,17 @@ export const readSavedColumns = async (
     return undefined;
   }
 
-  const plain = await decryptBytes(dataKey, {
-    keyId: stored.keyId,
-    cipher: "aes-gcm-256",
-    iv: stored.iv,
-    ciphertext: stored.encryptedColumns,
-  });
+  try {
+    const plain = await decryptBytes(dataKey, {
+      keyId: stored.keyId,
+      cipher: "aes-gcm-256",
+      iv: stored.iv,
+      ciphertext: stored.encryptedColumns,
+    });
 
-  return v.parse(v.array(v.string()), JSON.parse(new TextDecoder().decode(plain)));
+    return v.parse(v.array(v.string()), JSON.parse(new TextDecoder().decode(plain)));
+  } catch {
+    // A choice that cannot be read is no choice: the table proposes its columns.
+    return undefined;
+  }
 };

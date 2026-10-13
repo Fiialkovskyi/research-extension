@@ -29,7 +29,9 @@ import {
   openResearchDatabase,
   SESSION_STORE,
   SNAPSHOT_STORE,
+  REJECTION_STORE,
   SUMMARY_STORE,
+  TABLE_COLUMNS_STORE,
   type StoredSession,
 } from "@/shared/storage";
 
@@ -185,6 +187,8 @@ const createFreshDatabase = async () => {
   await database.clear(EXTRACTION_STORE);
   await database.clear(ENTITY_STORE);
   await database.clear(SUMMARY_STORE);
+  await database.clear(REJECTION_STORE);
+  await database.clear(TABLE_COLUMNS_STORE);
 
   return database;
 };
@@ -3511,6 +3515,36 @@ describe("fact extraction through the background", () => {
       active: true,
     });
     expect(sessionTabs.groupTabs).toHaveBeenCalledWith({ tabIds: [31], groupId: 42 });
+  });
+
+  it("rejects a fact, hiding it from the table, and restores it", async () => {
+    const { app, database, clock } = await createExtractionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () =>
+      expect((await database.getAll(FACT_STORE)).some(({ entityId }) => entityId)).toBe(true),
+    );
+
+    const [fact] = await database.getAll(FACT_STORE);
+    const rows = async () =>
+      (
+        (await app.handleMessage(buildRpcMessage("table.read", {}))) as {
+          payload: { table: { rows: unknown[]; rejectedCount: number } };
+        }
+      ).payload.table;
+
+    expect((await rows()).rows).toHaveLength(1);
+    expect(
+      await app.handleMessage(buildRpcMessage("facts.reject", { factIds: [fact!.id] })),
+    ).toMatchObject({ type: "facts.rejected", payload: { rejectionCount: 1 } });
+    expect(await rows()).toMatchObject({ rows: [], rejectedCount: 1 });
+    expect(await app.handleMessage(buildRpcMessage("facts.restoreRejections", {}))).toMatchObject({
+      type: "facts.rejectionsRestored",
+      payload: { restoredCount: 1 },
+    });
+    expect((await rows()).rows).toHaveLength(1);
   });
 
   it("opens the Summaries page", async () => {

@@ -34,6 +34,7 @@ export {
   SPACE_STORE,
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
+  REJECTION_STORE,
   VECTOR_STORE,
 } from "./constants";
 export type {
@@ -68,6 +69,7 @@ export type {
   StoredSnapshot,
   StoredSummary,
   StoredTableColumns,
+  StoredRejection,
   StoredSpace,
   StoredChunk,
   StoredVector,

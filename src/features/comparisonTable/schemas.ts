@@ -25,6 +25,8 @@ export const comparisonTableSchema = v.object({
   columns: v.array(comparisonColumnSchema),
   /** Attributes of the type not shown, which a column can be added for. */
   otherColumns: v.array(comparisonColumnSchema),
+  /** How many statements the user marked wrong in this session (REQ-LIN-008). */
+  rejectedCount: v.number(),
   rows: v.array(
     v.object({
       entityId: v.string(),

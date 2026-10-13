@@ -23,6 +23,7 @@ import {
   SPACE_STORE,
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
+  REJECTION_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -412,6 +413,20 @@ describe("applyDatabaseUpgrade", () => {
     expect(after.version).toBe(17);
     expect(await after.count(TABLE_COLUMNS_STORE)).toBe(0);
     expect([...after.transaction(TABLE_COLUMNS_STORE).store.indexNames]).toEqual(["sessionId"]);
+
+    after.close();
+  });
+
+  it("adds an empty rejection store, indexed by session, to a version-17 profile", async () => {
+    const name = getNextDatabaseName();
+
+    (await openAt(name, 17)).close();
+
+    const after = await openAt(name, 18);
+
+    expect(after.version).toBe(18);
+    expect(await after.count(REJECTION_STORE)).toBe(0);
+    expect([...after.transaction(REJECTION_STORE).store.indexNames]).toEqual(["sessionId"]);
 
     after.close();
   });

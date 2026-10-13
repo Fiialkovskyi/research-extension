@@ -64,7 +64,8 @@ export const runClusterSummaryJob = async ({
   const cluster = (await readClustering(database, sessionId))?.clusters.find(
     ({ id }) => id === clusterId,
   );
-  const factIds = cluster === undefined ? [] : await readClusterFactIds(database, cluster);
+  const factIds =
+    cluster === undefined ? [] : await readClusterFactIds(database, cluster, sessionId);
 
   if (factIds.length === 0 || (await getFactSetHash(factIds)) !== factSetHash) {
     return false;

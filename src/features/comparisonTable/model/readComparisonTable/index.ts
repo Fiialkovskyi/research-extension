@@ -3,6 +3,7 @@ import type { IDBPDatabase } from "idb";
 import { getDataKey } from "@/features/dataProtection";
 import { readSealedEntity } from "@/features/entityResolution";
 import { readSealedFact } from "@/features/factExtraction";
+import { filterRejectedFacts, readRejectedKeys } from "@/features/factRejections";
 import { getLiveSession } from "@/features/researchSession";
 import { normalizeEntityName } from "@/shared/normalizeEntityName";
 import {
@@ -43,15 +44,26 @@ export const readComparisonTable = async (
   }
 
   const dataKey = await getDataKey(database);
-  const [stored, entities] = await Promise.all([
+  const [stored, entities, rejectedKeys] = await Promise.all([
     database.getAllFromIndex(FACT_STORE, "sessionId", session.id),
     database.getAllFromIndex(ENTITY_STORE, "sessionId", session.id),
+    readRejectedKeys(database, session.id),
   ]);
   const byId = new Map(entities.map((entity) => [entity.id, entity]));
+  // A record that fails authentication is left out rather than failing the
+  // whole table: the rest of the session is still worth showing.
   const names = new Map(
-    await Promise.all(
-      entities.map(async (entity) => [entity.id, await readSealedEntity(dataKey, entity)] as const),
-    ),
+    (
+      await Promise.all(
+        entities.map(async (entity) => {
+          try {
+            return [[entity.id, await readSealedEntity(dataKey, entity)] as const];
+          } catch {
+            return [];
+          }
+        }),
+      )
+    ).flat(),
   );
   /** The row a fact's entity resolves to. */
   const readRoot = (entityId: string): string => {
@@ -60,13 +72,19 @@ export const readComparisonTable = async (
     return mergedInto !== undefined && byId.has(mergedInto) ? mergedInto : entityId;
   };
   const pages = new Map<string, { title: string; url: string }>();
-  const facts: (TableFact & { type: string })[] = [];
+  const read: (TableFact & { type: string; subject: string })[] = [];
 
   for (const fact of stored) {
     if (fact.entityId !== undefined) {
       const rowId = readRoot(fact.entityId);
       const type = names.get(rowId)?.type ?? "unknown";
-      const { attribute, value, unit, quote } = await readSealedFact(dataKey, fact);
+      const sealed = await readSealedFact(dataKey, fact).catch(() => undefined);
+
+      if (sealed === undefined) {
+        continue;
+      }
+
+      const { subject, attribute, value, unit, quote } = sealed;
 
       if (!pages.has(fact.nodeId)) {
         const node = await database.get(NODE_STORE, fact.nodeId);
@@ -77,8 +95,9 @@ export const readComparisonTable = async (
         });
       }
 
-      facts.push({
+      read.push({
         id: fact.id,
+        subject,
         rowId,
         nodeId: fact.nodeId,
         attribute,
@@ -93,6 +112,9 @@ export const readComparisonTable = async (
     }
   }
 
+  // Facts the user marked wrong are left out of every cell (REQ-LIN-008).
+  const facts = await filterRejectedFacts(read, rejectedKeys);
+  const rejectedCount = rejectedKeys.size;
   const rowsByType = Map.groupBy(facts, ({ type }) => type);
   const types = [...rowsByType.entries()]
     .map(([type, members]) => ({ type, rowCount: new Set(members.map(({ rowId }) => rowId)).size }))
@@ -106,7 +128,14 @@ export const readComparisonTable = async (
   if (chosen === undefined) {
     return {
       title: session.title,
-      table: { types: [], entityType: null, columns: [], otherColumns: [], rows: [] },
+      table: {
+        types: [],
+        entityType: null,
+        columns: [],
+        otherColumns: [],
+        rows: [],
+        rejectedCount,
+      },
     };
   }
 
@@ -135,6 +164,6 @@ export const readComparisonTable = async (
 
   return {
     title: session.title,
-    table: { types, entityType: chosen.type, columns, otherColumns, rows },
+    table: { types, entityType: chosen.type, columns, otherColumns, rows, rejectedCount },
   };
 };

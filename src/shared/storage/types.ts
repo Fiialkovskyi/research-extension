@@ -20,6 +20,7 @@ import type {
   SPACE_STORE,
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
+  REJECTION_STORE,
   VECTOR_STORE,
 } from "./constants";
 
@@ -363,6 +364,20 @@ export interface StoredTableColumns {
   encryptedColumns: ArrayBuffer;
 }
 
+/**
+ * A fact the user marked wrong (REQ-LIN-008), by the hash of its normalised
+ * subject, attribute and value: no readable content, and every fact stating
+ * the same thing, from any model, is hidden with it.
+ */
+export interface StoredRejection {
+  /** `<sessionId>:<key>`. */
+  id: string;
+  sessionId: string;
+  /** `factKey@1`: SHA-256 of the normalised triple, hex. */
+  key: string;
+  createdAt: number;
+}
+
 /** How fact extraction of one snapshot went: progress and counts, no content. */
 export interface StoredExtraction {
   snapshotId: string;
@@ -641,6 +656,11 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [TABLE_COLUMNS_STORE]: {
     key: string;
     value: StoredTableColumns;
+    indexes: { sessionId: string };
+  };
+  [REJECTION_STORE]: {
+    key: string;
+    value: StoredRejection;
     indexes: { sessionId: string };
   };
 }

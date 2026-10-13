@@ -8,6 +8,7 @@ import {
   comparisonTableResponseSchemas,
 } from "@/features/comparisonTable";
 import { ComparisonTable } from "@/features/comparisonTable/ui/comparisonTable";
+import { factRejectionResponseSchemas } from "@/features/factRejections";
 import { type ResearchGaps as Gaps, researchGapResponseSchemas } from "@/features/researchGaps";
 import { ResearchGaps } from "@/features/researchGaps/ui/researchGaps";
 import { getErrorMessage } from "@/shared/getErrorMessage";
@@ -35,6 +36,7 @@ const responseSchemas = {
   ...clusterSummaryResponseSchemas,
   ...comparisonTableResponseSchemas,
   ...researchGapResponseSchemas,
+  ...factRejectionResponseSchemas,
   ...rpcResponseSchemas,
 } as const;
 
@@ -251,6 +253,25 @@ export function SummariesApp({
     saveFile(`${state.view.title} — ${table.entityType ?? "table"}.csv`, buildComparisonCsv(table));
   }, [saveFile, state, table]);
 
+  /** A rejection or a restore changes summaries, the table and the gaps alike. */
+  const reloadAll = useCallback(async () => {
+    await load();
+    await loadTable(entityType);
+  }, [entityType, load, loadTable]);
+
+  const reject = useCallback(
+    async (factIds: string[]) => {
+      await ask(buildRpcMessage("facts.reject", { factIds }));
+      await reloadAll();
+    },
+    [ask, reloadAll],
+  );
+
+  const restore = useCallback(async () => {
+    await ask(buildRpcMessage("facts.restoreRejections", {}));
+    await reloadAll();
+  }, [ask, reloadAll]);
+
   const searchGap = useCallback(
     async (query: string) => {
       await ask(buildRpcMessage("gaps.search", { query }));
@@ -289,6 +310,7 @@ export function SummariesApp({
           clusters={state.view.clusters}
           canSummarize={state.view.canSummarize}
           onSummarize={(clusterId) => void summarize(clusterId)}
+          onReject={(factIds) => void reject(factIds)}
         />
       )}
       {state.status === "ready" && table !== undefined && (
@@ -297,6 +319,8 @@ export function SummariesApp({
           onChooseType={(type) => void chooseType(type)}
           onSetColumns={(type, columns) => void setColumns(type, columns)}
           onExport={exportTable}
+          onReject={(factIds) => void reject(factIds)}
+          onRestore={() => void restore()}
         />
       )}
       {state.status === "ready" && gaps !== undefined && (
