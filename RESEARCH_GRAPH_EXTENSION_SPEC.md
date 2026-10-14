@@ -670,6 +670,19 @@ As built (`add-egress-suite`), the egress check is `e2e/specs/egress.e2e.ts`. It
 
 As built (`add-accessibility-audit`), `e2e/specs/accessibility.e2e.ts` runs axe-core inside each extension page in Firefox against WCAG 2.0 and 2.1 A and AA, with a planted-violation control. Keyboard, screen-reader and dark-theme checks remain manual.
 
+As built (`add-performance-gates`), the following budgets are gated:
+
+- REQ-NFR-001 in `e2e/specs/performance.e2e.ts`, as the p95 of 20 navigations to their node's `createdAt`;
+- REQ-NFR-003 in the same spec, as the extension process's settled memory after `minimizeMemoryUsage`, an upper bound shared with Firefox's built-in add-ons;
+- REQ-NFR-009 in `clusterSession`'s unit spec.
+
+The following are not gated:
+
+- NFR-002, which needs an in-page profiler marker;
+- NFR-004 and NFR-007, which are measured in the opt-in network run;
+- NFR-008, estimated at about 1 MB for a typical session;
+- NFR-010.
+
 ## 14. Implementation tasks
 
 Work proceeds in six milestones. M0 spikes de-risk platform assumptions before anything else is built, and every task names the requirements it closes.
@@ -722,7 +735,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 **M6: Hardening and beta**
 
-- [ ] Egress test suite, performance gates, accessibility audit. (Section 13) The egress suite is built (`add-egress-suite`). It found, and the change fixed, Ollama being polled once page access was allowed. The accessibility audit is built too (`add-accessibility-audit`): axe against WCAG 2 A and AA on every extension page. Performance gates are still open.
+- [x] Egress test suite, performance gates, accessibility audit. (Section 13) Built as `add-egress-suite`, which also fixed Ollama being polled once page access was allowed; `add-accessibility-audit`, axe against WCAG 2 A and AA on every extension page; and `add-performance-gates`, which gates NFR-001 and NFR-003 in e2e, with NFR-009 in unit.
 - [ ] Passphrase lock and denylist editor. (SEC-006, SEC-007) The denylist editor is built (`add-site-denylist-editor`); the passphrase lock is still open.
 - [ ] Page access granted at install: move `<all_urls>` from `optional_host_permissions` to `host_permissions`, so a session no longer needs an "Allow page access" click; keep the popup's re-request for access revoked in about:addons. Open details: the stricter install prompt and AMO review, whether temporary installs (`npm run dev`) get the grant, and the `extension-shell` and `research-session` spec changes. Added by the maintainer's request (2026-10-13). (RT-002)
 - [ ] AMO submission with source and build instructions; beta onboarding. (RT-007)
