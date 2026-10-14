@@ -21,6 +21,7 @@ import {
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
   QUESTION_STORE,
+  BLOCKED_SITES_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -190,6 +191,9 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
   },
   19: (database) => {
     database.createObjectStore(QUESTION_STORE, { keyPath: "sessionId" });
+  },
+  20: (database) => {
+    database.createObjectStore(BLOCKED_SITES_STORE, { keyPath: "id" });
   },
 };
 

@@ -22,6 +22,7 @@ import type {
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
   QUESTION_STORE,
+  BLOCKED_SITES_STORE,
   VECTOR_STORE,
 } from "./constants";
 
@@ -395,6 +396,18 @@ export interface StoredQuestions {
   encryptedQuestions: ArrayBuffer;
 }
 
+/**
+ * The sites the user added to the capture denylist (REQ-SEC-007), encrypted:
+ * the sites a person hides are themselves private. One record, `id: "user"`.
+ */
+export interface StoredBlockedSites {
+  id: "user";
+  keyId: string;
+  iv: Uint8Array;
+  /** JSON list of hosts, encrypted. */
+  encryptedSites: ArrayBuffer;
+}
+
 /** How fact extraction of one snapshot went: progress and counts, no content. */
 export interface StoredExtraction {
   snapshotId: string;
@@ -687,5 +700,9 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [QUESTION_STORE]: {
     key: string;
     value: StoredQuestions;
+  };
+  [BLOCKED_SITES_STORE]: {
+    key: string;
+    value: StoredBlockedSites;
   };
 }

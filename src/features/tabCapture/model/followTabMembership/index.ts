@@ -1,5 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
+import { readBlockedSites } from "@/features/siteDenylist";
 import { closeNode, readTabNode, recordEdge, recordNode } from "@/features/researchGraph";
 import { getActiveSession } from "@/features/researchSession";
 import type { ResearchDatabaseSchema } from "@/shared/storage";
@@ -45,7 +46,11 @@ export const followTabMembership = async ({
     return;
   }
 
-  if (current !== undefined || tab.incognito || !isCapturableUrl(tab.url)) {
+  if (
+    current !== undefined ||
+    tab.incognito ||
+    !isCapturableUrl(tab.url, await readBlockedSites(database))
+  ) {
     return;
   }
 

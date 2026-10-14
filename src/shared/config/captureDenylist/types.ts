@@ -4,7 +4,9 @@ export type DenylistCategoryName =
   | "health"
   | "government"
   | "webmail"
-  | "passwordManagers";
+  | "passwordManagers"
+  /** The sites the user added; never part of the bundled list. */
+  | "user";
 
 /**
  * One category of sensitive pages, by host.

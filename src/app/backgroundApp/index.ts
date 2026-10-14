@@ -98,6 +98,7 @@ import { readComparisonTable, saveTableColumns } from "@/features/comparisonTabl
 import { openGapSearch, readResearchGaps } from "@/features/researchGaps";
 import { rejectFacts, restoreRejections } from "@/features/factRejections";
 import { purgeRetiredSpaces, readSpaceUsage, removeSpace } from "@/features/embeddingSpaces";
+import { parseBlockedSite, readBlockedSites, saveBlockedSites } from "@/features/siteDenylist";
 import {
   enqueueOpenQuestions,
   getQuestionsProducer,
@@ -1240,6 +1241,36 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           void runJobs();
 
           return buildRpcMessage("facts.rejectionsRestored", { restoredCount });
+        }
+
+        case "denylist.read": {
+          return buildRpcMessage("denylist.view", {
+            sites: await readBlockedSites(await getDatabase()),
+          });
+        }
+
+        case "denylist.save": {
+          const parsed = request.payload.sites.map((site) => ({
+            site,
+            host: parseBlockedSite(site),
+          }));
+          const invalid = parsed.find(({ host }) => host === undefined);
+
+          if (invalid !== undefined) {
+            return buildRpcMessage("denylist.view", {
+              sites: await readBlockedSites(await getDatabase()),
+              invalid: invalid.site,
+            });
+          }
+
+          const sites = await serializeWork(async () =>
+            saveBlockedSites(
+              await getDatabase(),
+              parsed.flatMap(({ host }) => host ?? []),
+            ),
+          );
+
+          return buildRpcMessage("denylist.view", { sites });
         }
 
         case "spaces.list": {

@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveBlockedSites } from "@/features/siteDenylist";
 import { reconcileSessionTabs } from ".";
 import { followTabMembership } from "../followTabMembership";
 import type { CaptureTab, TabCaptureApi } from "../../types";
@@ -12,6 +13,7 @@ import {
   openResearchDatabase,
   type ResearchDatabaseSchema,
   SESSION_STORE,
+  BLOCKED_SITES_STORE,
 } from "@/shared/storage";
 
 const GROUP_ID = 42;
@@ -25,6 +27,7 @@ beforeEach(async () => {
     database.clear(SESSION_STORE),
     database.clear(NODE_STORE),
     database.clear(EDGE_STORE),
+    database.clear(BLOCKED_SITES_STORE),
   ]);
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -100,6 +103,16 @@ describe("reconcileSessionTabs", () => {
     await reconcileSessionTabs({
       database,
       api: createApi(sessionTab({ url: "https://www.irs.gov/" }), sessionTab({ id: 8 })),
+    });
+
+    expect(await readNodes()).toEqual([expect.objectContaining({ tabId: 8 })]);
+  });
+
+  it("leaves a group tab on a site the user added unrecorded", async () => {
+    await saveBlockedSites(database, ["myclinic.example"]);
+    await reconcileSessionTabs({
+      database,
+      api: createApi(sessionTab({ url: "https://myclinic.example/" }), sessionTab({ id: 8 })),
     });
 
     expect(await readNodes()).toEqual([expect.objectContaining({ tabId: 8 })]);

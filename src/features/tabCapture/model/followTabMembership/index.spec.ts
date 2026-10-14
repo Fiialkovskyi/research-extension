@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { saveBlockedSites } from "@/features/siteDenylist";
 import { followTabMembership } from ".";
 import type { CaptureTab } from "../../types";
 import {
@@ -11,6 +12,7 @@ import {
   openResearchDatabase,
   type ResearchDatabaseSchema,
   SESSION_STORE,
+  BLOCKED_SITES_STORE,
 } from "@/shared/storage";
 
 const GROUP_ID = 42;
@@ -24,6 +26,7 @@ beforeEach(async () => {
     database.clear(SESSION_STORE),
     database.clear(NODE_STORE),
     database.clear(EDGE_STORE),
+    database.clear(BLOCKED_SITES_STORE),
   ]);
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -59,6 +62,13 @@ describe("followTabMembership", () => {
         transitionType: "joined",
       }),
     ]);
+  });
+
+  it("leaves a joining tab on a site the user added unrecorded", async () => {
+    await saveBlockedSites(database, ["example.org"]);
+    await followTabMembership({ database, tab: sessionTab() });
+
+    expect(await readNodes()).toEqual([]);
   });
 
   it("links a joining tab to the page of the tab that opened it", async () => {

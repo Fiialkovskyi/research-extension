@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveBlockedSites } from "@/features/siteDenylist";
 import { recordNavigation } from ".";
 import type { CaptureTab, CommittedNavigation, TabCaptureApi } from "../../types";
 import {
@@ -11,6 +12,7 @@ import {
   openResearchDatabase,
   type ResearchDatabaseSchema,
   SESSION_STORE,
+  BLOCKED_SITES_STORE,
 } from "@/shared/storage";
 
 const GROUP_ID = 42;
@@ -24,6 +26,7 @@ beforeEach(async () => {
     database.clear(SESSION_STORE),
     database.clear(NODE_STORE),
     database.clear(EDGE_STORE),
+    database.clear(BLOCKED_SITES_STORE),
   ]);
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -208,6 +211,27 @@ describe("recordNavigation", () => {
 
     expect(after).toMatchObject({ parentNodeId: null });
     expect(await database.count(EDGE_STORE)).toBe(0);
+  });
+
+  it("records nothing on a site the user added, nor on its subdomains, but on a look-alike", async () => {
+    const api = createApi(sessionTab());
+
+    await saveBlockedSites(database, ["myclinic.example"]);
+
+    expect(
+      await recordNavigation({
+        database,
+        api,
+        navigation: commit({ url: "https://portal.myclinic.example/" }),
+      }),
+    ).toBeUndefined();
+    expect(
+      await recordNavigation({
+        database,
+        api,
+        navigation: commit({ url: "https://notmyclinic.example/" }),
+      }),
+    ).toBeDefined();
   });
 
   it("ignores a tab outside the session's group", async () => {

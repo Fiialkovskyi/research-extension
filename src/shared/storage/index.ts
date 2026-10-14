@@ -36,6 +36,7 @@ export {
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
   QUESTION_STORE,
+  BLOCKED_SITES_STORE,
   VECTOR_STORE,
 } from "./constants";
 export type {
@@ -72,6 +73,7 @@ export type {
   StoredTableColumns,
   StoredRejection,
   StoredQuestions,
+  StoredBlockedSites,
   StoredSpace,
   StoredChunk,
   StoredVector,

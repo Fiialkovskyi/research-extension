@@ -12,8 +12,14 @@ import { isDenylistedHost } from "../isDenylistedHost";
  * SEC-007). Every recording path asks this, and everything else capture keeps —
  * signals, reading time, the page observer, snapshots — hangs off a node, so a
  * page refused here leaves no trace.
+ *
+ * @param blockedSites The sites the user added to the denylist, matched with
+ *   their subdomains as the bundled list's domains are.
  */
-export const isCapturableUrl = (url: string | undefined): url is string => {
+export const isCapturableUrl = (
+  url: string | undefined,
+  blockedSites: readonly string[] = [],
+): url is string => {
   if (url === undefined || !URL.canParse(url)) {
     return false;
   }
@@ -21,6 +27,11 @@ export const isCapturableUrl = (url: string | undefined): url is string => {
   const { protocol, hostname } = new URL(url);
 
   return (
-    (protocol === "http:" || protocol === "https:") && !isDenylistedHost(hostname, CAPTURE_DENYLIST)
+    (protocol === "http:" || protocol === "https:") &&
+    !isDenylistedHost(hostname, CAPTURE_DENYLIST) &&
+    !isDenylistedHost(hostname, {
+      version: CAPTURE_DENYLIST.version,
+      categories: [{ name: "user", domains: blockedSites, suffixes: [], words: [] }],
+    })
   );
 };

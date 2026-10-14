@@ -26,4 +26,12 @@ describe("isCapturableUrl", () => {
   ])("never captures %s", (url) => {
     expect(isCapturableUrl(url)).toBe(false);
   });
+
+  it("refuses a site the user added and its subdomains, but not a look-alike", () => {
+    const sites = ["myclinic.example"];
+
+    expect(isCapturableUrl("https://myclinic.example/", sites)).toBe(false);
+    expect(isCapturableUrl("https://portal.myclinic.example/a", sites)).toBe(false);
+    expect(isCapturableUrl("https://notmyclinic.example/", sites)).toBe(true);
+  });
 });

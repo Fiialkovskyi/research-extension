@@ -33,6 +33,7 @@ import {
   SUMMARY_STORE,
   TABLE_COLUMNS_STORE,
   QUESTION_STORE,
+  BLOCKED_SITES_STORE,
   type StoredSession,
 } from "@/shared/storage";
 
@@ -191,6 +192,7 @@ const createFreshDatabase = async () => {
   await database.clear(REJECTION_STORE);
   await database.clear(TABLE_COLUMNS_STORE);
   await database.clear(QUESTION_STORE);
+  await database.clear(BLOCKED_SITES_STORE);
 
   return database;
 };
@@ -1397,6 +1399,29 @@ describe("page signals and reading time through the background", () => {
         url: "https://www.paypal.com/myaccount",
       }),
     ).toMatchObject({ type: "signal.dropped", payload: { stop: true } });
+  });
+
+  it("records nothing on a site the user added, and refuses an entry that names no site", async () => {
+    const { app, database, executeScript } = await createSignalsApp();
+
+    expect(
+      await app.handleMessage(
+        buildRpcMessage("denylist.save", { sites: ["https://www.MyClinic.example/visits"] }),
+      ),
+    ).toMatchObject({ type: "denylist.view", payload: { sites: ["myclinic.example"] } });
+    expect(
+      await app.handleMessage(
+        buildRpcMessage("denylist.save", { sites: ["myclinic.example", "not a site"] }),
+      ),
+    ).toMatchObject({ payload: { sites: ["myclinic.example"], invalid: "not a site" } });
+
+    await app.handleNavigationCommitted(commit("https://portal.myclinic.example/"));
+
+    expect(await database.count(NODE_STORE)).toBe(0);
+    expect(executeScript).not.toHaveBeenCalled();
+    expect(await app.handleMessage(buildRpcMessage("denylist.read", {}))).toMatchObject({
+      payload: { sites: ["myclinic.example"] },
+    });
   });
 
   it("encrypts on start-up a snapshot an earlier version stored in the clear", async () => {

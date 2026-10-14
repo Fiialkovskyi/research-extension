@@ -3,6 +3,7 @@ import { useEffect, useReducer } from "react";
 import { diagnosticsResponseSchemas } from "@/features/diagnostics";
 import { LifetimeProbeCard } from "@/features/diagnostics/ui/lifetimeProbeCard";
 import { EmbeddingSpacesCard } from "@/features/embeddingSpaces/ui/embeddingSpacesCard";
+import { BlockedSitesCard } from "@/features/siteDenylist/ui/blockedSitesCard";
 import { PolicyReport } from "@/features/diagnostics/ui/policyReport";
 import { inferenceResponseSchemas } from "@/features/inference";
 import { benchmarkResponseSchemas } from "@/features/inferenceBenchmark";
@@ -338,6 +339,8 @@ export function OptionsApp({
           <InstallProgress state={state.install} />
         </div>
       </section>
+
+      <BlockedSitesCard client={client} />
 
       <EmbeddingSpacesCard client={client} />
 

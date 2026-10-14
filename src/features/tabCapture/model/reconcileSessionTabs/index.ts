@@ -1,5 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
+import { readBlockedSites } from "@/features/siteDenylist";
 import { closeNode, recordNode } from "@/features/researchGraph";
 import { getActiveSession } from "@/features/researchSession";
 import { NODE_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
@@ -51,8 +52,10 @@ export const reconcileSessionTabs = async ({
     }
   }
 
+  const blockedSites = await readBlockedSites(database);
+
   for (const tab of tabs) {
-    if (!coveredTabIds.has(tab.id) && isCapturableUrl(tab.url)) {
+    if (!coveredTabIds.has(tab.id) && isCapturableUrl(tab.url, blockedSites)) {
       const node = await recordNode(database, {
         sessionId: session.id,
         tabId: tab.id,

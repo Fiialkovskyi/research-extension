@@ -25,6 +25,7 @@ import {
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
   QUESTION_STORE,
+  BLOCKED_SITES_STORE,
   VECTOR_STORE,
 } from "../../../constants";
 import { type ResearchDatabaseSchema } from "../../../types";
@@ -442,6 +443,20 @@ describe("applyDatabaseUpgrade", () => {
     expect(after.version).toBe(19);
     expect(await after.count(QUESTION_STORE)).toBe(0);
     expect(after.transaction(QUESTION_STORE).store.keyPath).toBe("sessionId");
+
+    after.close();
+  });
+
+  it("adds an empty blocked-sites store to a version-19 profile", async () => {
+    const name = getNextDatabaseName();
+
+    (await openAt(name, 19)).close();
+
+    const after = await openAt(name, 20);
+
+    expect(after.version).toBe(20);
+    expect(await after.count(BLOCKED_SITES_STORE)).toBe(0);
+    expect(after.transaction(BLOCKED_SITES_STORE).store.keyPath).toBe("id");
 
     after.close();
   });

@@ -1,5 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
+import { readBlockedSites } from "@/features/siteDenylist";
 import { closeNode, readTabNode, recordEdge, recordNode } from "@/features/researchGraph";
 import { getActiveSession } from "@/features/researchSession";
 import type { ResearchDatabaseSchema, StoredNode } from "@/shared/storage";
@@ -66,7 +67,7 @@ export const recordNavigation = async ({
     return undefined;
   }
 
-  if (!isCapturableUrl(url)) {
+  if (!isCapturableUrl(url, await readBlockedSites(database))) {
     if (parent !== undefined) {
       await closeNode(database, parent.id);
     }
