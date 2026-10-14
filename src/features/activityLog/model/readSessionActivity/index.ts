@@ -7,6 +7,6 @@ export const readSessionActivity = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
   sessionId: string,
 ): Promise<StoredActivity[]> =>
-  (await database.getAllFromIndex(ACTIVITY_STORE, "sessionId", sessionId)).sort(
+  (await database.getAllFromIndex(ACTIVITY_STORE, "sessionId", sessionId)).toSorted(
     (first, second) => first.at - second.at || first.endAt - second.endAt,
   );

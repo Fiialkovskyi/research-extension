@@ -129,7 +129,11 @@ import {
   runLifetimeProbe,
 } from "@/features/diagnostics";
 import { activateModel, getActiveModel, listInstalledModels } from "@/features/modelRegistry";
-import { buildGraphSnapshot, type GraphSnapshot } from "@/features/researchMap";
+import {
+  buildGraphSnapshot,
+  type GraphSnapshot,
+  MAP_EXCERPT_CHARACTERS,
+} from "@/features/researchMap";
 import {
   buildSessionSummary,
   closeSessionForGroup,
@@ -1117,12 +1121,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     await captureAndPush(async (openedDatabase) => {
       switch (request.type) {
         case "signal.batch": {
-          const target = await recordSignalBatch(
-            openedDatabase,
-            sender,
-            request.payload,
-            getNow(),
-          );
+          const target = await recordSignalBatch(openedDatabase, sender, request.payload, getNow());
 
           if (target.node === undefined) {
             answer = buildRpcMessage("signal.dropped", { stop: target.stop });
@@ -1975,6 +1974,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "recorded.read": {
           return buildRpcMessage("recorded.session", {
             session: (await readRecordedSession(await getDatabase())) ?? null,
+          });
+        }
+
+        case "map.readExcerpt": {
+          const { nodeId } = request.payload;
+          const text = await readRecordedText(await getDatabase(), nodeId);
+
+          return buildRpcMessage("map.excerpt", {
+            nodeId,
+            text: text === null ? null : text.slice(0, MAP_EXCERPT_CHARACTERS),
           });
         }
 

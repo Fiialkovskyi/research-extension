@@ -7,3 +7,4 @@
 export { type MapActivation, activateMapNode } from "./activateMapNode";
 export { type MapNodeSnapshot, type MapSnapshot, parseMapSnapshot } from "./parseMapSnapshot";
 export { readResearchMap } from "./readResearchMap";
+export { type MapViewName, switchMapView } from "./switchMapView";

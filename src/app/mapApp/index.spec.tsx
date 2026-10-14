@@ -1,5 +1,5 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GraphSnapshot } from "@/features/researchMap";
 import { buildRpcMessage } from "@/shared/rpc";
@@ -25,6 +25,11 @@ vi.mock("@/features/researchMap/ui/researchMap", () => ({
       ))}
     </ul>
   ),
+}));
+
+// The anchor view is React Flow too, covered by its own spec.
+vi.mock("@/features/researchMap/ui/anchorView", () => ({
+  AnchorView: () => <div data-testid="map-anchors" />,
 }));
 
 /** A client that records what was sent and can push messages back. */
@@ -82,6 +87,10 @@ const buildSnapshot = (...titles: string[]): GraphSnapshot => ({
   activity: [],
 });
 
+beforeEach(() => {
+  window.history.replaceState(null, "", "#");
+});
+
 describe("MapApp", () => {
   it("subscribes to the graph and waits for it", () => {
     const { client, sent } = createStubClient();
@@ -110,7 +119,11 @@ describe("MapApp", () => {
     push("graph.snapshot", buildSnapshot("A", "B"));
 
     expect(screen.getByTestId("map-session-title")).toHaveTextContent("E-bike motors");
-    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["A", "B"]);
+    expect(
+      within(screen.getByTestId("research-map"))
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["A", "B"]);
   });
 
   it("asks to focus the tab of an activated page", () => {
@@ -144,5 +157,80 @@ describe("MapApp", () => {
     push("graph.snapshot", { nodes: "not a graph" });
 
     expect(screen.getByTestId("map-loading")).toBeInTheDocument();
+  });
+
+  describe("views", () => {
+    it("opens the tree, and switches view from the switcher, keeping it in the address", () => {
+      const { client, push } = createStubClient();
+      render(<MapApp client={client} />);
+      push("graph.snapshot", buildSnapshot("A"));
+
+      expect(screen.getByTestId("research-map")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId("map-view-history"));
+
+      expect(screen.getByTestId("map-history")).toBeInTheDocument();
+      expect(screen.queryByTestId("research-map")).not.toBeInTheDocument();
+      expect(window.location.hash).toBe("#history");
+
+      fireEvent.click(screen.getByTestId("map-view-tree"));
+
+      expect(window.location.hash).toBe("");
+    });
+
+    it("switches view with the keys 1 to 4", () => {
+      const { client, push } = createStubClient();
+      render(<MapApp client={client} />);
+      push("graph.snapshot", buildSnapshot("A"));
+
+      fireEvent.keyDown(window, { key: "3" });
+
+      expect(screen.getByTestId("map-anchors")).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "4" });
+
+      expect(screen.getByTestId("map-telemetry")).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "2", ctrlKey: true });
+      fireEvent.keyDown(window, { key: "9" });
+
+      expect(screen.getByTestId("map-telemetry")).toBeInTheDocument();
+    });
+
+    it("opens the view the address names", () => {
+      window.history.replaceState(null, "", "#telemetry");
+
+      const { client, push } = createStubClient();
+      render(<MapApp client={client} />);
+      push("graph.snapshot", buildSnapshot("A"));
+
+      expect(screen.getByTestId("map-telemetry")).toBeInTheDocument();
+      expect(screen.getByTestId("map-view-telemetry")).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("asks once for the text of a hovered page, and shows it", () => {
+      window.history.replaceState(null, "", "#telemetry");
+
+      const { client, push, sent } = createStubClient();
+      render(<MapApp client={client} />);
+      push("graph.snapshot", {
+        ...buildSnapshot("A"),
+        activity: [{ nodeId: "node-0", kind: "focus", at: 0, endAt: 60_000 }],
+      });
+
+      const block = screen.getByTestId("telemetry-block");
+
+      fireEvent.mouseEnter(block);
+      fireEvent.mouseLeave(block);
+      fireEvent.mouseEnter(block);
+
+      expect(sent.filter(({ type }) => type === "map.readExcerpt")).toEqual([
+        { type: "map.readExcerpt", payload: { nodeId: "node-0" } },
+      ]);
+
+      push("map.excerpt", { nodeId: "node-0", text: "Mid-drive motors." });
+
+      expect(screen.getByTestId("telemetry-excerpt")).toHaveTextContent("Mid-drive motors.");
+    });
   });
 });

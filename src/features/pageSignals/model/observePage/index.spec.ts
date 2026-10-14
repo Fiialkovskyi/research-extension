@@ -126,7 +126,10 @@ describe("observePage", () => {
     elapse();
 
     expect(sent).toEqual([
-      expect.objectContaining({ type: "signal.batch", payload: { maxScroll: 0.2, copyEvents: 0, pasteEvents: 0 } }),
+      expect.objectContaining({
+        type: "signal.batch",
+        payload: { maxScroll: 0.2, copyEvents: 0, pasteEvents: 0 },
+      }),
     ]);
   });
 

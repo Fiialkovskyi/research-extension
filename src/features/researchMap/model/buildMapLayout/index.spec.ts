@@ -167,7 +167,9 @@ describe("buildMapLayout", () => {
   });
 
   it("lays out nothing for an empty snapshot", () => {
-    expect(buildMapLayout({ session: null, nodes: [], edges: [], clusters: [], activity: [] })).toEqual({
+    expect(
+      buildMapLayout({ session: null, nodes: [], edges: [], clusters: [], activity: [] }),
+    ).toEqual({
       nodes: [],
       edges: [],
     });

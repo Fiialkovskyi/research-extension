@@ -29,6 +29,7 @@ import {
   type MapNodeSnapshot,
   type MapSnapshot,
   readResearchMap,
+  switchMapView,
 } from "../fixtures/researchMap/utils";
 
 /**
@@ -266,6 +267,17 @@ describe("the research map", () => {
     await browser.pause(500);
 
     expect(isMapUrl(await readSelectedUrl())).toBe(true);
+  });
+
+  it("switches between its four views, and back to the tree", async () => {
+    for (const view of ["history", "anchors", "telemetry", "tree"] as const) {
+      await switchMapView(view);
+    }
+
+    const map = await readResearchMap();
+
+    expect(map.nodes.length).toBeGreaterThan(0);
+    expect(map.documentId).toBe(documentId);
   });
 
   it("shows a page read while it is open within a second", async () => {

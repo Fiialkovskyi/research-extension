@@ -2027,6 +2027,21 @@ describe("what was recorded, through the background", () => {
     ).toMatchObject({ payload: { text: "Mid-drive motors sit at the cranks." } });
   });
 
+  it("answers the map with the start of a page's text, and nothing for an unknown page", async () => {
+    const { app, database } = await createRecordedApp();
+    const [node] = await database.getAll(NODE_STORE);
+
+    expect(
+      await app.handleMessage(buildRpcMessage("map.readExcerpt", { nodeId: node?.id ?? "" })),
+    ).toMatchObject({
+      type: "map.excerpt",
+      payload: { nodeId: node?.id, text: "Mid-drive motors sit at the cranks." },
+    });
+    expect(
+      await app.handleMessage(buildRpcMessage("map.readExcerpt", { nodeId: "missing" })),
+    ).toMatchObject({ type: "map.excerpt", payload: { nodeId: "missing", text: null } });
+  });
+
   it("deletes a page with its snapshot", async () => {
     const { app, database } = await createRecordedApp();
     const [node] = await database.getAll(NODE_STORE);

@@ -102,9 +102,9 @@ describe("buildGraphSnapshot", () => {
       },
     ];
 
-    expect(buildGraphSnapshot(session, { nodes: [node], edges: [] }, [], activity).activity).toEqual(
-      [{ nodeId: "node-a", kind: "focus", at: 100, endAt: 900 }],
-    );
+    expect(
+      buildGraphSnapshot(session, { nodes: [node], edges: [] }, [], activity).activity,
+    ).toEqual([{ nodeId: "node-a", kind: "focus", at: 100, endAt: 900 }]);
   });
 
   it("carries a SERP's kind and query", () => {

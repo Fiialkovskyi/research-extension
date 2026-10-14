@@ -5,6 +5,7 @@
  * entity, so it has no `index.ts` of its own.
  */
 
+export { ANCHOR_RULES } from "./anchorRules/constants";
 export { CAPTURE_DENYLIST } from "./captureDenylist/constants";
 export type {
   CaptureDenylist,

@@ -79,6 +79,8 @@ export const researchMapRequestSchemas = {
   "tab.focus": v.object({ tabId: v.number() }),
   /** Select the map's tab, opening one if none is open. */
   "map.open": v.object({}),
+  /** The start of an active-session page's captured text, for the telemetry view's tooltip. */
+  "map.readExcerpt": v.object({ nodeId: v.string() }),
 } as const;
 
 export const researchMapResponseSchemas = {
@@ -87,4 +89,6 @@ export const researchMapResponseSchemas = {
   /** The tab holds no open node of the active session, or no session is active. */
   "tab.focusRefused": v.object({ tabId: v.number(), reason: v.string() }),
   "map.opened": v.object({}),
+  /** `null` when the page has no captured text, or is not the live session's. */
+  "map.excerpt": v.object({ nodeId: v.string(), text: v.nullable(v.string()) }),
 } as const;

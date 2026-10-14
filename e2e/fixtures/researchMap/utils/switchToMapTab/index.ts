@@ -23,8 +23,9 @@ export const switchToMapTab = async (): Promise<void> => {
       for (const handle of await browser.getWindowHandles()) {
         await browser.switchToWindow(handle);
 
+        // The map keeps its current view in the fragment (`#telemetry`).
         if (
-          (await browser.getUrl()) === mapUrl &&
+          (await browser.getUrl()).split("#")[0] === mapUrl &&
           (await browser.execute(() => document.readyState)) === "complete"
         ) {
           return true;

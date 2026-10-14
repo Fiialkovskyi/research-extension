@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { type GraphSnapshot, researchMapResponseSchemas } from "@/features/researchMap";
+import {
+  type GraphSnapshot,
+  type MapView,
+  researchMapResponseSchemas,
+} from "@/features/researchMap";
+import { DEFAULT_MAP_VIEW, MAP_VIEWS } from "@/features/researchMap/constants";
+import { parseMapView } from "@/features/researchMap/model/parseMapView";
+import { AnchorView } from "@/features/researchMap/ui/anchorView";
+import { HistoryView } from "@/features/researchMap/ui/historyView";
 import { ResearchMap } from "@/features/researchMap/ui/researchMap";
+import { TelemetryView } from "@/features/researchMap/ui/telemetryView";
+import { ViewSwitcher } from "@/features/researchMap/ui/viewSwitcher";
 import {
   buildRpcMessage,
   parseRpcMessage,
@@ -38,11 +48,27 @@ type MapState =
   | { status: "empty" }
   | { status: "ready"; snapshot: GraphSnapshot };
 
-/** Composition root of the research map page. */
+/** Whether a key press was meant for a field rather than for the page. */
+const isTypingTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement &&
+  (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+
+/**
+ * Composition root of the research map page.
+ *
+ * The page draws the active session four ways — a plain history, the tree,
+ * its anchors, and a telemetry timeline — picked by the switcher or the keys
+ * 1–4. The view is kept in the address (`#telemetry`), so a reload keeps it.
+ */
 export function MapApp({ client }: MapAppProps) {
   const [state, setState] = useState<MapState>({ status: "loading" });
   /** Why the last activated page could not be shown, until one can. */
   const [failure, setFailure] = useState<string | undefined>();
+  const [view, setView] = useState<MapView>(() => parseMapView(window.location.hash));
+  /** Captured text the telemetry view asked for, by page; `null` when there is none. */
+  const [excerpts, setExcerpts] = useState<Record<string, string | null>>({});
+  /** Pages whose text was asked for, so hovering a page again does not ask twice. */
+  const askedExcerpts = useRef(new Set<string>());
 
   useEffect(() => {
     const unsubscribe = client.subscribe((message) => {
@@ -77,6 +103,12 @@ export function MapApp({ client }: MapAppProps) {
         case "rpc.failed":
           setFailure(response.payload.reason);
           break;
+        case "map.excerpt": {
+          const { nodeId, text } = response.payload;
+
+          setExcerpts((held) => ({ ...held, [nodeId]: text }));
+          break;
+        }
         case "map.opened":
           // Asked for by the popup, never by this page.
           break;
@@ -96,10 +128,51 @@ export function MapApp({ client }: MapAppProps) {
     [client],
   );
 
+  const readExcerpt = useCallback(
+    (nodeId: string) => {
+      if (!askedExcerpts.current.has(nodeId)) {
+        askedExcerpts.current.add(nodeId);
+        client.send(buildRpcMessage("map.readExcerpt", { nodeId }));
+      }
+    },
+    [client],
+  );
+
+  const changeView = useCallback((next: MapView) => {
+    setView(next);
+    // The default view needs no fragment: the plain address already opens it.
+    window.history.replaceState(
+      null,
+      "",
+      next === DEFAULT_MAP_VIEW ? window.location.pathname : `#${next}`,
+    );
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || isTypingTarget(event.target)) {
+        return;
+      }
+
+      const picked = MAP_VIEWS[Number(event.key) - 1];
+
+      if (picked !== undefined) {
+        changeView(picked);
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [changeView]);
+
   return (
     <main className="flex h-screen flex-col bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
-      <header className="flex items-baseline gap-3 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
+      <header className="flex items-center gap-3 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
         <h1 className="text-sm font-semibold">Research map</h1>
+        <ViewSwitcher view={view} onChange={changeView} />
         {state.status === "ready" && (
           <span data-testid="map-session-title" className="truncate text-sm">
             {state.snapshot.session?.title}
@@ -126,8 +199,22 @@ export function MapApp({ client }: MapAppProps) {
             No active research session.
           </p>
         )}
-        {state.status === "ready" && (
+        {state.status === "ready" && view === "history" && (
+          <HistoryView snapshot={state.snapshot} onFocusTab={focusTab} />
+        )}
+        {state.status === "ready" && view === "tree" && (
           <ResearchMap snapshot={state.snapshot} onFocusTab={focusTab} />
+        )}
+        {state.status === "ready" && view === "anchors" && (
+          <AnchorView snapshot={state.snapshot} onFocusTab={focusTab} />
+        )}
+        {state.status === "ready" && view === "telemetry" && (
+          <TelemetryView
+            snapshot={state.snapshot}
+            excerpts={excerpts}
+            onReadExcerpt={readExcerpt}
+            onFocusTab={focusTab}
+          />
         )}
       </div>
     </main>

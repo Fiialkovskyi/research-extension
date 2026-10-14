@@ -116,7 +116,7 @@ describe("trackActiveDwell", () => {
       readNode("https://example.org/a"),
       readNode("https://example.org/b"),
     ]);
-    const activity = (await database.getAll(ACTIVITY_STORE)).sort((x, y) => x.at - y.at);
+    const activity = (await database.getAll(ACTIVITY_STORE)).toSorted((x, y) => x.at - y.at);
 
     expect(activity.map(({ nodeId, kind, at, endAt }) => ({ nodeId, kind, at, endAt }))).toEqual([
       { nodeId: a.id, kind: "focus", at: 1_000, endAt: 31_000 },

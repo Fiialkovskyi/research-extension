@@ -481,7 +481,7 @@ describe("applyDatabaseUpgrade", () => {
 
     expect(after.version).toBe(21);
     expect(await after.count(ACTIVITY_STORE)).toBe(0);
-    expect([...after.transaction(ACTIVITY_STORE).store.indexNames].sort()).toEqual([
+    expect([...after.transaction(ACTIVITY_STORE).store.indexNames].toSorted()).toEqual([
       "nodeId",
       "sessionId",
     ]);

@@ -64,21 +64,48 @@ const readSignals = async () => (await database.get(NODE_STORE, "a"))?.signals;
 
 describe("recordSignalBatch", () => {
   it("keeps the deepest scroll, even when a later batch reports less", async () => {
-    await recordSignalBatch(database, SENDER, { maxScroll: 0.8, copyEvents: 0, pasteEvents: 0 }, 1000);
-    await recordSignalBatch(database, SENDER, { maxScroll: 0.3, copyEvents: 0, pasteEvents: 0 }, 1000);
+    await recordSignalBatch(
+      database,
+      SENDER,
+      { maxScroll: 0.8, copyEvents: 0, pasteEvents: 0 },
+      1000,
+    );
+    await recordSignalBatch(
+      database,
+      SENDER,
+      { maxScroll: 0.3, copyEvents: 0, pasteEvents: 0 },
+      1000,
+    );
 
     expect(await readSignals()).toMatchObject({ maxScroll: 0.8 });
   });
 
   it("adds up copies across batches", async () => {
-    await recordSignalBatch(database, SENDER, { maxScroll: 0.1, copyEvents: 1, pasteEvents: 0 }, 1000);
-    await recordSignalBatch(database, SENDER, { maxScroll: 0.1, copyEvents: 2, pasteEvents: 0 }, 1000);
+    await recordSignalBatch(
+      database,
+      SENDER,
+      { maxScroll: 0.1, copyEvents: 1, pasteEvents: 0 },
+      1000,
+    );
+    await recordSignalBatch(
+      database,
+      SENDER,
+      { maxScroll: 0.1, copyEvents: 2, pasteEvents: 0 },
+      1000,
+    );
 
     expect(await readSignals()).toMatchObject({ copyEvents: 3 });
   });
 
   it("answers with the updated node", async () => {
-    expect(await recordSignalBatch(database, SENDER, { maxScroll: 0.5, copyEvents: 1, pasteEvents: 0 }, 1000)).toEqual({
+    expect(
+      await recordSignalBatch(
+        database,
+        SENDER,
+        { maxScroll: 0.5, copyEvents: 1, pasteEvents: 0 },
+        1000,
+      ),
+    ).toEqual({
       node: expect.objectContaining({
         id: "a",
         signals: expect.objectContaining({ maxScroll: 0.5, copyEvents: 1 }),
@@ -101,13 +128,18 @@ describe("recordSignalBatch", () => {
   });
 
   it("adds up pastes, and logs each copy and paste when the batch arrived", async () => {
-    await recordSignalBatch(database, SENDER, { maxScroll: 0.1, copyEvents: 1, pasteEvents: 2 }, 5000);
+    await recordSignalBatch(
+      database,
+      SENDER,
+      { maxScroll: 0.1, copyEvents: 1, pasteEvents: 2 },
+      5000,
+    );
 
     expect(await readSignals()).toMatchObject({ copyEvents: 1, pasteEvents: 2 });
     expect(
-      (await database.getAll(ACTIVITY_STORE)).map(({ nodeId, kind, at }) => ({ nodeId, kind, at })).sort(
-        (x, y) => x.kind.localeCompare(y.kind),
-      ),
+      (await database.getAll(ACTIVITY_STORE))
+        .map(({ nodeId, kind, at }) => ({ nodeId, kind, at }))
+        .toSorted((x, y) => x.kind.localeCompare(y.kind)),
     ).toEqual([
       { nodeId: "a", kind: "copy", at: 5000 },
       { nodeId: "a", kind: "paste", at: 5000 },
