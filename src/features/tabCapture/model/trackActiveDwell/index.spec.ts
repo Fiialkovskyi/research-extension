@@ -8,6 +8,7 @@ import { followTabMembership } from "../followTabMembership";
 import type { CaptureTab } from "../../types";
 import { recordNavigation } from "../recordNavigation";
 import {
+  ACTIVITY_STORE,
   EDGE_STORE,
   NODE_STORE,
   openResearchDatabase,
@@ -27,6 +28,7 @@ beforeEach(async () => {
     database.clear(SESSION_STORE),
     database.clear(NODE_STORE),
     database.clear(EDGE_STORE),
+    database.clear(ACTIVITY_STORE),
   ]);
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -103,6 +105,30 @@ describe("trackActiveDwell", () => {
 
     expect(await readDwell("https://example.org/a")).toBe(2_000);
     expect(await readVisit()).toMatchObject({ since: 3_000, visitDwellMs: 2_000 });
+  });
+
+  it("logs each counted interval on the session's timeline", async () => {
+    await track(7, 1_000);
+    await track(8, 31_000);
+    await track(7, 61_000);
+
+    const [a, b] = await Promise.all([
+      readNode("https://example.org/a"),
+      readNode("https://example.org/b"),
+    ]);
+    const activity = (await database.getAll(ACTIVITY_STORE)).sort((x, y) => x.at - y.at);
+
+    expect(activity.map(({ nodeId, kind, at, endAt }) => ({ nodeId, kind, at, endAt }))).toEqual([
+      { nodeId: a.id, kind: "focus", at: 1_000, endAt: 31_000 },
+      { nodeId: b.id, kind: "focus", at: 31_000, endAt: 61_000 },
+    ]);
+  });
+
+  it("logs nothing for an interval left open by a previous run", async () => {
+    await track(7, 1_000);
+    await track(7, 5 * MINUTE, true);
+
+    expect(await database.count(ACTIVITY_STORE)).toBe(0);
   });
 
   it("caps one uninterrupted stretch at ten minutes", async () => {

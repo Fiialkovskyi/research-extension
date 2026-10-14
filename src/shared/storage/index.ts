@@ -14,6 +14,7 @@
  */
 
 export {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -40,7 +41,9 @@ export {
   VECTOR_STORE,
 } from "./constants";
 export type {
+  ActivityKind,
   ConformanceStatus,
+  StoredActivity,
   StoredCluster,
   StoredClustering,
   EdgeKind,

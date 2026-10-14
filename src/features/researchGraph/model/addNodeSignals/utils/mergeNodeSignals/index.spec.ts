@@ -18,6 +18,7 @@ const node: StoredNode = {
     activeDwellMs: 1000,
     maxScroll: 0.8,
     copyEvents: 1,
+    pasteEvents: 0,
     focusCount: 2,
     revisitCount: 0,
     quickReturnCount: 0,
@@ -33,6 +34,7 @@ describe("mergeNodeSignals", () => {
       mergeNodeSignals(node, {
         activeDwellMs: 500,
         copyEvents: 2,
+        pasteEvents: 0,
         focusCount: 1,
         revisitCount: 1,
         quickReturnCount: 1,
@@ -41,6 +43,7 @@ describe("mergeNodeSignals", () => {
       activeDwellMs: 1500,
       maxScroll: 0.8,
       copyEvents: 3,
+      pasteEvents: 0,
       focusCount: 3,
       revisitCount: 1,
       quickReturnCount: 1,

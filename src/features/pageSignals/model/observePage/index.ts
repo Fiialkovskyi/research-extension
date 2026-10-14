@@ -33,13 +33,13 @@ type MarkedWindow = Window & { [OBSERVED_MARKER]?: boolean };
 
 /**
  * Observes a session page: how far it was scrolled and how often it was
- * copied from, sent to the background in batches (REQ-CAP-005), and its
+ * copied from and pasted into, sent to the background in batches (REQ-CAP-005), and its
  * readable text once, when the background asks for it (REQ-CAP-006).
  *
  * Kept cheap on the page's main thread: a scroll event only asks for a frame,
  * and the frame does the one layout read. The clipboard, the selection and
- * anything typed are never read; a copy is counted, nothing more, and only a
- * copy the user made — a page cannot fake one.
+ * anything typed are never read; a copy or paste is counted, nothing more, and
+ * only one the user made — a page cannot fake one.
  *
  * @returns A function that stops observing.
  */
@@ -56,6 +56,7 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
   let maxScroll = 0;
   let sentScroll = 0;
   let copyEvents = 0;
+  let pasteEvents = 0;
   let isFramePending = false;
   let timer: number | undefined;
   let hasExtracted = false;
@@ -73,14 +74,15 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
       timer = undefined;
     }
 
-    if (maxScroll <= sentScroll && copyEvents === 0) {
+    if (maxScroll <= sentScroll && copyEvents === 0 && pasteEvents === 0) {
       return Promise.resolve();
     }
 
-    const batch = { maxScroll, copyEvents };
+    const batch = { maxScroll, copyEvents, pasteEvents };
 
     sentScroll = maxScroll;
     copyEvents = 0;
+    pasteEvents = 0;
 
     return send(buildRpcMessage("signal.batch", batch)).then(
       (answer) => {
@@ -132,6 +134,13 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
     }
   };
 
+  const handlePaste = (event: Event): void => {
+    if (event.isTrusted) {
+      pasteEvents += 1;
+      schedule();
+    }
+  };
+
   const handleVisibilityChange = (): void => {
     if (document.visibilityState === "hidden") {
       void flush();
@@ -177,15 +186,17 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
     return Promise.resolve(buildRpcMessage("content.extracting", {}));
   });
 
-  // Capture phase for copy, so a page that stops the event still has it counted.
+  // Capture phase for copy and paste, so a page that stops the event still has it counted.
   window.addEventListener("scroll", handleScroll, { passive: true });
   window.addEventListener("copy", handleCopy, true);
+  window.addEventListener("paste", handlePaste, true);
   window.addEventListener("pagehide", handlePageHide);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   const stop = (): void => {
     window.removeEventListener("scroll", handleScroll);
     window.removeEventListener("copy", handleCopy, true);
+    window.removeEventListener("paste", handlePaste, true);
     window.removeEventListener("pagehide", handlePageHide);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     stopListening();

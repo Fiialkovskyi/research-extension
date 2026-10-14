@@ -25,6 +25,7 @@ export const mergeNodeSignals = (node: StoredNode, observation: SignalObservatio
       activeDwellMs: signals.activeDwellMs + (observation.activeDwellMs ?? 0),
       maxScroll: Math.max(signals.maxScroll, observation.maxScroll ?? 0),
       copyEvents: signals.copyEvents + (observation.copyEvents ?? 0),
+      pasteEvents: signals.pasteEvents + (observation.pasteEvents ?? 0),
       focusCount: signals.focusCount + (observation.focusCount ?? 0),
       revisitCount: signals.revisitCount + (observation.revisitCount ?? 0),
       quickReturnCount: signals.quickReturnCount + (observation.quickReturnCount ?? 0),

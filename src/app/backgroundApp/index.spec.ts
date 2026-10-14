@@ -1137,6 +1137,7 @@ describe("the research map through the background", () => {
       nodes: [],
       edges: [],
       clusters: [],
+      activity: [],
     });
   });
 
@@ -1208,6 +1209,7 @@ describe("the research map through the background", () => {
       nodes: [],
       edges: [],
       clusters: [],
+      activity: [],
     });
   });
 
@@ -1334,7 +1336,7 @@ describe("the research map through the background", () => {
 
 /** A batch as a session page's observer sends it. */
 const batch = (maxScroll: number, copyEvents = 0) =>
-  buildRpcMessage("signal.batch", { maxScroll, copyEvents });
+  buildRpcMessage("signal.batch", { maxScroll, copyEvents, pasteEvents: 0 });
 
 const FROM_PAGE_A = { tabId: 7, url: "https://example.org/a" };
 
@@ -2222,6 +2224,7 @@ const createReattachApp = async () => {
       activeDwellMs: 0,
       maxScroll: 0,
       copyEvents: 0,
+      pasteEvents: 0,
       focusCount: 1,
       revisitCount: 0,
       quickReturnCount: 0,

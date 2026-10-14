@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { deleteSession } from ".";
 import {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -44,6 +45,7 @@ const STORES = [
   CLUSTERING_STORE,
   SESSION_STORE,
   SPACE_STORE,
+  ACTIVITY_STORE,
 ] as const;
 
 /** One record of every session-scoped kind for `sessionId`. */
@@ -87,6 +89,7 @@ const record = async (sessionId: string) => {
   await database.put(TABLE_COLUMNS_STORE, { id: `${sessionId}:product`, sessionId } as never);
   await database.put(REJECTION_STORE, { id: `${sessionId}:k`, sessionId } as never);
   await database.put(QUESTION_STORE, { sessionId } as never);
+  await database.put(ACTIVITY_STORE, { id: `${sessionId}-a`, sessionId, nodeId: "n" } as never);
   await database.put(JOB_STORE, {
     id: `${sessionId}-j`,
     sessionId,
@@ -130,6 +133,7 @@ describe("deleteSession", () => {
     expect(await database.count(TABLE_COLUMNS_STORE)).toBe(1);
     expect(await database.count(REJECTION_STORE)).toBe(1);
     expect(await database.count(QUESTION_STORE)).toBe(1);
+    expect(await database.count(ACTIVITY_STORE)).toBe(1);
     expect(await database.count(SPACE_STORE)).toBe(1);
   });
 

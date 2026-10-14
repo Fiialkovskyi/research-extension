@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   EDGE_STORE,
   ENTITY_STORE,
@@ -22,7 +23,7 @@ const isJobFor = (payload: unknown, snapshotId: string): boolean =>
 
 /**
  * Deletes a page and everything derived from it, in one transaction
- * (REQ-STO-008): the node, every edge touching it, its snapshot, its chunks,
+ * (REQ-STO-008): the node, every edge touching it, its activity, its snapshot, its chunks,
  * its vectors in every space, its facts and their extraction record, the
  * entities left with no facts, and the jobs working on it. Pages reached from
  * it keep their own records.
@@ -44,6 +45,7 @@ export const deleteNode = async (
       EXTRACTION_STORE,
       ENTITY_STORE,
       JOB_STORE,
+      ACTIVITY_STORE,
     ],
     "readwrite",
   );
@@ -59,11 +61,13 @@ export const deleteNode = async (
   const vectors = transaction.objectStore(VECTOR_STORE);
   const facts = transaction.objectStore(FACT_STORE);
   const extractions = transaction.objectStore(EXTRACTION_STORE);
-  const [sessionEdges, vectorKeys, pageFacts, extractionKeys] = await Promise.all([
+  const activity = transaction.objectStore(ACTIVITY_STORE);
+  const [sessionEdges, vectorKeys, pageFacts, extractionKeys, activityKeys] = await Promise.all([
     edges.index("sessionId").getAll(node.sessionId),
     vectors.index("nodeId").getAllKeys(nodeId),
     facts.index("nodeId").getAll(nodeId),
     extractions.index("nodeId").getAllKeys(nodeId),
+    activity.index("nodeId").getAllKeys(nodeId),
   ]);
   const deletions: Promise<unknown>[] = [
     nodes.delete(nodeId),
@@ -73,6 +77,7 @@ export const deleteNode = async (
     ...vectorKeys.map((key) => vectors.delete(key)),
     ...pageFacts.map(({ id }) => facts.delete(id)),
     ...extractionKeys.map((key) => extractions.delete(key)),
+    ...activityKeys.map((key) => activity.delete(key)),
   ];
 
   if (node.snapshotId !== undefined) {

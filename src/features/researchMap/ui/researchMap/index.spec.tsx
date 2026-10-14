@@ -70,6 +70,10 @@ const buildNode = (id: string, overrides: Partial<MapNode> = {}): MapNode => ({
   tabState: "open",
   engagement: "skimmed",
   copyEvents: 0,
+  pasteEvents: 0,
+  activeDwellMs: 0,
+  focusCount: 0,
+  revisitCount: 0,
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",
@@ -82,6 +86,7 @@ const snapshot: GraphSnapshot = {
   nodes: [buildNode("a", { tabState: "closed" }), buildNode("b", { tabId: 7, parentNodeId: "a" })],
   edges: [{ id: "a|b|sameTab", from: "a", to: "b", kind: "sameTab" }],
   clusters: [],
+  activity: [],
 };
 
 const findNode = (id: string) => {

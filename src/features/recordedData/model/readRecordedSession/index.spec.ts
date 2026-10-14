@@ -25,6 +25,7 @@ const SIGNALS = {
   activeDwellMs: 120_000,
   maxScroll: 0.8,
   copyEvents: 1,
+  pasteEvents: 0,
   focusCount: 3,
   revisitCount: 1,
   quickReturnCount: 0,

@@ -126,7 +126,7 @@ describe("observePage", () => {
     elapse();
 
     expect(sent).toEqual([
-      expect.objectContaining({ type: "signal.batch", payload: { maxScroll: 0.2, copyEvents: 0 } }),
+      expect.objectContaining({ type: "signal.batch", payload: { maxScroll: 0.2, copyEvents: 0, pasteEvents: 0 } }),
     ]);
   });
 
@@ -152,7 +152,7 @@ describe("observePage", () => {
     paint();
     elapse();
 
-    expect(sent.at(-1)?.payload).toEqual({ maxScroll: 0.8, copyEvents: 0 });
+    expect(sent.at(-1)?.payload).toEqual({ maxScroll: 0.8, copyEvents: 0, pasteEvents: 0 });
   });
 
   it("sends at most one batch per 2 s of continuous scrolling", () => {
@@ -207,7 +207,18 @@ describe("observePage", () => {
     page.window.fire("copy", false);
     elapse();
 
-    expect(sent.at(-1)?.payload).toEqual({ maxScroll: 0.2, copyEvents: 2 });
+    expect(sent.at(-1)?.payload).toEqual({ maxScroll: 0.2, copyEvents: 2, pasteEvents: 0 });
+  });
+
+  it("counts pastes the user made, and only those", () => {
+    observe();
+    paint();
+    elapse();
+    page.window.fire("paste");
+    page.window.fire("paste", false);
+    elapse();
+
+    expect(sent.at(-1)?.payload).toEqual({ maxScroll: 0.2, copyEvents: 0, pasteEvents: 1 });
   });
 
   it("sends copies since the last batch, not a running total", () => {
@@ -323,5 +334,6 @@ describe("observePage", () => {
 
     expect(page.window.listeners.get("scroll")?.size).toBe(1);
     expect(page.window.listeners.get("copy")?.size).toBe(1);
+    expect(page.window.listeners.get("paste")?.size).toBe(1);
   });
 });

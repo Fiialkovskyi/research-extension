@@ -1,5 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
+import { recordFocusInterval } from "@/features/activityLog";
 import { addNodeSignals, readTabNode } from "@/features/researchGraph";
 import { getActiveSession, setSessionFocus } from "@/features/researchSession";
 import { ENGAGEMENT_RULES } from "@/shared/config";
@@ -78,6 +79,13 @@ export const trackActiveDwell = async ({
       await addNodeSignals(database, visit.nodeId, {
         activeDwellMs: intervalMs,
         ...(isRevisitReached ? { revisitCount: 1 } : {}),
+      });
+      // The same capped interval, so the timeline and the dwell total agree.
+      await recordFocusInterval(database, {
+        sessionId: session.id,
+        nodeId: visit.nodeId,
+        startedAt: visit.since,
+        endedAt: visit.since + intervalMs,
       });
       visit = {
         ...visit,

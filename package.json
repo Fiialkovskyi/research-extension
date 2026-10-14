@@ -47,6 +47,7 @@
     "@wdio/mocha-framework": "^10.0.1",
     "@wdio/spec-reporter": "^10.0.1",
     "@wxt-dev/module-react": "^1.2.2",
+    "axe-core": "^4.10.3",
     "fake-indexeddb": "^6.2.5",
     "geckodriver": "^7.0.0",
     "graphology-types": "^0.24.8",

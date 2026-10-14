@@ -31,6 +31,7 @@ const node: StoredNode = {
     activeDwellMs: 5,
     maxScroll: 0.5,
     copyEvents: 1,
+    pasteEvents: 0,
     focusCount: 2,
     revisitCount: 0,
     quickReturnCount: 0,
@@ -65,6 +66,10 @@ describe("buildGraphSnapshot", () => {
           tabState: "closed",
           engagement: "deep_read",
           copyEvents: 1,
+          pasteEvents: 0,
+          activeDwellMs: 5,
+          focusCount: 2,
+          revisitCount: 0,
           parentNodeId: null,
           openerNodeId: null,
           transitionType: "typed",
@@ -73,6 +78,7 @@ describe("buildGraphSnapshot", () => {
       ],
       edges: [{ id: "node-a|node-b|sameTab", from: "node-a", to: "node-b", kind: "sameTab" }],
       clusters: [],
+      activity: [],
     });
   });
 
@@ -81,6 +87,23 @@ describe("buildGraphSnapshot", () => {
 
     expect(buildGraphSnapshot(session, { nodes: [node], edges: [] }, clusters).clusters).toEqual(
       clusters,
+    );
+  });
+
+  it("carries the session's activity as times and pages only", () => {
+    const activity = [
+      {
+        id: "activity-1",
+        sessionId: "session-1",
+        nodeId: "node-a",
+        kind: "focus" as const,
+        at: 100,
+        endAt: 900,
+      },
+    ];
+
+    expect(buildGraphSnapshot(session, { nodes: [node], edges: [] }, [], activity).activity).toEqual(
+      [{ nodeId: "node-a", kind: "focus", at: 100, endAt: 900 }],
     );
   });
 
@@ -101,6 +124,7 @@ describe("buildGraphSnapshot", () => {
         activeDwellMs: 3_000,
         maxScroll: 0,
         copyEvents: 0,
+        pasteEvents: 0,
         focusCount: 1,
         revisitCount: 0,
         quickReturnCount: 0,
@@ -136,6 +160,7 @@ describe("buildGraphSnapshot", () => {
       nodes: [],
       edges: [],
       clusters: [],
+      activity: [],
     });
   });
 

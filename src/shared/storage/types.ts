@@ -2,6 +2,7 @@ import type { DBSchema } from "idb";
 
 import type { InferenceDevice, ModelManifest } from "../modelManifest";
 import type {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -204,6 +205,8 @@ export interface StoredNodeSignals {
   maxScroll: number;
   /** Copy events seen. Only their number: the copied text is never read. */
   copyEvents: number;
+  /** Paste events seen. Only their number: the pasted text is never read. */
+  pasteEvents: number;
   focusCount: number;
   revisitCount: number;
   /** First visits, reached from a search, that went straight back to a search. */
@@ -257,6 +260,26 @@ export interface StoredEdge {
   to: string;
   weight: number;
   createdAt: number;
+}
+
+/** What an activity record says happened on a page. */
+export type ActivityKind = "focus" | "copy" | "paste";
+
+/**
+ * One moment of a session's activity, kept so its timeline can be drawn: an
+ * interval of active reading, or a copy or paste. Times and a page, nothing
+ * the page showed or the user copied.
+ */
+export interface StoredActivity {
+  /** A UUID. */
+  id: string;
+  sessionId: string;
+  nodeId: string;
+  kind: ActivityKind;
+  /** When it happened; for `focus`, when the interval began. */
+  at: number;
+  /** When a `focus` interval ended. Equal to `at` for a copy or a paste. */
+  endAt: number;
 }
 
 /** Where a job is in its life. `failed` is final until the work is asked for again. */
@@ -704,5 +727,10 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [BLOCKED_SITES_STORE]: {
     key: string;
     value: StoredBlockedSites;
+  };
+  [ACTIVITY_STORE]: {
+    key: string;
+    value: StoredActivity;
+    indexes: { sessionId: string; nodeId: string };
   };
 }

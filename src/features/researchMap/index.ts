@@ -19,6 +19,7 @@ export {
 } from "./schemas";
 export type {
   GraphSnapshot,
+  MapActivity,
   MapCluster,
   MapEdge,
   MapNode,

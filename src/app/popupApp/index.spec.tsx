@@ -110,6 +110,10 @@ const node = (id: string, overrides: Record<string, unknown> = {}) => ({
   tabState: "open",
   engagement: "skimmed",
   copyEvents: 0,
+  pasteEvents: 0,
+  activeDwellMs: 0,
+  focusCount: 0,
+  revisitCount: 0,
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",
@@ -123,6 +127,7 @@ const snapshot = (...nodes: ReturnType<typeof node>[]) =>
     nodes,
     edges: [],
     clusters: [],
+    activity: [],
   });
 
 /** A background with one saved session, and an active one until saved. */

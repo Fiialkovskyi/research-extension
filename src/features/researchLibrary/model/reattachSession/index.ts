@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -21,6 +22,7 @@ const SESSION_SCOPED_STORES = [
   CHUNK_STORE,
   VECTOR_STORE,
   JOB_STORE,
+  ACTIVITY_STORE,
 ] as const;
 
 export interface ReattachSessionOptions {

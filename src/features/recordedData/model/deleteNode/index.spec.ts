@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { deleteNode } from ".";
 import { recordSnapshot } from "@/features/pageSnapshots";
 import {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   EDGE_STORE,
   ENTITY_STORE,
@@ -39,6 +40,7 @@ const node = (id: string, overrides: Partial<StoredNode> = {}): StoredNode => ({
     activeDwellMs: 0,
     maxScroll: 0,
     copyEvents: 1,
+    pasteEvents: 0,
     focusCount: 1,
     revisitCount: 0,
     quickReturnCount: 0,
@@ -72,6 +74,7 @@ beforeEach(async () => {
         ENTITY_STORE,
         JOB_STORE,
         KEY_STORE,
+        ACTIVITY_STORE,
       ] as const
     ).map((store) => database.clear(store)),
   );
@@ -134,6 +137,22 @@ beforeEach(async () => {
       nodeId: "a",
       sessionId: "session-1",
     } as never),
+    database.put(ACTIVITY_STORE, {
+      id: "activity-a",
+      sessionId: "session-1",
+      nodeId: "a",
+      kind: "focus",
+      at: 1,
+      endAt: 2,
+    }),
+    database.put(ACTIVITY_STORE, {
+      id: "activity-b",
+      sessionId: "session-1",
+      nodeId: "b",
+      kind: "copy",
+      at: 3,
+      endAt: 3,
+    }),
     database.put(FACT_STORE, { id: "other:0:0", nodeId: "b", sessionId: "session-1" } as never),
     database.put(EXTRACTION_STORE, { snapshotId, nodeId: "a", sessionId: "session-1" } as never),
     database.put(JOB_STORE, {
@@ -188,6 +207,7 @@ describe("deleteNode", () => {
     expect((await database.getAll(JOB_STORE)).map(({ id }) => id)).toEqual(["job-b"]);
     expect((await database.getAll(FACT_STORE)).map(({ nodeId }) => nodeId)).toEqual(["b"]);
     expect(await database.count(EXTRACTION_STORE)).toBe(0);
+    expect((await database.getAll(ACTIVITY_STORE)).map(({ id }) => id)).toEqual(["activity-b"]);
   });
 
   it("removes the entities only page A held, and frees those merged into them", async () => {

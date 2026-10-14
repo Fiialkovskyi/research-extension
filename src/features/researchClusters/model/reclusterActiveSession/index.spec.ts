@@ -33,6 +33,7 @@ const page = (id: string, createdAt: number): StoredNode => ({
     activeDwellMs: 20_000,
     maxScroll: 0.5,
     copyEvents: 0,
+    pasteEvents: 0,
     focusCount: 1,
     revisitCount: 0,
     quickReturnCount: 0,

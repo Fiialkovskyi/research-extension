@@ -668,6 +668,8 @@ Every requirement ID maps to at least one automated test, except UX requirements
 
 As built (`add-egress-suite`), the egress check is `e2e/specs/egress.e2e.ts`. It does not use a proxy. It records, from Firefox's chrome context, every HTTP request whose principal is the add-on. It proves that it sees one, then runs a session and asserts none, apart from tabs the add-on opened at the user's request.
 
+As built (`add-accessibility-audit`), `e2e/specs/accessibility.e2e.ts` runs axe-core inside each extension page in Firefox against WCAG 2.0 and 2.1 A and AA, with a planted-violation control. Keyboard, screen-reader and dark-theme checks remain manual.
+
 ## 14. Implementation tasks
 
 Work proceeds in six milestones. M0 spikes de-risk platform assumptions before anything else is built, and every task names the requirements it closes.
@@ -720,7 +722,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 **M6: Hardening and beta**
 
-- [ ] Egress test suite, performance gates, accessibility audit. (Section 13) The egress suite is built (`add-egress-suite`). It found, and the change fixed, Ollama being polled once page access was allowed. Performance gates and the accessibility audit are still open.
+- [ ] Egress test suite, performance gates, accessibility audit. (Section 13) The egress suite is built (`add-egress-suite`). It found, and the change fixed, Ollama being polled once page access was allowed. The accessibility audit is built too (`add-accessibility-audit`): axe against WCAG 2 A and AA on every extension page. Performance gates are still open.
 - [ ] Passphrase lock and denylist editor. (SEC-006, SEC-007) The denylist editor is built (`add-site-denylist-editor`); the passphrase lock is still open.
 - [ ] Page access granted at install: move `<all_urls>` from `optional_host_permissions` to `host_permissions`, so a session no longer needs an "Allow page access" click; keep the popup's re-request for access revoked in about:addons. Open details: the stricter install prompt and AMO review, whether temporary installs (`npm run dev`) get the grant, and the `extension-shell` and `research-session` spec changes. Added by the maintainer's request (2026-10-13). (RT-002)
 - [ ] AMO submission with source and build instructions; beta onboarding. (RT-007)

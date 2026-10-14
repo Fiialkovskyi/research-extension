@@ -1,23 +1,25 @@
 import { getNodeEngagement, type SessionGraph } from "@/features/researchGraph";
-import type { StoredCluster, StoredSession } from "@/shared/storage";
+import type { StoredActivity, StoredCluster, StoredSession } from "@/shared/storage";
 
 import type { GraphSnapshot } from "../../types";
 
 /**
  * Builds what the map is told about the active session's graph.
  *
- * Records are reduced to the fields the map draws, so signals and anything the
- * background later stores on a node stay out of the protocol; the engagement
- * state the signals add up to is derived here, with the session's focus. With
- * no active session there is nothing to draw, whatever graph was passed.
+ * Records are reduced to the fields the map draws, so anything the background
+ * later stores on a node stays out of the protocol; the engagement state the
+ * signals add up to is derived here, with the session's focus. The activity
+ * log comes along as times and pages, for the history and telemetry views.
+ * With no active session there is nothing to draw, whatever graph was passed.
  */
 export const buildGraphSnapshot = (
   session: StoredSession | undefined,
   graph: SessionGraph,
   clusters: readonly StoredCluster[] = [],
+  activity: readonly StoredActivity[] = [],
 ): GraphSnapshot => {
   if (session === undefined) {
-    return { session: null, nodes: [], edges: [], clusters: [] };
+    return { session: null, nodes: [], edges: [], clusters: [], activity: [] };
   }
 
   return {
@@ -33,6 +35,10 @@ export const buildGraphSnapshot = (
       tabState: node.tabState,
       engagement: getNodeEngagement(node, { isFocused: session.focus?.nodeId === node.id }),
       copyEvents: node.signals.copyEvents,
+      pasteEvents: node.signals.pasteEvents,
+      activeDwellMs: node.signals.activeDwellMs,
+      focusCount: node.signals.focusCount,
+      revisitCount: node.signals.revisitCount,
       parentNodeId: node.parentNodeId,
       openerNodeId: node.openerNodeId,
       transitionType: node.transitionType,
@@ -44,5 +50,6 @@ export const buildGraphSnapshot = (
       label,
       memberIds: [...memberIds],
     })),
+    activity: activity.map(({ nodeId, kind, at, endAt }) => ({ nodeId, kind, at, endAt })),
   };
 };

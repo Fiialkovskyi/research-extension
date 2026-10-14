@@ -17,6 +17,13 @@ export const mapNodeSchema = v.object({
   engagement: v.picklist(ENGAGEMENT_STATES),
   /** Copies the user made from the page: the sidebar marks a page copied from. */
   copyEvents: v.number(),
+  /** Pastes the user made into the page: the anchor view marks a page written in. */
+  pasteEvents: v.number(),
+  /** Active reading time, which sizes a page in the anchor view. */
+  activeDwellMs: v.number(),
+  /** Times the page was focused, and returned to after being read. */
+  focusCount: v.number(),
+  revisitCount: v.number(),
   parentNodeId: v.nullable(v.string()),
   openerNodeId: v.nullable(v.string()),
   transitionType: v.string(),
@@ -39,6 +46,18 @@ export const mapClusterSchema = v.object({
   memberIds: v.array(v.string()),
 });
 
+/**
+ * A moment of the session's activity: an interval of reading a page, or a copy
+ * or paste on it. Times only; what was read, copied or pasted is not sent.
+ */
+export const mapActivitySchema = v.object({
+  nodeId: v.string(),
+  kind: v.picklist(["focus", "copy", "paste"]),
+  at: v.number(),
+  /** When a reading interval ended; equal to `at` for a copy or paste. */
+  endAt: v.number(),
+});
+
 /** The active session's graph at one moment, or no session and nothing to draw. */
 export const graphSnapshotSchema = v.object({
   session: v.nullable(v.object({ id: v.string(), title: v.string() })),
@@ -46,6 +65,8 @@ export const graphSnapshotSchema = v.object({
   edges: v.array(mapEdgeSchema),
   /** The session's latest clusters; empty before it is first clustered. */
   clusters: v.array(mapClusterSchema),
+  /** The session's activity, earliest first; empty before it was first logged. */
+  activity: v.array(mapActivitySchema),
 });
 
 export const researchMapRequestSchemas = {

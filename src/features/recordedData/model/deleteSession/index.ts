@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -33,6 +34,7 @@ const SESSION_SCOPED_STORES = [
   TABLE_COLUMNS_STORE,
   REJECTION_STORE,
   JOB_STORE,
+  ACTIVITY_STORE,
 ] as const;
 
 /**

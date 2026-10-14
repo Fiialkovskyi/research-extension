@@ -14,6 +14,10 @@ const buildNode = (id: string, overrides: Partial<MapNode> = {}): MapNode => ({
   tabState: "open",
   engagement: "skimmed",
   copyEvents: 0,
+  pasteEvents: 0,
+  activeDwellMs: 0,
+  focusCount: 0,
+  revisitCount: 0,
   parentNodeId: null,
   openerNodeId: null,
   transitionType: "link",
@@ -34,6 +38,7 @@ const snapshot: GraphSnapshot = {
     { id: "b|c|opener", from: "b", to: "c", kind: "opener" },
   ],
   clusters: [],
+  activity: [],
 };
 
 const readPosition = (layout: ReturnType<typeof buildMapLayout>, id: string) => {
@@ -162,7 +167,7 @@ describe("buildMapLayout", () => {
   });
 
   it("lays out nothing for an empty snapshot", () => {
-    expect(buildMapLayout({ session: null, nodes: [], edges: [], clusters: [] })).toEqual({
+    expect(buildMapLayout({ session: null, nodes: [], edges: [], clusters: [], activity: [] })).toEqual({
       nodes: [],
       edges: [],
     });

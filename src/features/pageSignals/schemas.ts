@@ -12,11 +12,13 @@ import { MAXIMUM_SNAPSHOT_BYTES } from "@/features/pageSnapshots";
 export const pageContentRequestSchemas = {
   /**
    * What the page saw since its last batch. `maxScroll` is a reading — the
-   * deepest point so far — and `copyEvents` a count since the last batch.
+   * deepest point so far — and `copyEvents` and `pasteEvents` counts since
+   * the last batch.
    */
   "signal.batch": v.object({
     maxScroll: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
     copyEvents: v.pipe(v.number(), v.integer(), v.minValue(0)),
+    pasteEvents: v.pipe(v.number(), v.integer(), v.minValue(0)),
   }),
   /** The page's readable text, asked for when its node became deep read. */
   "content.extracted": v.object({

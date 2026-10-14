@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
 import {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -457,6 +458,36 @@ describe("applyDatabaseUpgrade", () => {
     expect(after.version).toBe(20);
     expect(await after.count(BLOCKED_SITES_STORE)).toBe(0);
     expect(after.transaction(BLOCKED_SITES_STORE).store.keyPath).toBe("id");
+
+    after.close();
+  });
+
+  it("adds an activity store indexed by session and page, and zero pastes to a version-20 profile's nodes", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 20);
+    const signals = {
+      activeDwellMs: 4,
+      maxScroll: 0.5,
+      copyEvents: 1,
+      focusCount: 2,
+      revisitCount: 0,
+      quickReturnCount: 0,
+    };
+
+    await before.put(NODE_STORE, { id: "node-1", sessionId: "s", tabId: 7, signals } as never);
+    before.close();
+
+    const after = await openAt(name, 21);
+
+    expect(after.version).toBe(21);
+    expect(await after.count(ACTIVITY_STORE)).toBe(0);
+    expect([...after.transaction(ACTIVITY_STORE).store.indexNames].sort()).toEqual([
+      "nodeId",
+      "sessionId",
+    ]);
+    expect(await after.get(NODE_STORE, "node-1")).toMatchObject({
+      signals: { ...signals, pasteEvents: 0 },
+    });
 
     after.close();
   });

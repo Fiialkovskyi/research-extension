@@ -1,6 +1,7 @@
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import {
+  ACTIVITY_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -194,6 +195,32 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
   },
   20: (database) => {
     database.createObjectStore(BLOCKED_SITES_STORE, { keyPath: "id" });
+  },
+  21: (database, transaction) => {
+    const activity = database.createObjectStore(ACTIVITY_STORE, { keyPath: "id" });
+
+    activity.createIndex("sessionId", "sessionId");
+    activity.createIndex("nodeId", "nodeId");
+
+    // Nodes recorded before pastes were counted had none; zero says exactly
+    // that. Rewritten inside the version-change transaction, like 9.
+    const nodes = transaction.objectStore(NODE_STORE);
+    const rewrite = async (): Promise<void> => {
+      let cursor = await nodes.openCursor();
+
+      while (cursor !== null) {
+        if (cursor.value.signals.pasteEvents === undefined) {
+          await cursor.update({
+            ...cursor.value,
+            signals: { ...cursor.value.signals, pasteEvents: 0 },
+          });
+        }
+
+        cursor = await cursor.continue();
+      }
+    };
+
+    void rewrite();
   },
 };
 

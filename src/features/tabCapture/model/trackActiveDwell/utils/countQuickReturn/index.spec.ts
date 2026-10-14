@@ -28,6 +28,7 @@ const buildNode = (id: string, overrides: Partial<StoredNode> = {}): StoredNode 
     activeDwellMs: 4_000,
     maxScroll: 0.3,
     copyEvents: 0,
+    pasteEvents: 0,
     focusCount: 1,
     revisitCount: 0,
     quickReturnCount: 0,

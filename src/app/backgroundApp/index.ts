@@ -94,6 +94,7 @@ import {
   runClusterSummaryJob,
   SUMMARIZE_CLUSTER_JOB,
 } from "@/features/clusterSummaries";
+import { readSessionActivity } from "@/features/activityLog";
 import { readComparisonTable, saveTableColumns } from "@/features/comparisonTable";
 import { openGapSearch, readResearchGaps } from "@/features/researchGaps";
 import { rejectFacts, restoreRejections } from "@/features/factRejections";
@@ -247,12 +248,13 @@ const readGraphSnapshot = async (
     return buildGraphSnapshot(undefined, { nodes: [], edges: [] });
   }
 
-  const [graph, clustering] = await Promise.all([
+  const [graph, clustering, activity] = await Promise.all([
     readSessionGraph(openedDatabase, session.id),
     readClustering(openedDatabase, session.id),
+    readSessionActivity(openedDatabase, session.id),
   ]);
 
-  return buildGraphSnapshot(session, graph, clustering?.clusters);
+  return buildGraphSnapshot(session, graph, clustering?.clusters, activity);
 };
 
 export const createBackgroundApp = (dependencies: BackgroundDependencies): BackgroundApp => {
@@ -1115,7 +1117,12 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     await captureAndPush(async (openedDatabase) => {
       switch (request.type) {
         case "signal.batch": {
-          const target = await recordSignalBatch(openedDatabase, sender, request.payload);
+          const target = await recordSignalBatch(
+            openedDatabase,
+            sender,
+            request.payload,
+            getNow(),
+          );
 
           if (target.node === undefined) {
             answer = buildRpcMessage("signal.dropped", { stop: target.stop });
