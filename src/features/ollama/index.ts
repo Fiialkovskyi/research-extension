@@ -16,6 +16,7 @@ export { createOllamaEmbedder } from "./model/createOllamaEmbedder";
 export { createOllamaGenerator } from "./model/createOllamaGenerator";
 export type { OllamaGenerator } from "./model/createOllamaGenerator";
 export { isLocalAiPaused } from "./model/isLocalAiPaused";
+export { isOllamaAccessGranted } from "./model/isOllamaAccessGranted";
 export { findOllamaProfile } from "./model/findOllamaProfile";
 export { listOllamaModelEntries } from "./model/listOllamaModelEntries";
 export { matchesOllamaName } from "./model/matchesOllamaName";

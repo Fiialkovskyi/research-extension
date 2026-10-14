@@ -591,7 +591,7 @@ The only network traffic the extension originates is model downloads from Huggin
 **Requirements**
 
 - **REQ-SEC-001:** Extension pages SHALL use a CSP whose `connect-src` allows only `'self'`, the enumerated Hugging Face hosts, and the local inference server on loopback (`http://127.0.0.1:11434`). Workers inherit it.
-- **REQ-SEC-001a (local inference server):** The extension SHALL reach a local inference server (Ollama) only on loopback, only after the user grants its optional host permission from the options page, and SHALL send it nothing but the texts to embed or generate from and the model requests the user initiates. A model it serves SHALL be pinned to the digest the server reports and pass the conformance suite before use, like an installed model.
+- **REQ-SEC-001a (local inference server):** The extension SHALL reach a local inference server (Ollama) only on loopback, only after the user grants its optional host permission from the options page, and SHALL send it nothing but the texts to embed or generate from and the model requests the user initiates. A model it serves SHALL be pinned to the digest the server reports and pass the conformance suite before use, like an installed model. As built (`add-egress-suite`), the server counts as connected only when its own origin is among the granted host permissions; page access (`<all_urls>`), which also covers loopback, does not count.
 - **REQ-SEC-002:** Content scripts SHALL NOT call `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `EventSource`. Enforced by a lint rule and a bundle scan in CI.
 - **REQ-SEC-003:** Model downloads SHALL be user-initiated from the options page, send no cookies or identifiers (`credentials: "omit"`), and support offline install from local files (a folder picker, or a path given to the native host).
 - **REQ-SEC-004 (native host):** The native host SHALL communicate only over stdio native messaging, SHALL NOT open listening or outbound sockets except for user-initiated model downloads from Hugging Face, and SHALL default to `HF_HUB_OFFLINE=1` after install. Its manifest SHALL list only this extension's ID in `allowed_extensions`. Install locations: `~/.mozilla/native-messaging-hosts/` on Linux and `~/Library/Application Support/Mozilla/NativeMessagingHosts/` on macOS.
@@ -666,6 +666,8 @@ Every requirement ID maps to at least one automated test, except UX requirements
 | Lint and packaging       | `web-ext lint`, the addons-linter, custom ESLint rules (`no-direct-model-import`, no network in content scripts) | REQ-RT-006, REQ-RT-007, REQ-MOD-001, REQ-SEC-002                                                                                              |
 | Prompt evals             | A labeled fact-extraction set of 50 pages across 3 domains                                                       | Precision ≥ 0.9 and grounded rate ≥ 0.95 per prompt version and model profile; a regression blocks release                                    |
 
+As built (`add-egress-suite`), the egress check is `e2e/specs/egress.e2e.ts`. It does not use a proxy. It records, from Firefox's chrome context, every HTTP request whose principal is the add-on. It proves that it sees one, then runs a session and asserts none, apart from tabs the add-on opened at the user's request.
+
 ## 14. Implementation tasks
 
 Work proceeds in six milestones. M0 spikes de-risk platform assumptions before anything else is built, and every task names the requirements it closes.
@@ -718,7 +720,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 **M6: Hardening and beta**
 
-- [ ] Egress test suite, performance gates, accessibility audit. (Section 13)
+- [ ] Egress test suite, performance gates, accessibility audit. (Section 13) The egress suite is built (`add-egress-suite`). It found, and the change fixed, Ollama being polled once page access was allowed. Performance gates and the accessibility audit are still open.
 - [ ] Passphrase lock and denylist editor. (SEC-006, SEC-007) The denylist editor is built (`add-site-denylist-editor`); the passphrase lock is still open.
 - [ ] Page access granted at install: move `<all_urls>` from `optional_host_permissions` to `host_permissions`, so a session no longer needs an "Allow page access" click; keep the popup's re-request for access revoked in about:addons. Open details: the stricter install prompt and AMO review, whether temporary installs (`npm run dev`) get the grant, and the `extension-shell` and `research-session` spec changes. Added by the maintainer's request (2026-10-13). (RT-002)
 - [ ] AMO submission with source and build instructions; beta onboarding. (RT-007)

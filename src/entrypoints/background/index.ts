@@ -7,11 +7,12 @@ import { SUMMARIES_PAGE_PATH } from "@/features/clusterSummaries";
 import { HOLD_PAGE_PATH } from "@/features/diagnostics";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
 import { JOB_WAKE_ALARM } from "@/features/jobQueue";
+import { isOllamaAccessGranted } from "@/features/ollama";
 import { RECORDED_PAGE_PATH } from "@/features/recordedData";
 import { MAP_PAGE_PATH, openMapTab, readMapTab } from "@/features/researchMap";
 import { NO_TAB_GROUP } from "@/features/researchSession";
 import { readCaptureTab, readFocusedTab } from "@/features/tabCapture";
-import { ENGAGEMENT_RULES, LOCAL_INFERENCE_ORIGINS } from "@/shared/config";
+import { ENGAGEMENT_RULES } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import { collectPolicyViolations } from "@/shared/collectPolicyViolations";
 import { openResearchDatabase } from "@/shared/storage";
@@ -148,10 +149,8 @@ export default defineBackground(() => {
       createTabIn: (windowId) => browser.tabs.create({ windowId }),
       removeTabs: (tabIds) => browser.tabs.remove(tabIds),
     },
-    hasOllamaAccess: () =>
-      browser.permissions.contains({
-        origins: LOCAL_INFERENCE_ORIGINS.map((origin) => `${origin}/*`),
-      }),
+    hasOllamaAccess: async () =>
+      isOllamaAccessGranted((await browser.permissions.getAll()).origins ?? []),
     backgroundLifetime: {
       // Read-only and cheap: it exists only to count as activity.
       touch: () => browser.runtime.getPlatformInfo(),
