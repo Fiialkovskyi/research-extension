@@ -6,6 +6,7 @@ import { EmbeddingSpacesCard } from "@/features/embeddingSpaces/ui/embeddingSpac
 import { BlockedSitesCard } from "@/features/siteDenylist/ui/blockedSitesCard";
 import { PolicyReport } from "@/features/diagnostics/ui/policyReport";
 import { inferenceResponseSchemas } from "@/features/inference";
+import { liveDataResponseSchemas } from "@/features/liveData";
 import { benchmarkResponseSchemas } from "@/features/inferenceBenchmark";
 import { BenchmarkReport } from "@/features/inferenceBenchmark/ui/benchmarkReport";
 import { modelInstallResponseSchemas } from "@/features/modelInstall";
@@ -74,6 +75,7 @@ const responseSchemas = {
   ...benchmarkResponseSchemas,
   "diagnostics.report": diagnosticsResponseSchemas["diagnostics.report"],
   ...inferenceResponseSchemas,
+  ...liveDataResponseSchemas,
   ...modelInstallResponseSchemas,
   ...modelRegistryResponseSchemas,
   ...rpcResponseSchemas,
@@ -121,6 +123,15 @@ export function OptionsApp({
         throw error;
       }
 
+      // Told that data changed elsewhere: only the model list is this surface's own to read again.
+      if (response.type === "data.changed") {
+        if (response.payload.topics.includes("models")) {
+          client.send(buildRpcMessage("model.list", {}));
+        }
+
+        return;
+      }
+
       // `response` was validated against the response schemas above, and every
       // type those schemas admit is a member of `OptionsEvent` by construction.
       dispatch(response as OptionsEvent);
@@ -143,6 +154,7 @@ export function OptionsApp({
       }
     });
 
+    client.send(buildRpcMessage("data.subscribe", {}));
     client.send(buildRpcMessage("inference.probe", {}));
     client.send(buildRpcMessage("model.list", {}));
     client.send(buildRpcMessage("diagnostics.read", {}));

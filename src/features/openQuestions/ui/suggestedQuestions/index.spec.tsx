@@ -9,6 +9,7 @@ const VIEW: OpenQuestionsView = {
   hasQuestions: true,
   isStale: false,
   isPending: false,
+  hasModel: true,
   canSuggest: true,
   modelName: "qwen3:4b",
 };
@@ -46,8 +47,22 @@ describe("SuggestedQuestions", () => {
   });
 
   it("says a generation model is needed without one", () => {
+    renderQuestions({
+      ...VIEW,
+      questions: [],
+      hasQuestions: false,
+      hasModel: false,
+      canSuggest: false,
+    });
+
+    expect(screen.getByTestId("questions-no-model")).toHaveTextContent(/settings/u);
+  });
+
+  it("says it needs facts, not the settings, when a model is on and no facts exist yet", () => {
     renderQuestions({ ...VIEW, questions: [], hasQuestions: false, canSuggest: false });
 
-    expect(screen.getByTestId("questions-no-model")).toBeInTheDocument();
+    expect(screen.queryByTestId("questions-no-model")).toBeNull();
+    expect(screen.getByTestId("questions-no-facts")).toHaveTextContent(/facts/u);
+    expect(screen.getByTestId("questions-no-facts")).not.toHaveTextContent(/settings/u);
   });
 });

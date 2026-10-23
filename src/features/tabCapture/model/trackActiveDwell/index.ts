@@ -114,6 +114,13 @@ export const trackActiveDwell = async ({
     await countQuickReturn(database, visit, target);
   }
 
+  // A page read without its tab ever being switched to — the tab was already in
+  // front when the page loaded — has been focused all the same. Left at zero it
+  // would stay "unread" however long it was read, and never have its text kept.
+  if (target !== undefined && visit?.nodeId !== target.id && target.signals.focusCount === 0) {
+    await addNodeSignals(database, target.id, { focusCount: 1, lastFocusedAt: now });
+  }
+
   if (target !== undefined) {
     visit =
       visit?.nodeId === target.id

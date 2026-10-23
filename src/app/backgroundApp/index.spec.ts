@@ -1,3 +1,4 @@
+import { DATA_TOPICS } from "@/features/liveData";
 import { describe, expect, it, vi } from "vitest";
 
 import "fake-indexeddb/auto";
@@ -3728,5 +3729,118 @@ describe("fact extraction through the background", () => {
     await app.reconcileSession();
 
     expect(await extractionJobs(database)).toEqual([]);
+  });
+});
+
+/** The topics each `data.changed` a port has received names, oldest first. */
+const readDataChanges = (posted: unknown[]) =>
+  posted
+    .filter((message) => (message as { type: string }).type === "data.changed")
+    .map((message) => (message as { payload: { topics: string[] } }).payload.topics)
+    .filter((topics) => topics.length > 0);
+
+describe("telling pages that data changed", () => {
+  it("answers a subscription with no topics, since the page reads for itself", async () => {
+    const { app } = await createSessionApp();
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+
+    await vi.waitFor(() =>
+      expect(page.posted).toEqual([
+        expect.objectContaining({ type: "data.changed", payload: { topics: [] } }),
+      ]),
+    );
+  });
+
+  it("tells a subscribed page that pages changed after a capture, without the data", async () => {
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab({ url: "https://example.org/a" })),
+    });
+    await database.put(SESSION_STORE, activeSession);
+
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+    await vi.waitFor(() => expect(readDataChanges(page.posted)[0]).toEqual(["pages", "snapshots"]));
+  });
+
+  it("ends a burst of changes in one notification", async () => {
+    const { app, database } = await createSessionApp({
+      tabCapture: createTabCapture(sessionTab({ url: "https://example.org/a" })),
+    });
+    await database.put(SESSION_STORE, activeSession);
+
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+    await Promise.all([
+      app.handleNavigationCommitted(commit("https://example.org/a")),
+      app.handleNavigationCommitted(commit("https://example.org/b")),
+      app.handleNavigationCommitted(commit("https://example.org/c")),
+    ]);
+    await vi.waitFor(() => expect(readDataChanges(page.posted)).not.toHaveLength(0));
+
+    expect(readDataChanges(page.posted)).toHaveLength(1);
+  });
+
+  it("tells every topic after a request that changes what pages show", async () => {
+    const { app } = await createSessionApp();
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+    await app.handleMessage(buildRpcMessage("node.delete", { nodeId: "missing" }));
+
+    await vi.waitFor(() =>
+      expect(new Set(readDataChanges(page.posted).flat())).toEqual(new Set(DATA_TOPICS)),
+    );
+  });
+
+  it("does not answer a read with a notification, or it would answer itself", async () => {
+    const { app } = await createSessionApp();
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+    await app.handleMessage(buildRpcMessage("recorded.read", {}));
+    await app.handleMessage(buildRpcMessage("summaries.read", {}));
+
+    expect(readDataChanges(page.posted)).toEqual([]);
+  });
+
+  it("tells that access changed when the user grants or withdraws a permission", async () => {
+    const { app } = await createSessionApp();
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+    app.handleAccessChanged();
+
+    await vi.waitFor(() => expect(readDataChanges(page.posted)[0]).toEqual(["access", "models"]));
+  });
+
+  it("stops telling a page whose port disconnected", async () => {
+    const { app } = await createSessionApp();
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+    page.disconnect();
+    app.handleAccessChanged();
+    await app.handleMessage(buildRpcMessage("recorded.read", {}));
+
+    expect(readDataChanges(page.posted)).toEqual([]);
   });
 });

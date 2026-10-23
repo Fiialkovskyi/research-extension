@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { entityResolutionResponseSchemas } from "@/features/entityResolution";
 import { factExtractionResponseSchemas } from "@/features/factExtraction";
 import { type RecordedSession, recordedDataResponseSchemas } from "@/features/recordedData";
+import { useDataChanges, type WatchData } from "@/features/liveData/ui/useDataChanges";
 import { RecordedPage } from "@/features/recordedData/ui/recordedPage";
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import {
@@ -12,16 +13,19 @@ import {
   rpcResponseSchemas,
 } from "@/shared/rpc";
 
-/** The page's end of its conversation with the background: one-shot requests. */
+/** The page's end of its conversation with the background: requests, and being told of changes. */
 export interface RecordedClient {
   request: (message: RpcMessage<string, unknown>) => Promise<unknown>;
+  /** How the page hears that data changed. Without it the page shows what it read when it opened. */
+  watch?: WatchData;
 }
 
 export interface RecordedAppProps {
   client: RecordedClient;
-  /** How often to read again while facts are being extracted. */
-  refreshIntervalMs?: number;
 }
+
+/** The kinds of data this page shows, so it reads again only when one of them changes. */
+const WATCHED_TOPICS = ["pages", "snapshots", "facts", "models"] as const;
 
 const responseSchemas = {
   ...recordedDataResponseSchemas,
@@ -61,7 +65,7 @@ const readRecordedState = (answer: unknown): RecordedState | { failure: string }
 };
 
 /** Composition root of the "What was recorded" page. */
-export function RecordedApp({ client, refreshIntervalMs = 3_000 }: RecordedAppProps) {
+export function RecordedApp({ client }: RecordedAppProps) {
   const [state, setState] = useState<RecordedState>({ status: "loading" });
   const [isExtractionRequested, setIsExtractionRequested] = useState(false);
   const [texts, setTexts] = useState<ReadonlyMap<string, string | null>>(new Map());
@@ -87,7 +91,7 @@ export function RecordedApp({ client, refreshIntervalMs = 3_000 }: RecordedAppPr
     [client],
   );
 
-  /** Reads again, after a deletion: the background owns what is recorded. */
+  /** Reads again, after a deletion or a change: the background owns what is recorded. */
   const load = useCallback(async () => {
     try {
       const next = readRecordedState(await client.request(buildRpcMessage("recorded.read", {})));
@@ -157,23 +161,10 @@ export function RecordedApp({ client, refreshIntervalMs = 3_000 }: RecordedAppPr
     }
   }, [ask, load]);
 
-  const isRefreshing =
+  useDataChanges(client.watch, WATCHED_TOPICS, load);
+
+  const isExtractingFacts =
     state.status === "ready" && isExtracting(state.session, isExtractionRequested);
-
-  // Counts change as pages are extracted; read again until none is under way.
-  useEffect(() => {
-    if (!isRefreshing) {
-      return undefined;
-    }
-
-    const timer = setInterval(() => {
-      void load();
-    }, refreshIntervalMs);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [isRefreshing, load, refreshIntervalMs]);
 
   const separateEntity = useCallback(
     async (entityId: string) => {
@@ -217,7 +208,7 @@ export function RecordedApp({ client, refreshIntervalMs = 3_000 }: RecordedAppPr
           onDeleteNode={(nodeId) => void deleteNode(nodeId)}
           onDeleteSession={(sessionId) => void deleteSession(sessionId)}
           onExtractFacts={() => void extractFacts()}
-          isExtracting={isRefreshing}
+          isExtracting={isExtractingFacts}
           onSeparateEntity={(entityId) => void separateEntity(entityId)}
         />
       )}

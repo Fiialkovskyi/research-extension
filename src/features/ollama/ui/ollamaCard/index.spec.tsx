@@ -109,6 +109,50 @@ describe("OllamaCard", () => {
     );
   });
 
+  it("says so on the page when the permission is refused, and lets the user try again", async () => {
+    const { client, sent, push } = createStubClient();
+    const requestAccess = vi.fn(() => Promise.resolve(false));
+
+    renderCard(client, { requestAccess });
+    pushState(push, "notConnected");
+    fireEvent.click(screen.getByTestId("ollama-connect"));
+
+    expect(await screen.findByTestId("ollama-access-problem")).toBeTruthy();
+    expect(sent.filter(({ type }) => type === "ollama.status")).toHaveLength(1);
+
+    requestAccess.mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByTestId("ollama-connect"));
+
+    await vi.waitFor(() => expect(screen.queryByTestId("ollama-access-problem")).toBeNull());
+  });
+
+  it("shows why the permission request failed", async () => {
+    const { client, push } = createStubClient();
+
+    renderCard(client, { requestAccess: () => Promise.reject(new Error("not from a click")) });
+    pushState(push, "notConnected");
+    fireEvent.click(screen.getByTestId("ollama-connect"));
+
+    expect((await screen.findByTestId("ollama-access-problem")).textContent).toContain(
+      "not from a click",
+    );
+  });
+
+  it("looks again when told access was granted elsewhere, and not for other changes", () => {
+    const { client, sent, push } = createStubClient();
+    const count = () => sent.filter(({ type }) => type === "ollama.status").length;
+
+    renderCard(client);
+    pushState(push, "notConnected");
+    push(buildRpcMessage("data.changed", { topics: ["facts"] }));
+
+    expect(count()).toBe(1);
+
+    push(buildRpcMessage("data.changed", { topics: ["access"] }));
+
+    expect(count()).toBe(2);
+  });
+
   it("starts the checklist at installing and opening Ollama, and checks again by itself", () => {
     vi.useFakeTimers();
 

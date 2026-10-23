@@ -10,7 +10,16 @@ import { LOCAL_INFERENCE_ORIGINS } from "@/shared/config";
  * connecting Ollama, and the extension would reach a local server the user
  * never connected.
  *
+ * A match pattern carries no port, and Firefox lists `http://127.0.0.1:11434/*`
+ * back as `http://127.0.0.1/*`, so the origin is compared without its port.
+ *
  * @param grantedOrigins The granted origin patterns, as `permissions.getAll` lists them.
  */
 export const isOllamaAccessGranted = (grantedOrigins: readonly string[]): boolean =>
-  LOCAL_INFERENCE_ORIGINS.every((origin) => grantedOrigins.includes(`${origin}/*`));
+  LOCAL_INFERENCE_ORIGINS.every((origin) => {
+    const { protocol, hostname } = new URL(origin);
+
+    return grantedOrigins.some((granted) =>
+      [`${protocol}//${hostname}/*`, `${origin}/*`].includes(granted),
+    );
+  });

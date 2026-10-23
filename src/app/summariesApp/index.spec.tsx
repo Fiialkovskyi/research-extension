@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { SummariesApp, type SummariesClient } from ".";
+import type { DataTopic } from "@/features/liveData";
 import { buildRpcMessage, type RpcMessage } from "@/shared/rpc";
 
 const cluster = (summary: unknown, isPending = false) => ({
@@ -25,7 +26,15 @@ const createClient = (hasSession = true) => {
   let reads = 0;
   let isRequested = false;
   const sent: string[] = [];
+  let listener: ((topics: readonly DataTopic[]) => void) | undefined;
   const client: SummariesClient = {
+    watch: (onChange) => {
+      listener = onChange;
+
+      return () => {
+        listener = undefined;
+      };
+    },
     request: vi.fn((message: RpcMessage<string, unknown>) => {
       sent.push(message.type);
 
@@ -33,7 +42,7 @@ const createClient = (hasSession = true) => {
         case "summaries.read": {
           reads += 1;
 
-          const isWritten = isRequested && reads > 2;
+          const isWritten = isRequested && reads > 1;
 
           return Promise.resolve(
             buildRpcMessage("summaries.view", {
@@ -114,6 +123,7 @@ const createClient = (hasSession = true) => {
                     hasQuestions: true,
                     isStale: true,
                     isPending: false,
+                    hasModel: true,
                     canSuggest: true,
                     modelName: "qwen3:4b",
                   }
@@ -140,24 +150,52 @@ const createClient = (hasSession = true) => {
     }),
   };
 
-  return { client, sent };
+  /** The background telling the page that data changed. */
+  const emit = (topics: readonly DataTopic[]) => {
+    act(() => {
+      listener?.(topics);
+    });
+  };
+
+  return { client, sent, emit };
 };
 
 describe("SummariesApp", () => {
-  it("asks for a summary, then reads again until it is written", async () => {
-    const { client, sent } = createClient();
+  it("asks for a summary, then shows it when the background says it was written", async () => {
+    const { client, sent, emit } = createClient();
 
-    render(<SummariesApp client={client} refreshIntervalMs={10} />);
+    render(<SummariesApp client={client} />);
     fireEvent.click(await screen.findByRole("button", { name: "Summarize now" }));
+    await vi.waitFor(() => expect(sent).toContain("summaries.refresh"));
+
+    emit(["summaries"]);
 
     expect(await screen.findByText("Volta is lighter.")).toBeInTheDocument();
-    expect(sent).toContain("summaries.refresh");
 
     const reads = sent.filter((type) => type === "summaries.read").length;
 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(sent.filter((type) => type === "summaries.read")).toHaveLength(reads);
+  });
+
+  it("reads everything again when facts arrive, without a reload", async () => {
+    const { client, sent, emit } = createClient();
+
+    render(<SummariesApp client={client} />);
+    await screen.findByText("Volta E5");
+
+    const before = {
+      summaries: sent.filter((type) => type === "summaries.read").length,
+      questions: sent.filter((type) => type === "questions.read").length,
+    };
+
+    emit(["facts"]);
+
+    await vi.waitFor(() => {
+      expect(sent.filter((type) => type === "summaries.read")).toHaveLength(before.summaries + 1);
+      expect(sent.filter((type) => type === "questions.read")).toHaveLength(before.questions + 1);
+    });
   });
 
   it("shows the comparison table below the summaries, and switches its type", async () => {

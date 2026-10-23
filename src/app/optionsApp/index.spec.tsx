@@ -48,10 +48,26 @@ describe("OptionsApp", () => {
       "denylist.read",
       "spaces.list",
       "diagnostics.readProbes",
+      "data.subscribe",
       "inference.probe",
       "model.list",
       "diagnostics.read",
     ]);
+  });
+
+  it("lists the models again when told they changed, and not for other changes", () => {
+    const { client, sent, answer } = createStubClient();
+
+    render(<OptionsApp client={client} />);
+
+    const count = () => sent.filter((message) => message.type === "model.list").length;
+    const before = count();
+
+    answer("data.changed", { topics: ["facts"] });
+    expect(count()).toBe(before);
+
+    answer("data.changed", { topics: ["models"] });
+    expect(count()).toBe(before + 1);
   });
 
   it("leaves the probe card's answers to the card, so the page keeps rendering", () => {

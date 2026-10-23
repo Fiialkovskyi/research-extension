@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { RecordedApp, type RecordedClient } from ".";
+import type { DataTopic } from "@/features/liveData";
 import { buildRpcMessage, type RpcMessage } from "@/shared/rpc";
 
 const page = {
@@ -41,7 +42,15 @@ const createClient = () => {
     },
   ];
   const sent: string[] = [];
+  let listener: ((topics: readonly DataTopic[]) => void) | undefined;
   const client: RecordedClient = {
+    watch: (onChange) => {
+      listener = onChange;
+
+      return () => {
+        listener = undefined;
+      };
+    },
     request: vi.fn((message: RpcMessage<string, unknown>) => {
       sent.push(message.type);
 
@@ -49,7 +58,7 @@ const createClient = () => {
         case "recorded.read":
           extractionReads += 1;
 
-          if (pages[0]?.facts?.isFinished === false && extractionReads > 2) {
+          if (pages[0]?.facts?.isFinished === false && extractionReads > 1) {
             pages = [{ ...page, facts: { kept: 3, dropped: 1, isFinished: true } }];
           }
 
@@ -105,7 +114,14 @@ const createClient = () => {
     }),
   };
 
-  return { client, sent };
+  /** The background telling the page that data changed. */
+  const emit = (topics: readonly DataTopic[]) => {
+    act(() => {
+      listener?.(topics);
+    });
+  };
+
+  return { client, sent, emit };
 };
 
 describe("RecordedApp", () => {
@@ -121,13 +137,15 @@ describe("RecordedApp", () => {
     expect(await screen.findByTestId("recorded-text")).toHaveTextContent("Sits at the cranks.");
   });
 
-  it("asks for facts, then reads again until extraction has finished", async () => {
-    const { client, sent } = createClient();
+  it("asks for facts, then shows them when the background says they changed", async () => {
+    const { client, sent, emit } = createClient();
 
-    render(<RecordedApp client={client} refreshIntervalMs={10} />);
+    render(<RecordedApp client={client} />);
     fireEvent.click(await screen.findByTestId("recorded-extract-facts"));
 
     expect(await screen.findByText("Extracting facts…")).toBeInTheDocument();
+
+    emit(["facts"]);
 
     expect(await screen.findByText(/3 kept, 1 dropped$/u)).toBeInTheDocument();
     expect(screen.getByTestId("recorded-extract-facts")).toHaveTextContent("Extract facts now");
@@ -139,6 +157,21 @@ describe("RecordedApp", () => {
 
     expect(sent).toContain("facts.extractNow");
     expect(sent.filter((type) => type === "recorded.read")).toHaveLength(reads);
+  });
+
+  it("reads again for a change to what it shows, and not for another", async () => {
+    const { client, sent, emit } = createClient();
+
+    render(<RecordedApp client={client} />);
+    await screen.findByTestId("recorded-title");
+    emit(["access"]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(sent.filter((type) => type === "recorded.read")).toHaveLength(1);
+
+    emit(["snapshots"]);
+
+    await vi.waitFor(() => expect(sent.filter((type) => type === "recorded.read")).toHaveLength(2));
   });
 
   it("separates a merged name, then reads again", async () => {

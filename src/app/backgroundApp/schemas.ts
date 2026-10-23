@@ -9,6 +9,7 @@ import { diagnosticsRequestSchemas } from "@/features/diagnostics";
 import { entityResolutionRequestSchemas } from "@/features/entityResolution";
 import { factExtractionRequestSchemas } from "@/features/factExtraction";
 import { inferenceRequestSchemas } from "@/features/inference";
+import { liveDataRequestSchemas } from "@/features/liveData";
 import {
   benchmarkRequestSchemas,
   generationBenchmarkRequestSchemas,
@@ -37,6 +38,7 @@ export const requestSchemas = {
   ...factExtractionRequestSchemas,
   ...generationBenchmarkRequestSchemas,
   ...inferenceRequestSchemas,
+  ...liveDataRequestSchemas,
   ...modelInstallRequestSchemas,
   ...modelRegistryRequestSchemas,
   ...ollamaRequestSchemas,

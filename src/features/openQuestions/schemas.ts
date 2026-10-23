@@ -28,6 +28,8 @@ export const openQuestionsViewSchema = v.object({
   hasQuestions: v.boolean(),
   isStale: v.boolean(),
   isPending: v.boolean(),
+  /** Whether a generation model is on, which suggesting needs together with facts. */
+  hasModel: v.boolean(),
   canSuggest: v.boolean(),
   /** The model that suggested them, by name, when there are any (REQ-LIN-005). */
   modelName: v.nullable(v.string()),

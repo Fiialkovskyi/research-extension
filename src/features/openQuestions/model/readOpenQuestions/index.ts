@@ -76,6 +76,7 @@ export const readOpenQuestions = async (
       ((await getFactSetHash(factIds)) !== stored.factSetHash ||
         !models.some(({ ref }) => ref === stored.modelRef)),
     isPending,
+    hasModel: model !== undefined,
     canSuggest: model !== undefined && factIds.length > 0,
     modelName:
       stored === undefined

@@ -70,6 +70,15 @@ const track = (focusedTabId: number | undefined, now: number, discardOpen = fals
   trackActiveDwell({ database, focusedTabId, now, discardOpen });
 
 describe("trackActiveDwell", () => {
+  it("counts a tab as focused when it is read without ever being switched to", async () => {
+    await track(7, 1_000);
+    await track(8, 1_000 + MINUTE);
+    await track(7, 1_000 + 2 * MINUTE);
+
+    expect((await readNode("https://example.org/a")).signals.focusCount).toBe(1);
+    expect((await readNode("https://example.org/b")).signals.focusCount).toBe(1);
+  });
+
   it("adds the time a tab was read when the user switches away from it", async () => {
     await track(7, 1_000);
 

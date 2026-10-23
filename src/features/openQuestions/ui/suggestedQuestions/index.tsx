@@ -34,9 +34,14 @@ export function SuggestedQuestions({ view, onSearch, onSuggest }: SuggestedQuest
       <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
         Suggested by {view.modelName ?? "the model"} — check before relying on them.
       </p>
-      {!view.canSuggest && !view.hasQuestions && (
+      {!view.hasModel && !view.hasQuestions && (
         <p data-testid="questions-no-model" className="mt-1 text-sm">
           Turn on page summaries in the settings, and read a few pages, to get suggestions.
+        </p>
+      )}
+      {view.hasModel && !view.canSuggest && !view.hasQuestions && (
+        <p data-testid="questions-no-facts" className="mt-1 text-sm">
+          Suggestions need facts from the pages you read. They appear here once some are extracted.
         </p>
       )}
       {view.hasQuestions && view.questions.length === 0 && (

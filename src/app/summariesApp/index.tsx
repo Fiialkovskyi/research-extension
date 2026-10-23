@@ -8,6 +8,7 @@ import {
   comparisonTableResponseSchemas,
 } from "@/features/comparisonTable";
 import { ComparisonTable } from "@/features/comparisonTable/ui/comparisonTable";
+import { useDataChanges, type WatchData } from "@/features/liveData/ui/useDataChanges";
 import { factRejectionResponseSchemas } from "@/features/factRejections";
 import { type OpenQuestionsView, openQuestionResponseSchemas } from "@/features/openQuestions";
 import { SuggestedQuestions } from "@/features/openQuestions/ui/suggestedQuestions";
@@ -21,15 +22,18 @@ import {
   rpcResponseSchemas,
 } from "@/shared/rpc";
 
-/** The page's end of its conversation with the background: one-shot requests. */
+/** The page's end of its conversation with the background: requests, and being told of changes. */
 export interface SummariesClient {
   request: (message: RpcMessage<string, unknown>) => Promise<unknown>;
+  /** How the page hears that data changed. Without it the page shows what it read when it opened. */
+  watch?: WatchData;
 }
+
+/** The kinds of data this page shows, so it reads again only when one of them changes. */
+const WATCHED_TOPICS = ["pages", "facts", "clusters", "summaries", "questions", "models"] as const;
 
 export interface SummariesAppProps {
   client: SummariesClient;
-  /** How often to read again while a summary asked for is being written. */
-  refreshIntervalMs?: number;
   /** Saves a text file for the user; a Blob download from this page by default. */
   saveFile?: (name: string, text: string) => void;
 }
@@ -63,11 +67,7 @@ type SummariesState =
   | { status: "ready"; view: SummariesView };
 
 /** Composition root of the Summaries page. */
-export function SummariesApp({
-  client,
-  refreshIntervalMs = 3_000,
-  saveFile = downloadCsv,
-}: SummariesAppProps) {
+export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppProps) {
   const [state, setState] = useState<SummariesState>({ status: "loading" });
   const [table, setTable] = useState<Table>();
   const [entityType, setEntityType] = useState<string>();
@@ -174,25 +174,6 @@ export function SummariesApp({
     };
   }, [client]);
 
-  const isPending =
-    (state.status === "ready" && state.view.clusters.some(({ isPending: pending }) => pending)) ||
-    questions?.isPending === true;
-
-  // A summary asked for is written in the background: read again until it is.
-  useEffect(() => {
-    if (!isPending) {
-      return undefined;
-    }
-
-    const timer = setInterval(() => {
-      void load();
-    }, refreshIntervalMs);
-
-    return () => {
-      clearInterval(timer);
-    };
-  }, [isPending, load, refreshIntervalMs]);
-
   const loadTable = useCallback(
     async (type?: string) => {
       const answer = await ask(
@@ -293,6 +274,8 @@ export function SummariesApp({
     await load();
     await loadTable(entityType);
   }, [entityType, load, loadTable]);
+
+  useDataChanges(client.watch, WATCHED_TOPICS, reloadAll);
 
   const reject = useCallback(
     async (factIds: string[]) => {

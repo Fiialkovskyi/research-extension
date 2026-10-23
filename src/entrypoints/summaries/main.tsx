@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { browser } from "wxt/browser";
 
 import { SummariesApp, type SummariesClient } from "@/app/summariesApp";
+import { watchDataChanges } from "@/features/liveData";
 import "@/shared/styles/tailwind.css";
 
 const container = document.getElementById("root");
@@ -13,6 +14,7 @@ if (container === null) {
 
 const client: SummariesClient = {
   request: (message) => browser.runtime.sendMessage(message),
+  watch: (onChange) => watchDataChanges({ connect: () => browser.runtime.connect(), onChange }),
 };
 
 createRoot(container).render(

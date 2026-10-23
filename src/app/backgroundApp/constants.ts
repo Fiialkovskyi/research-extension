@@ -1,0 +1,28 @@
+/**
+ * The requests that change what a page shows, so that once one is handled every
+ * open page is told to read again. Reads are left out on purpose: a page reads
+ * in answer to a notification, and a read that notified would answer itself.
+ */
+export const DATA_CHANGING_REQUESTS: ReadonlySet<string> = new Set([
+  "denylist.save",
+  "entity.separate",
+  "facts.extractNow",
+  "facts.reject",
+  "facts.restoreRejections",
+  "model.activate",
+  "model.install",
+  "node.delete",
+  "ollama.enable",
+  "ollama.pull",
+  "ollama.register",
+  "questions.refresh",
+  "session.delete",
+  "session.keepSeparate",
+  "session.reattach",
+  "session.resume",
+  "session.save",
+  "spaces.remove",
+  "summaries.refresh",
+  "tabGroup.create",
+  "table.setColumns",
+]);

@@ -184,6 +184,8 @@ import {
   type StoredModel,
 } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
+import { DATA_TOPICS, type DataTopic } from "@/features/liveData";
+import { DATA_CHANGING_REQUESTS } from "./constants";
 import { requestSchemas } from "./schemas";
 import type { PageSender } from "@/features/pageSignals";
 import type {
@@ -354,6 +356,48 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
    * that port disconnects or can no longer be posted to.
    */
   const graphSubscribers = new Set<Emit>();
+  /** Where every open page hears that data changed: one `emit` per port, like the graph's. */
+  const dataSubscribers = new Set<Emit>();
+  /** The kinds of data that changed since the last notification went out. */
+  const pendingTopics = new Set<DataTopic>();
+  let isDataNotificationQueued = false;
+
+  /**
+   * Tells every open page which kinds of data changed, once the queued writes
+   * have been made. A burst of changes ends in one message: topics gather while
+   * the notification waits its turn.
+   */
+  const notifyDataChanged = (topics: readonly DataTopic[]): void => {
+    for (const topic of topics) {
+      pendingTopics.add(topic);
+    }
+
+    if (isDataNotificationQueued || dataSubscribers.size === 0) {
+      return;
+    }
+
+    isDataNotificationQueued = true;
+
+    void enqueueCapture(() => {
+      isDataNotificationQueued = false;
+
+      const message = buildRpcMessage("data.changed", { topics: [...pendingTopics] });
+
+      pendingTopics.clear();
+
+      for (const emit of dataSubscribers) {
+        try {
+          emit(message);
+        } catch {
+          // A port whose page has gone throws rather than delivering.
+          dataSubscribers.delete(emit);
+        }
+      }
+
+      return Promise.resolve();
+    });
+  };
+
   /** Capture writes queued so far, counted so a waiting push knows what came after it. */
   let captureWriteCount = 0;
   /**
@@ -460,6 +504,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       await enqueueOpenQuestions(openedDatabase, getNow());
     });
     pushGraphSnapshot();
+    notifyDataChanged(["clusters", "summaries", "questions"]);
     // A summary just queued must not wait for the next wake-up to be claimed.
     void runJobs();
   };
@@ -490,6 +535,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     const captured = enqueueCapture(work);
 
     pushGraphSnapshot();
+    notifyDataChanged(["pages", "snapshots"]);
     scheduleRecluster();
 
     return captured;
@@ -917,6 +963,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         ) {
           // Each pass claims, runs and settles one job.
           hasRunAny = true;
+          notifyDataChanged(["snapshots", "facts", "clusters", "summaries", "questions"]);
         }
       } while (isJobRunRequested);
     } catch (error) {
@@ -1178,7 +1225,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   // The switch below is exhaustive over the parsed message union, and the
   // compiler knows it: adding a message type without a case makes this
   // function stop returning on every path, which is the error we want.
-  const handleMessage = async (
+  const handleRequest = async (
     candidate: unknown,
     emit: Emit | undefined,
   ): Promise<RpcMessage<string, unknown>> => {
@@ -1601,6 +1648,15 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           }
 
           return buildRpcMessage("graph.snapshot", snapshot);
+        }
+
+        case "data.subscribe": {
+          // A one-shot message has nowhere to push to; it is answered and nothing more.
+          if (emit !== undefined) {
+            dataSubscribers.add(emit);
+          }
+
+          return buildRpcMessage("data.changed", { topics: [] });
         }
 
         case "tab.focus": {
@@ -2066,6 +2122,20 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     }
   };
 
+  /** Handles a request, then tells the pages if what it did changed what they show. */
+  const handleMessage = async (
+    candidate: unknown,
+    emit: Emit | undefined,
+  ): Promise<RpcMessage<string, unknown>> => {
+    const response = await handleRequest(candidate, emit);
+
+    if (DATA_CHANGING_REQUESTS.has(readMessageField(candidate, "type") ?? "")) {
+      notifyDataChanged(DATA_TOPICS);
+    }
+
+    return response;
+  };
+
   return {
     // Nowhere to stream or push to on a one-shot message.
     handleMessage: (candidate) => handleMessage(candidate, undefined),
@@ -2092,12 +2162,17 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           } catch {
             // The page went away before its answer; it has nothing to push to.
             graphSubscribers.delete(emit);
+            dataSubscribers.delete(emit);
           }
         });
       });
       port.onDisconnect.addListener(() => {
         graphSubscribers.delete(emit);
+        dataSubscribers.delete(emit);
       });
+    },
+    handleAccessChanged: () => {
+      notifyDataChanged(["access", "models"]);
     },
     handleGroupUpdated: async (group) => {
       await serializeWork(async () => {

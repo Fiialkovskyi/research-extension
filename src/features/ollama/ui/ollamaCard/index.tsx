@@ -6,6 +6,7 @@ import {
   generationBenchmarkResponseSchemas,
   MAXIMUM_EXTRACTION_MS,
 } from "@/features/inferenceBenchmark";
+import { liveDataResponseSchemas } from "@/features/liveData";
 import { modelRegistryResponseSchemas } from "@/features/modelRegistry";
 import { OLLAMA_DOWNLOAD_URL, OLLAMA_PROFILES } from "@/shared/config";
 import {
@@ -63,6 +64,7 @@ type EnableProgress =
 
 const responseSchemas = {
   ...ollamaResponseSchemas,
+  ...liveDataResponseSchemas,
   ...modelRegistryResponseSchemas,
   ...benchmarkResponseSchemas,
   ...generationBenchmarkResponseSchemas,
@@ -279,6 +281,7 @@ export function OllamaCard({
   const [extraction, setExtraction] = useState<ExtractionState | undefined>();
   const [throughput, setThroughput] = useState<number | undefined>();
   const [isOpen, setIsOpen] = useState(false);
+  const [accessProblem, setAccessProblem] = useState<string | undefined>();
 
   const refresh = useCallback(() => {
     client.send(buildRpcMessage("ollama.status", {}));
@@ -338,6 +341,13 @@ export function OllamaCard({
           client.send(buildRpcMessage("ollama.status", {}));
           break;
         }
+        case "data.changed":
+          // Access was granted or withdrawn, or a model changed, somewhere else.
+          if (response.payload.topics.some((topic) => topic === "access" || topic === "models")) {
+            client.send(buildRpcMessage("ollama.status", {}));
+          }
+
+          break;
         case "generation.measured":
           setExtraction({ status: "measured", measurement: response.payload });
           break;
@@ -460,7 +470,23 @@ export function OllamaCard({
   }, [isWaiting, recheckIntervalMs, refresh]);
 
   const setUp = () => {
-    requestAccess().then(refresh, () => undefined);
+    setAccessProblem(undefined);
+    requestAccess().then(
+      (isGranted) => {
+        if (isGranted) {
+          refresh();
+        } else {
+          setAccessProblem(
+            "Firefox did not give access. It asks in a small prompt near the top of the window — choose Allow, then press the button again.",
+          );
+        }
+      },
+      (error: unknown) => {
+        setAccessProblem(
+          `Firefox could not ask for access: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      },
+    );
   };
 
   const turnOn = (name: string) => {
@@ -512,6 +538,18 @@ export function OllamaCard({
             <Button data-testid="ollama-connect" onClick={setUp}>
               Set up Ollama
             </Button>
+            {accessProblem !== undefined && (
+              <p
+                data-testid="ollama-access-problem"
+                role="alert"
+                className="mt-2 flex items-start gap-2 text-red-700 dark:text-red-400"
+              >
+                <span className="mt-1.5">
+                  <StatusDot tone="bad" />
+                </span>
+                {accessProblem}
+              </p>
+            )}
           </div>
         )}
 

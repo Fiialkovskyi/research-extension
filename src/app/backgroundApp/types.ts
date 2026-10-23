@@ -169,6 +169,8 @@ export interface BackgroundApp {
    */
   attachPort: (port: BackgroundPort) => void;
   /** Follows a group's rename onto the session, when it is the session's group. */
+  /** The user granted or withdrew a permission, which may change what the options page offers. */
+  handleAccessChanged: () => void;
   handleGroupUpdated: (group: GroupEventDetails) => Promise<void>;
   /** Reopens the closed session when its group is restored under the same id. */
   handleGroupCreated: (group: GroupEventDetails) => Promise<void>;

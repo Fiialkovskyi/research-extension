@@ -116,6 +116,7 @@ describe("readOpenQuestions", () => {
       hasQuestions: true,
       isStale: false,
       isPending: false,
+      hasModel: true,
       canSuggest: true,
       modelName: "qwen3:4b",
     });

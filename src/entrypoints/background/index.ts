@@ -208,6 +208,14 @@ export default defineBackground(() => {
     app.attachPort(port);
   });
 
+  // Permission changes made in the browser's own add-on page reach the options page.
+  browser.permissions.onAdded.addListener(() => {
+    app.handleAccessChanged();
+  });
+  browser.permissions.onRemoved.addListener(() => {
+    app.handleAccessChanged();
+  });
+
   // The session follows its group. These wake the page, so like every other
   // listener they are attached before anything is awaited.
   browser.tabGroups.onUpdated.addListener((group) => {
