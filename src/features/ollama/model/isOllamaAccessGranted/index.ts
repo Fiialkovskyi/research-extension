@@ -13,6 +13,11 @@ import { LOCAL_INFERENCE_ORIGINS } from "@/shared/config";
  * A match pattern carries no port, and Firefox lists `http://127.0.0.1:11434/*`
  * back as `http://127.0.0.1/*`, so the origin is compared without its port.
  *
+ * Kept for a loopback permission that is optional. While the manifest
+ * requires it, as it does for now, the grant is always there and says nothing
+ * about the user; whether they asked for AI is the stored "setup started"
+ * choice instead.
+ *
  * @param grantedOrigins The granted origin patterns, as `permissions.getAll` lists them.
  */
 export const isOllamaAccessGranted = (grantedOrigins: readonly string[]): boolean =>

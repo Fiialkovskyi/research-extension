@@ -15,6 +15,7 @@
 
 export {
   ACTIVITY_STORE,
+  AI_SETUP_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -44,6 +45,7 @@ export type {
   ActivityKind,
   ConformanceStatus,
   StoredActivity,
+  StoredAiSetup,
   StoredCluster,
   StoredClustering,
   EdgeKind,

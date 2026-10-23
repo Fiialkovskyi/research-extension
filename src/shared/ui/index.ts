@@ -2,6 +2,8 @@
 
 export { Button } from "./button";
 export type { ButtonProps } from "./button";
+export { CopyableCommand } from "./copyableCommand";
+export type { CopyableCommandProps } from "./copyableCommand";
 export { Panel } from "./panel";
 export type { PanelProps } from "./panel";
 export { StatusDot } from "./statusDot";

@@ -40,25 +40,36 @@ describe("OptionsApp", () => {
   it("asks what this installation can run, what is installed, what the policy refused, where Ollama stands and how probe runs went", () => {
     const { client, sent } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     expect(sent.map((message) => message.type)).toEqual([
-      // Children's effects run first: the Ollama card, then the probe card.
-      "ollama.status",
+      // Children's effects run first: the blocked sites, the Ollama card, then the probe card.
       "denylist.read",
+      "ollama.status",
       "spaces.list",
       "diagnostics.readProbes",
       "data.subscribe",
+      "aiSetup.read",
       "inference.probe",
       "model.list",
       "diagnostics.read",
     ]);
   });
 
+  it("starts no inference worker while in-extension models are switched off", () => {
+    const { client, sent } = createStubClient();
+
+    render(<OptionsApp client={client} isInBrowserBackendEnabled={false} />);
+
+    expect(sent.map((message) => message.type)).not.toContain("inference.probe");
+    expect(screen.queryByTestId("in-browser-models")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("capabilities-pending")).not.toBeInTheDocument();
+  });
+
   it("lists the models again when told they changed, and not for other changes", () => {
     const { client, sent, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     const count = () => sent.filter((message) => message.type === "model.list").length;
     const before = count();
@@ -73,7 +84,7 @@ describe("OptionsApp", () => {
   it("leaves the probe card's answers to the card, so the page keeps rendering", () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     act(() => {
       answer("diagnostics.probeStarted", { runId: "run-1" });
       answer("diagnostics.probes", { runs: [] });
@@ -83,21 +94,74 @@ describe("OptionsApp", () => {
     expect(screen.getByTestId("probe-none")).toBeTruthy();
   });
 
-  it("keeps the background-lifetime probe in a Developer section, closed by default", () => {
+  it("keeps models, measurements and developer tools under a closed Advanced section", () => {
     const { client } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
-    const developer = screen.getByTestId("developer-section") as HTMLDetailsElement;
+    const advanced = screen.getByTestId("advanced-section") as HTMLDetailsElement;
 
-    expect(developer.open).toBe(false);
-    expect(developer.contains(screen.getByTestId("lifetime-probe"))).toBe(true);
+    expect(advanced.open).toBe(false);
+    expect(advanced.contains(screen.getByTestId("lifetime-probe"))).toBe(true);
+    expect(advanced.contains(screen.getByTestId("ollama-card"))).toBe(true);
+    expect(advanced.contains(screen.getByTestId("in-browser-models"))).toBe(true);
+  });
+
+  it("says AI is not set up, and opens setup in one click", async () => {
+    const { client, sent, answer } = createStubClient();
+
+    render(<OptionsApp client={client} isInBrowserBackendEnabled={false} />);
+    answer("aiSetup.status", {
+      isSetUp: false,
+      isStarted: false,
+      isBannerCollapsed: false,
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-status").textContent).toContain("AI isn't set up"),
+    );
+
+    fireEvent.click(screen.getByTestId("open-setup"));
+
+    expect(sent.at(-1)?.type).toBe("aiSetup.open");
+  });
+
+  it("says which models are on once AI is set up", async () => {
+    const { client, answer } = createStubClient();
+
+    render(<OptionsApp client={client} isInBrowserBackendEnabled={false} />);
+    answer("aiSetup.status", {
+      isSetUp: true,
+      isStarted: true,
+      isBannerCollapsed: false,
+    });
+    answer("model.listed", {
+      models: [
+        {
+          ref: "ollama:nomic-embed-text:latest@a",
+          repository: "nomic-embed-text:latest",
+          revision: "a",
+          family: "embedding",
+          conformance: "passed",
+          diskBytes: 0,
+          active: true,
+          installedAt: 1,
+        },
+      ],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("ai-status").textContent).toContain(
+        "AI is on, using nomic-embed-text:latest.",
+      ),
+    );
+    expect(screen.getByTestId("open-setup").textContent).toBe("Open setup");
   });
 
   it("says it is still checking before an answer arrives", () => {
     const { client } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     expect(screen.getByTestId("capabilities-pending")).toBeInTheDocument();
   });
@@ -105,7 +169,7 @@ describe("OptionsApp", () => {
   it("reports the devices and that it runs single-threaded", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("inference.capabilities", capabilities);
 
     await waitFor(() => expect(screen.getByTestId("capabilities")).toBeInTheDocument());
@@ -115,7 +179,7 @@ describe("OptionsApp", () => {
   it("says plainly that the realm is not cross-origin isolated", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("inference.capabilities", capabilities);
 
     await waitFor(() =>
@@ -126,7 +190,7 @@ describe("OptionsApp", () => {
   it("shows the empty state until a model is installed", () => {
     const { client } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     expect(screen.getByTestId("model-list-empty")).toBeInTheDocument();
   });
@@ -134,7 +198,7 @@ describe("OptionsApp", () => {
   it("lists what the background reports as installed", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", {
       models: [
         {
@@ -158,7 +222,7 @@ describe("OptionsApp", () => {
   it("offers every bundled profile for installation", () => {
     const { client } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     expect(screen.getByTestId(`install-${MINILM_L6_V2.repository}`)).toBeInTheDocument();
   });
@@ -166,7 +230,7 @@ describe("OptionsApp", () => {
   it("asks the background to install the profile the user chose", () => {
     const { client, sent } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
 
     expect(sent.at(-1)).toEqual({
@@ -178,7 +242,7 @@ describe("OptionsApp", () => {
   it("shows progress while the install runs", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
     answer("model.installProgress", {
       path: "onnx/model_quantized.onnx",
@@ -194,7 +258,7 @@ describe("OptionsApp", () => {
   it("prevents a second install while one is running", () => {
     const { client } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
 
     expect(screen.getByTestId(`install-${MINILM_L6_V2.repository}`)).toBeDisabled();
@@ -203,7 +267,7 @@ describe("OptionsApp", () => {
   it("refreshes the list once a model is installed", async () => {
     const { client, sent, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
     answer("model.installed", { ref: "a@b", diskBytes: 1, conformance: "pending" });
 
@@ -213,7 +277,7 @@ describe("OptionsApp", () => {
   it("shows why an install failed", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     fireEvent.click(screen.getByTestId(`install-${MINILM_L6_V2.repository}`));
     answer("model.installFailed", {
       repository: MINILM_L6_V2.repository,
@@ -228,7 +292,7 @@ describe("OptionsApp", () => {
   it("surfaces a refusal from the background", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("inference.failed", { reason: "worker crashed" });
 
     await waitFor(() =>
@@ -239,7 +303,7 @@ describe("OptionsApp", () => {
   it("surfaces a protocol refusal from the background", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("rpc.refused", { rejection: "unknown-type", reason: "Unknown message type" });
 
     await waitFor(() =>
@@ -250,7 +314,7 @@ describe("OptionsApp", () => {
   it("ignores a message it cannot validate rather than breaking the surface", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", { models: "not a list" });
     answer("inference.capabilities", capabilities);
 
@@ -259,7 +323,7 @@ describe("OptionsApp", () => {
 
   it("stops listening when it unmounts", () => {
     const { client, listenerCount } = createStubClient();
-    const { unmount } = render(<OptionsApp client={client} />);
+    const { unmount } = render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     unmount();
 
@@ -277,7 +341,7 @@ describe("OptionsApp", () => {
   it("carries a light and dark pair, so it follows the system scheme", () => {
     const { client } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     expect(screen.getByTestId("options-app").className).toMatch(/dark:/);
   });
@@ -316,7 +380,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
       family: "text-generation" as const,
     };
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", { models: [installed, generator] });
 
     await waitFor(() => expect(screen.getByTestId(`measure-${installed.ref}`)).toBeInTheDocument());
@@ -327,7 +391,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("offers the software path and the accelerated one", () => {
     const { client } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     expect(screen.getByTestId("device-wasm")).toBeChecked();
     expect(screen.getByTestId("device-webgpu")).not.toBeChecked();
@@ -336,7 +400,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("disables a path this installation cannot reach", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("inference.capabilities", capabilities);
 
     await waitFor(() => expect(screen.getByTestId("device-webgpu")).toBeDisabled());
@@ -346,7 +410,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("activates a model on the chosen path", async () => {
     const { client, sent, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", { models: [installed] });
     await waitFor(() =>
       expect(screen.getByTestId(`activate-${installed.ref}`)).toBeInTheDocument(),
@@ -362,7 +426,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("carries the newly chosen path into the next request", async () => {
     const { client, sent, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", { models: [installed] });
     await waitFor(() => expect(screen.getByTestId(`measure-${installed.ref}`)).toBeInTheDocument());
 
@@ -378,7 +442,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("shows every check an activation ran, passed or failed", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.activated", {
       ref: installed.ref,
       active: false,
@@ -404,7 +468,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("says the checks are running, then how they went", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", { models: [installed] });
     await waitFor(() =>
       expect(screen.getByTestId(`activate-${installed.ref}`)).toBeInTheDocument(),
@@ -430,7 +494,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("reports a refusal even when the request itself succeeded", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.activated", {
       ref: installed.ref,
       active: false,
@@ -448,7 +512,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("refreshes the list after an activation, since what it shows has changed", async () => {
     const { client, sent, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     const listsBefore = sent.filter((message) => message.type === "model.list").length;
 
     answer("model.activated", {
@@ -467,7 +531,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("shows the measurement against the budget", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("benchmark.measured", measured);
 
     await waitFor(() => expect(screen.getByTestId("benchmark-report")).toBeInTheDocument());
@@ -478,7 +542,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("says it is measuring while the run is in flight", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", { models: [installed] });
     await waitFor(() => expect(screen.getByTestId(`measure-${installed.ref}`)).toBeInTheDocument());
     fireEvent.click(screen.getByTestId(`measure-${installed.ref}`));
@@ -489,7 +553,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("reports a failed measurement", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("benchmark.failed", { ref: installed.ref, reason: "the runtime gave up" });
 
     await waitFor(() =>
@@ -500,7 +564,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("prevents a second operation while one is running, since they share one worker", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("model.listed", { models: [installed] });
     await waitFor(() => expect(screen.getByTestId(`measure-${installed.ref}`)).toBeInTheDocument());
     fireEvent.click(screen.getByTestId(`measure-${installed.ref}`));
@@ -512,7 +576,7 @@ describe("OptionsApp, choosing a device and measuring", () => {
   it("discards a measurement when the device changes under it", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("benchmark.measured", measured);
     await waitFor(() => expect(screen.getByTestId("benchmark-report")).toBeInTheDocument());
 
@@ -526,7 +590,7 @@ describe("OptionsApp, reporting the network policy", () => {
   it("shows what the package may reach once the background has said", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("diagnostics.report", {
       permittedOrigins: ["https://huggingface.co", "https://*.hf.co"],
       blocked: [],
@@ -539,7 +603,7 @@ describe("OptionsApp, reporting the network policy", () => {
   it("names an origin the policy refused", async () => {
     const { client, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     answer("diagnostics.report", {
       permittedOrigins: ["https://huggingface.co"],
       blocked: [{ origin: "https://cdn.jsdelivr.net", directive: "connect-src" }],
@@ -553,7 +617,7 @@ describe("OptionsApp, reporting the network policy", () => {
   it("asks again after an install, which is when a refusal would have happened", async () => {
     const { client, sent, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     const before = sent.filter((message) => message.type === "diagnostics.read").length;
 
     answer("model.installed", { ref: "a@b", diskBytes: 1, conformance: "pending" });
@@ -566,7 +630,7 @@ describe("OptionsApp, reporting the network policy", () => {
   it("asks again after a failed install, which is the case that needs the reason", async () => {
     const { client, sent, answer } = createStubClient();
 
-    render(<OptionsApp client={client} />);
+    render(<OptionsApp client={client} isInBrowserBackendEnabled />);
     const before = sent.filter((message) => message.type === "diagnostics.read").length;
 
     answer("model.installFailed", { repository: "owner/model", reason: "failed to fetch" });

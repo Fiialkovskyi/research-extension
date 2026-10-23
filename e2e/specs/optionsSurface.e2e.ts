@@ -1,6 +1,6 @@
 import { browser, expect } from "@wdio/globals";
 
-import { OPTIONS_PATH } from "@/shared/config";
+import { IS_IN_BROWSER_BACKEND_ENABLED, OPTIONS_PATH } from "@/shared/config";
 import {
   clearSystemColorScheme,
   enterBrowserChrome,
@@ -21,6 +21,9 @@ const readSurfaceUnder = async (scheme: SystemColorScheme) => {
   return readOptionsSurface();
 };
 
+/** Tests of the in-extension backend, which run only while it is switched on. */
+const inBrowserIt = IS_IN_BROWSER_BACKEND_ENABLED ? it : it.skip;
+
 describe("options surface", () => {
   after(async () => {
     await enterBrowserChrome();
@@ -28,19 +31,32 @@ describe("options surface", () => {
     await leaveBrowserChrome();
   });
 
-  it("reports what this installation can run, over a live port to the background", async () => {
+  it("says AI is not set up on a fresh install, over a live port to the background", async () => {
     await openOptionsSurface(OPTIONS_PATH);
 
     const snapshot = await readOptionsSurface();
 
-    // Reaching this line already proves the chain: the surface connected a
-    // port, the background spawned the inference worker, and the worker
-    // answered. The assertions below are about what it said.
-    expect(snapshot.capabilities).toContain("wasm");
-    expect(snapshot.capabilities).toMatch(/single-threaded|threads/);
+    expect(snapshot.isAiSetUp).toBe(false);
+    expect(snapshot.aiStatus).toContain("AI isn't set up");
+    expect(snapshot.aiStatus).toContain("Set up AI");
   });
 
-  it("reports the isolation that decides whether threads are available", async () => {
+  inBrowserIt(
+    "reports what this installation can run, over a live port to the background",
+    async () => {
+      await openOptionsSurface(OPTIONS_PATH);
+
+      const snapshot = await readOptionsSurface();
+
+      // Reaching this line already proves the chain: the surface connected a
+      // port, the background spawned the inference worker, and the worker
+      // answered. The assertions below are about what it said.
+      expect(snapshot.capabilities).toContain("wasm");
+      expect(snapshot.capabilities).toMatch(/single-threaded|threads/);
+    },
+  );
+
+  inBrowserIt("reports the isolation that decides whether threads are available", async () => {
     await openOptionsSurface(OPTIONS_PATH);
 
     const snapshot = await readOptionsSurface();
@@ -52,7 +68,7 @@ describe("options surface", () => {
     expect(snapshot.capabilities).toContain("single-threaded");
   });
 
-  it("says nothing is installed before anything is", async () => {
+  inBrowserIt("says nothing is installed before anything is", async () => {
     await openOptionsSurface(OPTIONS_PATH);
 
     expect((await readOptionsSurface()).listIsEmpty).toBe(true);
@@ -69,22 +85,18 @@ describe("options surface", () => {
     expect(dark.textColor).not.toBe(dark.backgroundColor);
   });
 
-  it("offers Ollama as an optional set-up, and admits only its loopback origin", async () => {
+  it("sends nothing to Ollama before setup starts, and admits only its loopback origin", async () => {
     await openOptionsSurface(OPTIONS_PATH);
 
-    // Access to the local server is optional and not yet granted, so the card
-    // asks before anything is sent to it — whether or not Ollama is running.
     await browser.waitUntil(
       async () => (await readOptionsSurface()).ollamaState === "notConnected",
-      {
-        timeoutMsg: "The Ollama card never said it is not connected",
-      },
+      { timeoutMsg: "The Ollama models never said AI is not set up" },
     );
 
     const snapshot = await readOptionsSurface();
 
-    expect(snapshot.ollamaText).toContain("(optional)");
-    expect(snapshot.ollamaText).toContain("Set up Ollama");
+    expect(snapshot.ollamaText).toContain("AI isn't set up yet.");
     expect(snapshot.policy).toContain("http://127.0.0.1:11434");
+    expect(snapshot.policy).not.toMatch(/huggingface|hf\.co/u);
   });
 });

@@ -29,7 +29,14 @@ const readOrigin = (): string => {
 };
 
 /** Every page the extension shows, with a session that has a page in it. */
-const PAGES = [POPUP_PATH, OPTIONS_PATH, "summaries.html", "recorded.html", "map.html"];
+const PAGES = [
+  POPUP_PATH,
+  OPTIONS_PATH,
+  "setup.html",
+  "summaries.html",
+  "recorded.html",
+  "map.html",
+];
 
 // Section 13's accessibility audit: every extension page against WCAG 2 A and AA.
 describe("accessibility", () => {

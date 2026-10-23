@@ -49,4 +49,6 @@ export const popupSnapshotSchema = v.object({
   leftOff: v.nullable(v.string()),
   /** The offer to continue a saved session, or null when none is made. */
   reattachOffer: v.nullable(v.string()),
+  /** The banner saying AI is not set up, or null when the popup shows none. */
+  setupBanner: v.nullable(v.string()),
 });

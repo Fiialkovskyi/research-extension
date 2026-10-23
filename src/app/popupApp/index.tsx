@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { aiSetupResponseSchemas, type AiSetupStatus } from "@/features/aiSetup";
+import { SetupBanner } from "@/features/aiSetup/ui/setupBanner";
 import { Greeting } from "@/features/greeting/ui/greeting";
 import { type GraphSnapshot, researchMapResponseSchemas } from "@/features/researchMap";
 import { buildResearchTree, listUnreadPages, type TreeFocus } from "@/features/researchTree";
@@ -185,6 +187,13 @@ const readFailure = (error: unknown): PopupState => {
   return { status: "ready", pending: false, failure: getErrorMessage(error) };
 };
 
+/** Where the user stands with AI; `undefined` on any other answer. */
+const readAiSetupStatus = (answer: unknown): AiSetupStatus | undefined => {
+  const response = parseRpcMessage(answer, { ...aiSetupResponseSchemas, ...rpcResponseSchemas });
+
+  return response.type === "aiSetup.status" ? response.payload : undefined;
+};
+
 /** Composition root of the toolbar popup surface. */
 /** Whether local AI is paused waiting for Ollama; `false` on any other answer. */
 const readLocalAiPaused = (answer: unknown): boolean => {
@@ -205,6 +214,25 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
   const isReady = state.status === "ready" && !state.pending;
   const [library, setLibrary] = useState<SavedSessionSummary[]>([]);
   const [isLocalAiPaused, setIsLocalAiPaused] = useState(false);
+  const [aiSetup, setAiSetup] = useState<AiSetupStatus | undefined>();
+
+  /** Opens the setup page; Firefox closes the popup as the page takes focus. */
+  const openSetup = useCallback(() => {
+    client.request(buildRpcMessage("aiSetup.open", {})).catch(() => undefined);
+  }, [client]);
+
+  /** Folds or unfolds the banner, remembered by the background for the next open. */
+  const toggleSetupBanner = useCallback(
+    (isCollapsed: boolean) => {
+      setAiSetup((previous) =>
+        previous === undefined ? previous : { ...previous, isBannerCollapsed: isCollapsed },
+      );
+      client
+        .request(buildRpcMessage("aiSetup.collapseBanner", { isCollapsed }))
+        .catch(() => undefined);
+    },
+    [client],
+  );
 
   // Whether similarity is waiting for Ollama, asked once while a session runs.
   useEffect(() => {
@@ -349,6 +377,27 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
     };
   }, [client]);
 
+  // Whether AI is set up, read from storage on every open: nothing here asks Ollama.
+  useEffect(() => {
+    let isCurrent = true;
+
+    client
+      .request(buildRpcMessage("aiSetup.read", {}))
+      .then(readAiSetupStatus)
+      .then(
+        (status) => {
+          if (isCurrent && status !== undefined) {
+            setAiSetup(status);
+          }
+        },
+        () => undefined,
+      );
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [client]);
+
   // The background does the work, so it finishes even if the user dismisses
   // the popup first. Firefox keeps the popup open when the extension itself
   // focuses the new tab (see the spike's Findings), so the answer is normally
@@ -476,6 +525,13 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
 
   return (
     <Panel>
+      {aiSetup !== undefined && !aiSetup.isSetUp && (
+        <SetupBanner
+          isCollapsed={aiSetup.isBannerCollapsed}
+          onSetUp={openSetup}
+          onToggle={toggleSetupBanner}
+        />
+      )}
       <Greeting />
       {state.status === "ready" && state.closedTitle !== undefined && (
         <p data-testid="session-closed" className="mt-2 text-sm">
@@ -568,16 +624,16 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
           <span className="mr-1.5 inline-block align-middle">
             <StatusDot tone="attention" />
           </span>
-          Local AI is paused: Ollama isn&apos;t running. Pages are still recorded; similarity
-          resumes when it&apos;s back.
-          {openSettings !== undefined && (
-            <>
-              {" "}
-              <button type="button" className="underline" onClick={openSettings}>
-                Open settings
-              </button>
-            </>
-          )}
+          AI is paused: Ollama isn&apos;t running. Open it and similar pages resume; pages are still
+          recorded.{" "}
+          <button
+            type="button"
+            data-testid="local-ai-paused-help"
+            className="underline"
+            onClick={openSetup}
+          >
+            Help
+          </button>
         </p>
       )}
       {state.status === "active" && hasPageAccess === false && (

@@ -37,6 +37,7 @@ export const POPUP_SNAPSHOT_SCRIPT = `
       savedSessions: Array.from(document.querySelectorAll('[data-testid="saved-session"]'), (entry) => entry.textContent),
       leftOff: document.querySelector('[data-testid="left-off"]')?.textContent ?? null,
       reattachOffer: document.querySelector('[data-testid="reattach-offer"]')?.textContent ?? null,
+      setupBanner: document.querySelector('[data-testid="setup-banner"]')?.textContent ?? null,
     });
   `;
 

@@ -35,7 +35,7 @@ the models, so in practice the setup is not optional — it is just hidden and h
   - one system notification right after install, whose click opens the wizard;
   - a badge on the toolbar icon (and a different one while Ollama is not answering);
   - a banner at the top of the popup — collapsible, not dismissable — leading to the wizard.
-  Sessions start and record without AI; nothing is blocked.
+    Sessions start and record without AI; nothing is blocked.
 - **The options page loses its model workbench.** It shows the AI status and a link to the wizard;
   other Ollama models, measurement and the developer tools sit under a closed "Advanced" section.
 

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { openResearchDatabase } from ".";
 import {
   ACTIVITY_STORE,
+  AI_SETUP_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   DATABASE_VERSION,
@@ -60,6 +61,7 @@ describe("openResearchDatabase", () => {
         QUESTION_STORE,
         BLOCKED_SITES_STORE,
         ACTIVITY_STORE,
+        AI_SETUP_STORE,
       ].toSorted(),
     );
 

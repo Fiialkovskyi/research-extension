@@ -4,15 +4,18 @@ import { describe, expect, it, vi } from "vitest";
 import "fake-indexeddb/auto";
 
 import { type BackgroundApp, createBackgroundApp, type BackgroundDependencies } from ".";
+import { IN_BROWSER_BACKEND_OFF_REASON } from "./constants";
 import type { InferenceWorker } from "@/features/inference";
 import { EXTRACTION_PROBES, PARAPHRASE_PROBES } from "@/features/modelConformance";
 import { SESSION_TAB_VALUE_KEY, type SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
 import { getFileDigest } from "@/features/modelInstall/model/assertFileDigest/utils/getFileDigest";
-import { MINILM_L6_V2 } from "@/shared/config";
+import type { TurnOnProgress } from "@/features/aiSetup";
+import { LOCAL_INFERENCE_ORIGINS, MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import {
+  AI_SETUP_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -123,6 +126,9 @@ const buildDependencies = (
     openMap: () => Promise.resolve(),
     openRecordedPage: () => Promise.resolve(),
     openSummariesPage: () => Promise.resolve(),
+    openSetupPage: () => Promise.resolve(),
+    showSetupNotification: () => Promise.resolve(),
+    setBadge: () => Promise.resolve(),
     pageSignals: {
       executeScript: () => Promise.resolve([]),
       requestPageText: () => Promise.resolve(undefined),
@@ -130,7 +136,9 @@ const buildDependencies = (
     },
     readFocusedTab: () => Promise.resolve(undefined),
     readIdleState: () => Promise.resolve("active"),
-    hasOllamaAccess: () => Promise.resolve(false),
+    // Most of this suite drives the in-extension backend with Hugging Face
+    // fixtures; the tests that need it switched off say so.
+    isInBrowserBackendEnabled: true,
     backgroundLifetime: {
       touch: () => Promise.resolve(),
       scheduleWake: () => Promise.resolve(),
@@ -194,6 +202,7 @@ const createFreshDatabase = async () => {
   await database.clear(TABLE_COLUMNS_STORE);
   await database.clear(QUESTION_STORE);
   await database.clear(BLOCKED_SITES_STORE);
+  await database.clear(AI_SETUP_STORE);
 
   return database;
 };
@@ -565,6 +574,105 @@ describe("installing a model through the background", () => {
     );
 
     expect(openDatabase).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("the in-extension backend switched off", () => {
+  const installed = {
+    ref: "owner/model@abc",
+    manifest: {
+      manifestVersion: 1,
+      reference: { hub: "huggingface", repository: "owner/model", revision: "a".repeat(40) },
+      format: "onnx",
+      files: [
+        { path: "config.json", digest: { algorithm: "sha256", value: "a".repeat(64) }, bytes: 2 },
+      ],
+      license: "Apache-2.0",
+      contract: {
+        family: "embedding",
+        dimensions: 384,
+        maxInputTokens: 512,
+        pooling: "mean",
+        normalize: true,
+        similarity: "cosine",
+        prefixes: { query: "", document: "" },
+      },
+    },
+    active: true,
+    conformance: "passed",
+    diskBytes: 2,
+    installedAt: 1,
+  } as const;
+
+  const createApp = async (fetchResource = vi.fn() as unknown as typeof fetch) => {
+    const database = await createFreshDatabase();
+    const createInferenceWorker = vi.fn(() => createStubWorker());
+
+    await database.put(MODEL_STORE, installed as never);
+
+    const app = createBackgroundApp(
+      buildDependencies({
+        isInBrowserBackendEnabled: false,
+        openDatabase: () => Promise.resolve(database),
+        fetchResource,
+        createInferenceWorker,
+      }),
+    );
+
+    return { app, fetchResource, createInferenceWorker };
+  };
+
+  it("refuses to install a bundled profile, without reaching a model host", async () => {
+    const { app, fetchResource } = await createApp();
+
+    const response = await app.handleMessage(
+      buildRpcMessage("model.install", { repository: MINILM_L6_V2.repository }),
+    );
+
+    expect(response).toMatchObject({
+      type: "model.installFailed",
+      payload: { reason: IN_BROWSER_BACKEND_OFF_REASON },
+    });
+    expect(fetchResource).not.toHaveBeenCalled();
+  });
+
+  it("refuses to activate an in-extension model, without loading it", async () => {
+    const { app, createInferenceWorker } = await createApp();
+
+    const response = await app.handleMessage(
+      buildRpcMessage("model.activate", { ref: installed.ref, device: "wasm" }),
+    );
+
+    expect(response).toMatchObject({
+      type: "model.activationFailed",
+      payload: { reason: IN_BROWSER_BACKEND_OFF_REASON },
+    });
+    expect(createInferenceWorker).not.toHaveBeenCalled();
+  });
+
+  it("refuses to measure an in-extension model", async () => {
+    const { app, createInferenceWorker } = await createApp();
+
+    const response = await app.handleMessage(
+      buildRpcMessage("benchmark.run", { ref: installed.ref, device: "wasm" }),
+    );
+
+    expect(response).toMatchObject({
+      type: "benchmark.failed",
+      payload: { reason: IN_BROWSER_BACKEND_OFF_REASON },
+    });
+    expect(createInferenceWorker).not.toHaveBeenCalled();
+  });
+
+  it("reports no model host among the permitted origins", async () => {
+    const { app } = await createApp();
+
+    const response = await app.handleMessage(buildRpcMessage("diagnostics.read", {}));
+
+    expect(response).toMatchObject({
+      type: "diagnostics.report",
+      payload: { permittedOrigins: [...LOCAL_INFERENCE_ORIGINS] },
+    });
   });
 });
 
@@ -2601,12 +2709,21 @@ const createFakeOllama = ({
 };
 
 describe("Ollama through the background", () => {
-  it("says it is not connected until access is granted", async () => {
-    const { app } = await createSessionApp();
+  it("contacts nothing and says it is not connected until the user starts setup", async () => {
+    const ollama = createFakeOllama();
+    const fetchResource = vi.fn(ollama.fetchResource) as unknown as typeof fetch;
+    const { app } = await createSessionApp({ fetchResource });
 
     expect(await app.handleMessage(buildRpcMessage("ollama.status", {}))).toMatchObject({
       type: "ollama.state",
       payload: { state: "notConnected", models: [] },
+    });
+    expect(fetchResource).not.toHaveBeenCalled();
+
+    await app.handleMessage(buildRpcMessage("aiSetup.start", {}));
+
+    expect(await app.handleMessage(buildRpcMessage("ollama.status", {}))).toMatchObject({
+      payload: { state: "running" },
     });
   });
 
@@ -2614,8 +2731,9 @@ describe("Ollama through the background", () => {
     const ollama = createFakeOllama({ isRunning: false });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
+
+    await app.handleMessage(buildRpcMessage("aiSetup.start", {}));
 
     expect(await app.handleMessage(buildRpcMessage("ollama.status", {}))).toMatchObject({
       payload: { state: "unreachable" },
@@ -2638,7 +2756,6 @@ describe("Ollama through the background", () => {
     const ollama = createFakeOllama();
     const { app, database } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
     const registered = await app.handleMessage(
       buildRpcMessage("ollama.register", { name: "nomic-embed-text:latest" }),
@@ -2662,8 +2779,10 @@ describe("Ollama through the background", () => {
     const ollama = createFakeOllama();
     const { app, database, clock } = await createSignalsApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
+
+    // A model is registered through setup, so the user has started it.
+    await app.handleMessage(buildRpcMessage("aiSetup.start", {}));
 
     await app.handleMessage(
       buildRpcMessage("ollama.register", { name: "nomic-embed-text:latest" }),
@@ -2712,12 +2831,197 @@ describe("Ollama through the background", () => {
   });
 });
 
+describe("AI setup through the background", () => {
+  it("answers a fresh install's status from storage, contacting nothing", async () => {
+    const fetchResource = vi.fn() as unknown as typeof fetch;
+    const { app } = await createSessionApp({ fetchResource });
+
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.read", {}))).toMatchObject({
+      type: "aiSetup.status",
+      payload: { isSetUp: false, isStarted: false, isBannerCollapsed: false },
+    });
+    expect(fetchResource).not.toHaveBeenCalled();
+  });
+
+  it("records that setup started, and how the banner was left", async () => {
+    const { app } = await createSessionApp();
+
+    await app.handleMessage(buildRpcMessage("aiSetup.start", {}));
+
+    expect(
+      await app.handleMessage(buildRpcMessage("aiSetup.collapseBanner", { isCollapsed: true })),
+    ).toMatchObject({
+      type: "aiSetup.status",
+      payload: { isStarted: true, isBannerCollapsed: true },
+    });
+  });
+});
+
+describe("telling the user that AI needs setting up", () => {
+  it("shows the notification once on a first install, never on an update", async () => {
+    const showSetupNotification = vi.fn(() => Promise.resolve());
+    const { app } = await createSessionApp({ showSetupNotification });
+
+    await app.handleInstalled("update");
+    expect(showSetupNotification).not.toHaveBeenCalled();
+
+    await app.handleInstalled("install");
+    expect(showSetupNotification).toHaveBeenCalledOnce();
+  });
+
+  it("opens the setup page when the notification is clicked, or a surface asks", async () => {
+    const openSetupPage = vi.fn(() => Promise.resolve());
+    const { app } = await createSessionApp({ openSetupPage });
+
+    await app.handleSetupNotificationClicked();
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.open", {}))).toMatchObject({
+      type: "aiSetup.opened",
+    });
+    expect(openSetupPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("badges the icon until an embedding model is on, then clears it", async () => {
+    const setBadge = vi.fn((_state: unknown) => Promise.resolve());
+    const ollama = createFakeOllama();
+    const { app } = await createSessionApp({ fetchResource: ollama.fetchResource, setBadge });
+
+    await app.handleStartup();
+    await vi.waitFor(() => expect(setBadge).toHaveBeenLastCalledWith("needsSetup"));
+
+    await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}));
+    await vi.waitFor(() => expect(setBadge).toHaveBeenLastCalledWith(undefined));
+  });
+});
+
+/** The types a fake port was sent, in order. */
+const typesOf = (posted: unknown[]) => posted.map((message) => (message as { type: string }).type);
+
+/** The "Turn on AI" progress a fake port was sent, in order. */
+const progressOf = (posted: unknown[]) =>
+  posted
+    .filter((message) => (message as { type: string }).type === "aiSetup.turnOnProgress")
+    .map((message) => (message as { payload: TurnOnProgress }).payload);
+
+describe("Turning AI on from the setup page", () => {
+  it("downloads, checks and activates both models, embedding first, under one progress", async () => {
+    const ollama = createFakeOllama({ hasModel: false });
+    const { app, database } = await createSessionApp({ fetchResource: ollama.fetchResource });
+    const { port, posted, send } = createFakePort();
+
+    app.attachPort(port);
+    send(buildRpcMessage("aiSetup.turnOn", {}));
+
+    await vi.waitFor(() => expect(typesOf(posted)).toContain("aiSetup.turnedOn"), {
+      timeout: 5_000,
+    });
+
+    const progress = progressOf(posted);
+
+    expect(ollama.state.pulls).toBe(2);
+    expect(progress[0]).toMatchObject({ family: "embedding", stage: "downloading" });
+    expect(progress.at(-1)).toMatchObject({ family: "text-generation", isEmbeddingReady: true });
+    expect(progress.map(({ fraction }) => fraction)).toEqual(
+      progress.map(({ fraction }) => fraction).toSorted((left, right) => left - right),
+    );
+    expect(posted.at(-1)).toMatchObject({ type: "aiSetup.turnedOn", payload: { isSetUp: true } });
+
+    const models = await database.getAll(MODEL_STORE);
+
+    expect(
+      models.filter(({ active }) => active).map(({ manifest }) => manifest.contract.family),
+    ).toEqual(expect.arrayContaining(["embedding", "text-generation"]));
+    expect((await app.handleMessage(buildRpcMessage("aiSetup.read", {}))).payload).toMatchObject({
+      isStarted: true,
+    });
+  });
+
+  it("does not download a model Ollama already has", async () => {
+    const ollama = createFakeOllama({ hasModel: false, chatModels: ["qwen3:4b"] });
+    const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
+
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}))).toMatchObject({
+      type: "aiSetup.turnedOn",
+      payload: { isSetUp: true },
+    });
+    expect(ollama.state.pulls).toBe(1);
+  });
+
+  it("says Ollama isn't running, before anything else", async () => {
+    const ollama = createFakeOllama({ isRunning: false });
+    const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
+
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}))).toMatchObject({
+      type: "aiSetup.turnOnFailed",
+      payload: { reason: "Ollama isn't running." },
+    });
+  });
+
+  it("names the model and stage that failed", async () => {
+    const ollama = createFakeOllama({ isBroken: true });
+    const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
+
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}))).toMatchObject({
+      type: "aiSetup.turnOnFailed",
+      payload: { name: "nomic-embed-text:latest", stage: "checking" },
+    });
+  });
+
+  it("keeps the embedding model on when the generation model fails", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"], isChatBroken: true });
+    const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
+
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}))).toMatchObject({
+      type: "aiSetup.turnOnFailed",
+      payload: { name: "qwen3:4b", stage: "checking" },
+    });
+    expect((await app.handleMessage(buildRpcMessage("aiSetup.read", {}))).payload).toMatchObject({
+      isSetUp: true,
+    });
+  });
+
+  it("lets a reopened page follow a run already under way", async () => {
+    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 20 });
+    const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
+    const first = createFakePort();
+    const second = createFakePort();
+
+    app.attachPort(first.port);
+    first.send(buildRpcMessage("aiSetup.turnOn", {}));
+    await vi.waitFor(() => expect(progressOf(first.posted).length).toBeGreaterThan(0));
+
+    app.attachPort(second.port);
+    second.send(buildRpcMessage("aiSetup.watch", {}));
+
+    await vi.waitFor(() =>
+      expect(second.posted[0]).toMatchObject({
+        type: "aiSetup.turnOnState",
+        payload: {
+          isRunning: true,
+          progress: expect.objectContaining({ fraction: expect.any(Number) }),
+        },
+      }),
+    );
+    await vi.waitFor(() => expect(typesOf(first.posted)).toContain("aiSetup.turnedOn"), {
+      timeout: 5_000,
+    });
+    // The page that only followed is told how the run ended.
+    await vi.waitFor(() =>
+      expect(second.posted.at(-1)).toMatchObject({
+        type: "aiSetup.turnedOn",
+        payload: { isSetUp: true },
+      }),
+    );
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.watch", {}))).toMatchObject({
+      payload: { isRunning: false },
+    });
+  });
+});
+
 describe("Turning local AI on in one action", () => {
   it("downloads the missing model with progress, then registers, checks and activates it", async () => {
     const ollama = createFakeOllama({ hasModel: false });
     const { app, database } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
     const { port, posted, send } = createFakePort();
 
@@ -2760,7 +3064,6 @@ describe("Turning local AI on in one action", () => {
     const ollama = createFakeOllama();
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     expect(
@@ -2772,7 +3075,6 @@ describe("Turning local AI on in one action", () => {
   it("says Ollama isn't running, before anything else", async () => {
     const { app } = await createSessionApp({
       fetchResource: createFakeOllama({ isRunning: false }).fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     expect(
@@ -2787,7 +3089,6 @@ describe("Turning local AI on in one action", () => {
     const ollama = createFakeOllama({ isBroken: true });
     const { app, database } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     expect(
@@ -2804,7 +3105,6 @@ describe("Page summaries through Ollama", () => {
     const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
     const { app, database } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
     const ref = `ollama:qwen3:4b@${ollama.chatDigest}`;
 
@@ -2839,7 +3139,6 @@ describe("Page summaries through Ollama", () => {
     const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
     const { app, database } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     await app.handleMessage(buildRpcMessage("ollama.enable", { name: "nomic-embed-text" }));
@@ -2856,7 +3155,6 @@ describe("Page summaries through Ollama", () => {
     const ollama = createFakeOllama({ chatModels: ["qwen3:0.6b"] });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     expect(
@@ -2872,7 +3170,6 @@ describe("Page summaries through Ollama", () => {
     const ollama = createFakeOllama({ chatModels: ["qwen3:4b"], isChatBroken: true });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     expect(
@@ -2890,7 +3187,6 @@ describe("Page summaries through Ollama", () => {
     const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
@@ -2910,7 +3206,6 @@ describe("Page summaries through Ollama", () => {
   it("says page summaries are not on when no generation model is active", async () => {
     const { app } = await createSessionApp({
       fetchResource: createFakeOllama().fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     expect(await app.handleMessage(buildRpcMessage("generation.measure", {}))).toMatchObject({
@@ -2923,7 +3218,6 @@ describe("Page summaries through Ollama", () => {
     const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
@@ -2943,7 +3237,6 @@ describe("Page summaries through Ollama", () => {
     const touch = vi.fn(() => Promise.resolve());
     const { app, database } = await createSessionApp({
       fetchResource: slow.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
       backgroundLifetime: {
         touch,
         scheduleWake: () => Promise.resolve(),
@@ -2983,7 +3276,6 @@ describe("Page summaries through Ollama", () => {
     const slow = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 2_300 });
     const { app: slowApp, database } = await createSessionApp({
       fetchResource: slow.fetchResource,
-      hasOllamaAccess: () => Promise.resolve(true),
     });
 
     // Registered and marked as having passed, rather than checked: the
@@ -3325,7 +3617,6 @@ const createExtractionApp = async (overrides: Partial<BackgroundDependencies> = 
   const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
   const signals = await createSignalsApp({
     fetchResource: ollama.fetchResource,
-    hasOllamaAccess: () => Promise.resolve(true),
     ...overrides,
   });
   const { app, database } = signals;

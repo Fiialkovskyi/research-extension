@@ -2,6 +2,7 @@ import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import {
   ACTIVITY_STORE,
+  AI_SETUP_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -221,6 +222,28 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     };
 
     void rewrite();
+  },
+  22: (database, transaction) => {
+    database.createObjectStore(AI_SETUP_STORE, { keyPath: "id" });
+
+    // A profile that already registered an Ollama model had connected to the
+    // server, which is the choice this store now records; without it, an
+    // upgrade would stop the extension reaching a server the user set up.
+    const models = transaction.objectStore(MODEL_STORE);
+    const record = async (): Promise<void> => {
+      let cursor = await models.openCursor();
+
+      while (cursor !== null) {
+        if (cursor.value.manifest.reference.hub === "ollama") {
+          await transaction.objectStore(AI_SETUP_STORE).put({ id: "user", startedAt: Date.now() });
+          return;
+        }
+
+        cursor = await cursor.continue();
+      }
+    };
+
+    void record();
   },
 };
 

@@ -1,6 +1,10 @@
 /**
  * Hugging Face as the add-on's only outbound destination.
  *
+ * Kept for the in-extension backend, which is switched off for now
+ * (`IS_IN_BROWSER_BACKEND_ENABLED`): while it is, the manifest names none of
+ * these origins, so a request to one is blocked rather than merely unused.
+ *
  * Single source of truth: the manifest's `connect-src` (`wxt.config.ts`) and
  * the code that builds file URLs both read these values, so the policy cannot
  * drift from the requests it is meant to permit. If a request is made to an

@@ -3,6 +3,7 @@ import type { DBSchema } from "idb";
 import type { InferenceDevice, ModelManifest } from "../modelManifest";
 import type {
   ACTIVITY_STORE,
+  AI_SETUP_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -423,6 +424,19 @@ export interface StoredQuestions {
  * The sites the user added to the capture denylist (REQ-SEC-007), encrypted:
  * the sites a person hides are themselves private. One record, `id: "user"`.
  */
+/**
+ * The user's progress toward local AI: whether they started setting it up,
+ * which is what allows the extension to contact the local server at all, and
+ * how they left the popup's setup banner.
+ */
+export interface StoredAiSetup {
+  id: "user";
+  /** When the user first opened setup or acted toward it; absent until then. */
+  startedAt?: number;
+  /** Whether the popup's setup banner is folded to one line. */
+  isBannerCollapsed?: boolean;
+}
+
 export interface StoredBlockedSites {
   id: "user";
   keyId: string;
@@ -732,5 +746,9 @@ export interface ResearchDatabaseSchema extends DBSchema {
     key: string;
     value: StoredActivity;
     indexes: { sessionId: string; nodeId: string };
+  };
+  [AI_SETUP_STORE]: {
+    key: string;
+    value: StoredAiSetup;
   };
 }

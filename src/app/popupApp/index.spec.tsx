@@ -19,6 +19,8 @@ interface ClientAnswers {
   map?: unknown;
   /** Whether local AI is paused waiting for Ollama. */
   isLocalAiPaused?: boolean;
+  /** Whether an embedding model is on; set up unless a test says otherwise. */
+  isAiSetUp?: boolean;
 }
 
 /** A background that reports `active` when asked, and answers a start with `start`. */
@@ -29,8 +31,25 @@ const createClient = ({
   start,
   map = buildRpcMessage("map.opened", {}),
   isLocalAiPaused = false,
+  isAiSetUp = true,
 }: ClientAnswers = {}): PopupClient => ({
   request: vi.fn((message: RpcMessage<string, unknown>) => {
+    if (message.type === "aiSetup.read" || message.type === "aiSetup.collapseBanner") {
+      return Promise.resolve(
+        buildRpcMessage("aiSetup.status", {
+          isSetUp: isAiSetUp,
+          isStarted: isAiSetUp,
+          isBannerCollapsed:
+            message.type === "aiSetup.collapseBanner" &&
+            (message.payload as { isCollapsed: boolean }).isCollapsed,
+        }),
+      );
+    }
+
+    if (message.type === "aiSetup.open") {
+      return Promise.resolve(buildRpcMessage("aiSetup.opened", {}));
+    }
+
     if (message.type === "ollama.health") {
       return Promise.resolve(buildRpcMessage("ollama.healthReport", { isPaused: isLocalAiPaused }));
     }
@@ -255,8 +274,8 @@ describe("PopupApp", () => {
     fireEvent.click(await screen.findByTestId("open-map"));
 
     expect(client.request).toHaveBeenCalledWith(expect.objectContaining({ type: "map.open" }));
-    // The session, local AI's health, and the map.
-    await vi.waitFor(() => expect(client.request).toHaveBeenCalledTimes(3));
+    // The session, whether AI is set up, local AI's health, and the map.
+    await vi.waitFor(() => expect(client.request).toHaveBeenCalledTimes(4));
     expect(screen.queryByTestId("map-error")).not.toBeInTheDocument();
   });
 
@@ -780,25 +799,18 @@ describe("PopupApp's way to settings", () => {
 });
 
 describe("PopupApp while local AI waits for Ollama", () => {
-  it("says similarity is paused, and opens settings from the line", async () => {
-    const openSettings = vi.fn();
+  it("says similarity is paused, and leads to the setup page from the line", async () => {
+    const client = createClient({ active: "E-bike motors", isLocalAiPaused: true });
 
-    render(
-      <PopupApp
-        client={createClient({ active: "E-bike motors", isLocalAiPaused: true })}
-        pageAccess={buildPageAccess()}
-        graph={buildGraph()}
-        openSettings={openSettings}
-      />,
-    );
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} graph={buildGraph()} />);
 
     expect(await screen.findByTestId("local-ai-paused")).toHaveTextContent(
-      "Local AI is paused: Ollama isn't running. Pages are still recorded",
+      "AI is paused: Ollama isn't running. Open it and similar pages resume",
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
+    fireEvent.click(screen.getByTestId("local-ai-paused-help"));
 
-    expect(openSettings).toHaveBeenCalledOnce();
+    expect(client.request).toHaveBeenCalledWith(expect.objectContaining({ type: "aiSetup.open" }));
   });
 
   it("says nothing while local AI is not paused", async () => {
@@ -813,5 +825,63 @@ describe("PopupApp while local AI waits for Ollama", () => {
     await screen.findByTestId("session-active");
 
     expect(screen.queryByTestId("local-ai-paused")).toBeNull();
+  });
+});
+
+describe("PopupApp while AI is not set up", () => {
+  it("leads to the setup page from a banner above everything else", async () => {
+    const client = createClient({ isAiSetUp: false });
+
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} graph={buildGraph()} />);
+
+    const banner = await screen.findByTestId("setup-banner");
+
+    expect(screen.getByTestId("popup-panel").firstElementChild).toBe(banner);
+
+    fireEvent.click(screen.getByTestId("setup-banner-action"));
+
+    expect(client.request).toHaveBeenCalledWith(expect.objectContaining({ type: "aiSetup.open" }));
+  });
+
+  it("asks the background to remember a folded banner", async () => {
+    const client = createClient({ isAiSetUp: false });
+
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} graph={buildGraph()} />);
+    fireEvent.click(await screen.findByTestId("setup-banner-toggle"));
+
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "aiSetup.collapseBanner", payload: { isCollapsed: true } }),
+    );
+    expect(screen.getByTestId("setup-banner").dataset["collapsed"]).toBe("true");
+  });
+
+  it("still starts a session", async () => {
+    const client = createClient({
+      isAiSetUp: false,
+      start: buildRpcMessage("tabGroup.created", {
+        groupId: 42,
+        tabId: 7,
+        title: "E-bike motors",
+        color: "blue",
+      }),
+    });
+
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} graph={buildGraph()} />);
+    fireEvent.change(await screen.findByLabelText("Session title"), {
+      target: { value: "E-bike motors" },
+    });
+    fireEvent.submit(screen.getByLabelText("Session title").closest("form")!);
+
+    expect(await screen.findByTestId("session-active")).toHaveTextContent("E-bike motors");
+  });
+
+  it("shows no banner once AI is set up", async () => {
+    render(
+      <PopupApp client={createClient()} pageAccess={buildPageAccess()} graph={buildGraph()} />,
+    );
+
+    await screen.findByLabelText("Session title");
+
+    expect(screen.queryByTestId("setup-banner")).not.toBeInTheDocument();
   });
 });

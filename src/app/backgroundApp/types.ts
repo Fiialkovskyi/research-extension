@@ -1,3 +1,4 @@
+import type { BadgeState } from "@/features/aiSetup";
 import type { IDBPDatabase } from "idb";
 
 import type { InferenceWorker } from "@/features/inference";
@@ -61,6 +62,12 @@ export interface BackgroundDependencies {
   openRecordedPage: () => Promise<void>;
   /** Selects the Summaries tab, opening one outside any tab group if none is open. */
   openSummariesPage: () => Promise<void>;
+  /** Selects the setup page's tab, opening one outside any tab group if none is open. */
+  openSetupPage: () => Promise<void>;
+  /** Shows the one system notification, after install, that AI needs setting up. */
+  showSetupNotification: () => Promise<void>;
+  /** Puts the badge on the toolbar icon, or takes it off. */
+  setBadge: (state: BadgeState) => Promise<void>;
   /** The browser calls resuming a saved session uses: opening, grouping and selecting tabs. */
   resumeApi: ResumeApi;
   /** The browser calls closing a saved session's tabs uses, keeping their window open. */
@@ -80,12 +87,15 @@ export interface BackgroundDependencies {
    * asked for (REQ-MOD-008).
    */
   readIdleState: () => Promise<IdleState>;
-  /** Whether the user granted access to the local Ollama server. */
-  hasOllamaAccess: () => Promise<boolean>;
   /** What the background needs to stay loaded through long work, and to wake itself. */
   backgroundLifetime: BackgroundLifetimeApi;
   /** Where the local Ollama server answers; the loopback default outside tests. */
   ollamaOrigin?: string;
+  /**
+   * Whether models that run inside the extension may be installed, activated
+   * and measured. The configured setting outside tests.
+   */
+  isInBrowserBackendEnabled?: boolean;
   /** The current time. Injected so reading time is exercised without waiting. */
   now?: () => number;
   /**
@@ -192,6 +202,15 @@ export interface BackgroundApp {
    * encrypts any snapshot an earlier version stored in the clear.
    */
   reconcileSession: () => Promise<void>;
+  /**
+   * The extension was installed or updated. A first install tells the user,
+   * once, that AI needs setting up; either way the toolbar badge is set.
+   */
+  handleInstalled: (reason: string) => Promise<void>;
+  /** The browser started: the badge is set again, since it does not survive a restart. */
+  handleStartup: () => Promise<void>;
+  /** The user clicked the setup notification. */
+  handleSetupNotificationClicked: () => Promise<void>;
   /** Records a page committed in a session tab. */
   handleNavigationCommitted: (navigation: CommittedNavigation) => Promise<void>;
   /** Follows a tab joining or leaving the session's group, or reporting a new title. */
@@ -224,3 +243,6 @@ export interface BackgroundApp {
   /** Releases the worker, if one was ever started. */
   shutdown: () => void;
 }
+
+/** Which stage making an Ollama model usable is in. */
+export type EnableStage = "downloading" | "checking";

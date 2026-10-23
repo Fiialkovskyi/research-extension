@@ -4,6 +4,11 @@ The one path that crosses most of the codebase: how a model goes from a line in 
 vector a feature can use. `AGENTS.md` gives the seven steps in brief; this section gives the rules
 each step keeps, and what to do when adding a model or a model family.
 
+> **Switched off for now.** The in-extension backend this section describes is disabled by
+> `IS_IN_BROWSER_BACKEND_ENABLED` (`shared/config/modelBackends`): the local Ollama server is the
+> only backend offered, set up from the setup page. The code is kept and the rules below still hold
+> for it; turning the flag on also restores the model hosts in the manifest.
+
 - [7.1 The path](#71-the-path)
 - [7.2 The two invariants](#72-the-two-invariants)
 - [7.3 Profiles](#73-profiles)

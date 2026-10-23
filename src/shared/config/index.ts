@@ -15,6 +15,7 @@ export type {
 export { ENGAGEMENT_RULES, ENGAGEMENT_STATES } from "./engagementRules/constants";
 export { ENGAGEMENT_DISPLAY } from "./engagementRules/display";
 export { EXTENSION_ID, FIREFOX_MIN_VERSION, OPTIONS_PATH, POPUP_PATH } from "./extension/constants";
+export { IS_IN_BROWSER_BACKEND_ENABLED } from "./modelBackends/constants";
 export {
   BGE_SMALL_EN_V1_5,
   BUNDLED_MODEL_PROFILES,

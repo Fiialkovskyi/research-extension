@@ -2,6 +2,14 @@ import type { IDBPDatabase } from "idb";
 import * as v from "valibot";
 
 import {
+  buildTurnOnPlan,
+  collapseSetupBanner,
+  getBadgeState,
+  readAiSetupStatus,
+  startAiSetup,
+  type TurnOnProgress,
+} from "@/features/aiSetup";
+import {
   type InferenceWorker,
   loadModelIntoWorker,
   type WorkerModelSession,
@@ -161,6 +169,7 @@ import {
 import {
   BUNDLED_MODEL_PROFILES,
   ENGAGEMENT_RULES,
+  IS_IN_BROWSER_BACKEND_ENABLED,
   LOCAL_INFERENCE_ORIGINS,
   OLLAMA_ORIGIN,
 } from "@/shared/config";
@@ -185,7 +194,7 @@ import {
 } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
 import { DATA_TOPICS, type DataTopic } from "@/features/liveData";
-import { DATA_CHANGING_REQUESTS } from "./constants";
+import { DATA_CHANGING_REQUESTS, IN_BROWSER_BACKEND_OFF_REASON } from "./constants";
 import { requestSchemas } from "./schemas";
 import type { PageSender } from "@/features/pageSignals";
 import type {
@@ -193,6 +202,7 @@ import type {
   BackgroundDependencies,
   BackgroundPort,
   Emit,
+  EnableStage,
   IdleState,
 } from "./types";
 
@@ -301,6 +311,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
   /** Discards the worker, so the next attempt starts from a clean runtime. */
   const ollamaOrigin = dependencies.ollamaOrigin ?? OLLAMA_ORIGIN;
+  const isInBrowserBackendEnabled =
+    dependencies.isInBrowserBackendEnabled ?? IS_IN_BROWSER_BACKEND_ENABLED;
 
   /**
    * Loads a model for use, wherever it runs: an Ollama model through the local
@@ -363,11 +375,31 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   let isDataNotificationQueued = false;
 
   /**
+   * Sets the toolbar badge from what is stored: AI not set up, or set up and
+   * waiting for Ollama. Cosmetic, so a failure is reported and nothing waits on it.
+   */
+  const refreshBadge = (): void => {
+    void (async () => {
+      const openedDatabase = await getDatabase();
+      const [status, isPaused] = await Promise.all([
+        readAiSetupStatus(openedDatabase),
+        isLocalAiPaused(openedDatabase),
+      ]);
+
+      await dependencies.setBadge(getBadgeState(status.isSetUp, isPaused));
+    })().catch(dependencies.reportError);
+  };
+
+  /**
    * Tells every open page which kinds of data changed, once the queued writes
    * have been made. A burst of changes ends in one message: topics gather while
    * the notification waits its turn.
    */
   const notifyDataChanged = (topics: readonly DataTopic[]): void => {
+    // Whatever changed may have set AI up, or paused it: the badge follows,
+    // whether or not a page is open to hear about it.
+    refreshBadge();
+
     for (const topic of topics) {
       pendingTopics.add(topic);
     }
@@ -1076,6 +1108,159 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   };
 
   /**
+   * Makes one Ollama model usable: downloads it through Ollama if it lacks it,
+   * registers it, runs its conformance suite and activates it.
+   *
+   * @param onProgress Told the stage, and how much of the download is done.
+   * @returns The model's ref.
+   */
+  const enableOllamaModel = async (
+    name: string,
+    onProgress: (progress: { stage: EnableStage; fraction?: number }) => void,
+  ): Promise<string> => {
+    const status = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+
+    if (status.state !== "running") {
+      throw new Error(
+        status.state === "refused" ? "Ollama is refusing this extension." : "Ollama isn't running.",
+      );
+    }
+
+    const isPresent = (models: readonly { name: string }[]) =>
+      models.find((model) => matchesOllamaName(name, model.name));
+    let present = isPresent(status.models);
+
+    if (present === undefined) {
+      // A pull reports each layer in turn; the largest is the weights, so its
+      // share is what the user is shown rather than a bar that restarts per layer.
+      let largest = { completed: 0, total: 0 };
+
+      onProgress({ stage: "downloading" });
+      await pullOllamaModel(dependencies.fetchResource, ollamaOrigin, name, (progress) => {
+        if (progress.total === undefined || progress.completed === undefined) {
+          return;
+        }
+
+        if (progress.total >= largest.total) {
+          largest = { completed: progress.completed, total: progress.total };
+        }
+
+        onProgress({
+          stage: "downloading",
+          fraction: largest.total === 0 ? 0 : largest.completed / largest.total,
+        });
+      });
+
+      const after = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+
+      present = after.state === "running" ? isPresent(after.models) : undefined;
+
+      if (present === undefined) {
+        throw new Error(`Ollama finished downloading but does not list ${name}.`);
+      }
+    }
+
+    onProgress({ stage: "checking" });
+
+    const ref = await registerOllamaModel(present.name);
+    const { recorded } = await activateWithConformance(ref, "local-server");
+
+    if (!recorded.active) {
+      throw new Error(recorded.conformanceReason ?? "It did not pass the quality check.");
+    }
+
+    return ref;
+  };
+
+  /** Pages following "Turn on AI", and where it stands; both empty while it is not running. */
+  const turnOnWatchers = new Set<Emit>();
+  /** Of those, the pages that only follow it, and so are sent how it ended. */
+  const turnOnFollowers = new Set<Emit>();
+  let turningOn: Promise<RpcMessage<string, unknown>> | undefined;
+  let turnOnProgress: TurnOnProgress | undefined;
+
+  const reportTurnOn = (progress: TurnOnProgress): void => {
+    turnOnProgress = progress;
+
+    for (const watch of turnOnWatchers) {
+      try {
+        watch(buildRpcMessage("aiSetup.turnOnProgress", progress));
+      } catch {
+        // The page closed; the work goes on without it.
+        turnOnWatchers.delete(watch);
+      }
+    }
+  };
+
+  /**
+   * "Turn on AI": the recommended embedding model, then the recommended
+   * text-generation model, each downloaded if Ollama lacks it, checked and
+   * activated. Runs in the background, so closing the page does not stop it;
+   * an activated model is kept when a later one fails.
+   */
+  const turnOnAi = async (): Promise<RpcMessage<string, unknown>> => {
+    await startAiSetup(await getDatabase(), getNow());
+
+    const status = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
+
+    if (status.state !== "running") {
+      return buildRpcMessage("aiSetup.turnOnFailed", {
+        stage: "downloading",
+        reason:
+          status.state === "refused"
+            ? "Ollama is refusing this extension."
+            : "Ollama isn't running.",
+      });
+    }
+
+    const plan = buildTurnOnPlan(
+      listOllamaModelEntries(status.models, await listInstalledOllamaModels(await getDatabase())),
+    );
+    let doneBytes = 0;
+    let isEmbeddingReady = false;
+
+    for (const [index, step] of plan.steps.entries()) {
+      let stage: EnableStage = step.isPulled ? "checking" : "downloading";
+      // Bytes when anything downloads, so the bar moves with the data; steps
+      // otherwise, so checking alone still shows progress.
+      const report = (stepFraction: number) => {
+        const fraction =
+          plan.downloadBytes === 0
+            ? (index + stepFraction) / plan.steps.length
+            : (doneBytes + stepFraction * step.downloadBytes) / plan.downloadBytes;
+
+        reportTurnOn({
+          name: step.name,
+          family: step.family,
+          stage,
+          fraction: Math.min(1, fraction),
+          isEmbeddingReady,
+        });
+      };
+
+      try {
+        report(0);
+        await enableOllamaModel(step.name, (progress) => {
+          stage = progress.stage;
+          report(progress.stage === "checking" ? 1 : (progress.fraction ?? 0));
+        });
+      } catch (error) {
+        return buildRpcMessage("aiSetup.turnOnFailed", {
+          name: step.name,
+          stage,
+          reason: getErrorMessage(error),
+        });
+      }
+
+      doneBytes += step.downloadBytes;
+      isEmbeddingReady ||= step.family === "embedding";
+      notifyDataChanged(["models"]);
+    }
+
+    return buildRpcMessage("aiSetup.turnedOn", await readAiSetupStatus(await getDatabase()));
+  };
+
+  /**
    * Once Ollama answers again, hands back the jobs that stopped because it did
    * not. Asked only while local AI is paused, so a working setup costs nothing.
    */
@@ -1497,7 +1682,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "diagnostics.read": {
           return buildRpcMessage("diagnostics.report", {
             blocked: dependencies.policyViolations.read(),
-            permittedOrigins: [...MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS],
+            permittedOrigins: [
+              ...(isInBrowserBackendEnabled ? MODEL_HOST_ORIGINS : []),
+              ...LOCAL_INFERENCE_ORIGINS,
+            ],
           });
         }
 
@@ -1511,6 +1699,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
             if (model === undefined) {
               throw new Error(`No model is installed under "${ref}".`);
+            }
+
+            if (!isInBrowserBackendEnabled && model.manifest.reference.hub !== "ollama") {
+              throw new Error(IN_BROWSER_BACKEND_OFF_REASON);
             }
 
             if (model.manifest.contract.family !== "embedding") {
@@ -1554,6 +1746,14 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           const { ref } = request.payload;
 
           try {
+            if (!isInBrowserBackendEnabled) {
+              const model = await (await getDatabase()).get(MODEL_STORE, ref);
+
+              if (model !== undefined && model.manifest.reference.hub !== "ollama") {
+                throw new Error(IN_BROWSER_BACKEND_OFF_REASON);
+              }
+            }
+
             const { recorded, probes } = await activateWithConformance(ref, device);
 
             return buildRpcMessage("model.activated", {
@@ -1848,7 +2048,9 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "ollama.status": {
-          if (!(await dependencies.hasOllamaAccess())) {
+          // Nothing is sent to Ollama until the user started setup: the loopback
+          // permission is granted at install and says nothing about them.
+          if (!(await readAiSetupStatus(await getDatabase())).isStarted) {
             return buildRpcMessage("ollama.state", { state: "notConnected", models: [] });
           }
 
@@ -1891,54 +2093,21 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           // One action from the user's click: download if missing, register,
           // check, activate — reporting which stage it is in.
           const { name } = request.payload;
-          let stage: "downloading" | "checking" = "downloading";
+          let stage: EnableStage = "downloading";
 
           try {
-            const status = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
-
-            if (status.state !== "running") {
-              throw new Error(
-                status.state === "refused"
-                  ? "Ollama is refusing this extension."
-                  : "Ollama isn't running.",
+            const ref = await enableOllamaModel(name, (progress) => {
+              stage = progress.stage;
+              emit?.(
+                buildRpcMessage("ollama.enableProgress", {
+                  name,
+                  stage: progress.stage,
+                  ...(progress.fraction === undefined
+                    ? {}
+                    : { percent: Math.round(progress.fraction * 100) }),
+                }),
               );
-            }
-
-            const isPresent = (models: readonly { name: string }[]) =>
-              models.find((model) => matchesOllamaName(name, model.name));
-            let present = isPresent(status.models);
-
-            if (present === undefined) {
-              await pullOllamaModel(dependencies.fetchResource, ollamaOrigin, name, (progress) => {
-                emit?.(
-                  buildRpcMessage("ollama.enableProgress", {
-                    name,
-                    stage: "downloading",
-                    ...(progress.total === undefined || progress.completed === undefined
-                      ? {}
-                      : { percent: Math.round((progress.completed / progress.total) * 100) }),
-                  }),
-                );
-              });
-
-              const after = await readOllamaStatus(dependencies.fetchResource, ollamaOrigin);
-
-              present = after.state === "running" ? isPresent(after.models) : undefined;
-
-              if (present === undefined) {
-                throw new Error(`Ollama finished downloading but does not list ${name}.`);
-              }
-            }
-
-            stage = "checking";
-            emit?.(buildRpcMessage("ollama.enableProgress", { name, stage }));
-
-            const ref = await registerOllamaModel(present.name);
-            const { recorded } = await activateWithConformance(ref, "local-server");
-
-            if (!recorded.active) {
-              throw new Error(recorded.conformanceReason ?? "It did not pass the quality check.");
-            }
+            });
 
             return buildRpcMessage("ollama.enabled", { name, ref });
           } catch (error) {
@@ -1948,6 +2117,46 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
               reason: getErrorMessage(error),
             });
           }
+        }
+
+        case "aiSetup.turnOn": {
+          if (emit !== undefined) {
+            turnOnWatchers.add(emit);
+          }
+
+          turningOn ??= turnOnAi().then((outcome) => {
+            // A page that only followed the run is told how it ended; the one
+            // that asked hears it as the answer.
+            for (const follow of turnOnFollowers) {
+              try {
+                follow(outcome);
+              } catch {
+                // That page closed already.
+              }
+            }
+
+            turningOn = undefined;
+            turnOnProgress = undefined;
+            turnOnWatchers.clear();
+            turnOnFollowers.clear();
+
+            return outcome;
+          });
+
+          return turningOn;
+        }
+
+        case "aiSetup.watch": {
+          // A reopened setup page follows a run already under way.
+          if (turningOn !== undefined && emit !== undefined) {
+            turnOnWatchers.add(emit);
+            turnOnFollowers.add(emit);
+          }
+
+          return buildRpcMessage("aiSetup.turnOnState", {
+            isRunning: turningOn !== undefined,
+            ...(turnOnProgress === undefined ? {} : { progress: turnOnProgress }),
+          });
         }
 
         case "ollama.pull": {
@@ -1962,6 +2171,32 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           } catch (error) {
             return buildRpcMessage("ollama.pullFailed", { name, reason: getErrorMessage(error) });
           }
+        }
+
+        case "aiSetup.open": {
+          await dependencies.openSetupPage();
+
+          return buildRpcMessage("aiSetup.opened", {});
+        }
+
+        case "aiSetup.read": {
+          return buildRpcMessage("aiSetup.status", await readAiSetupStatus(await getDatabase()));
+        }
+
+        case "aiSetup.start": {
+          const openedDatabase = await getDatabase();
+
+          await startAiSetup(openedDatabase, getNow());
+
+          return buildRpcMessage("aiSetup.status", await readAiSetupStatus(openedDatabase));
+        }
+
+        case "aiSetup.collapseBanner": {
+          const openedDatabase = await getDatabase();
+
+          await collapseSetupBanner(openedDatabase, request.payload.isCollapsed);
+
+          return buildRpcMessage("aiSetup.status", await readAiSetupStatus(openedDatabase));
         }
 
         case "ollama.health": {
@@ -2089,6 +2324,13 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             });
           }
 
+          if (!isInBrowserBackendEnabled) {
+            return buildRpcMessage("model.installFailed", {
+              repository,
+              reason: IN_BROWSER_BACKEND_OFF_REASON,
+            });
+          }
+
           try {
             const model = await installModel({
               profile,
@@ -2163,12 +2405,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             // The page went away before its answer; it has nothing to push to.
             graphSubscribers.delete(emit);
             dataSubscribers.delete(emit);
+            turnOnWatchers.delete(emit);
+            turnOnFollowers.delete(emit);
           }
         });
       });
       port.onDisconnect.addListener(() => {
         graphSubscribers.delete(emit);
         dataSubscribers.delete(emit);
+        turnOnWatchers.delete(emit);
+        turnOnFollowers.delete(emit);
       });
     },
     handleAccessChanged: () => {
@@ -2238,6 +2484,19 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           tab,
         });
       }),
+    handleInstalled: async (reason) => {
+      if (reason === "install") {
+        await dependencies.showSetupNotification().catch(dependencies.reportError);
+      }
+
+      refreshBadge();
+    },
+    handleStartup: () => {
+      refreshBadge();
+
+      return Promise.resolve();
+    },
+    handleSetupNotificationClicked: () => dependencies.openSetupPage(),
     reconcileSession: async () => {
       // Snapshots an earlier version stored in the clear are encrypted first.
       // Reported rather than thrown: a failure must not keep the session from

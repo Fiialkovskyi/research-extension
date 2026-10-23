@@ -8,7 +8,15 @@ import { EXTENSION_ID, FIREFOX_MIN_VERSION } from "./src/shared/config";
 // also exports functions that import through the `@/` alias, which the config
 // loader does not resolve. The manifest only needs the origins anyway.
 import { MODEL_HOST_ORIGINS } from "./src/shared/huggingFace/constants";
+import { IS_IN_BROWSER_BACKEND_ENABLED } from "./src/shared/config/modelBackends/constants";
 import { LOCAL_INFERENCE_ORIGINS } from "./src/shared/config/ollama/constants";
+
+/**
+ * The model hosts the in-extension backend downloads from. Kept, not deleted:
+ * while that backend is switched off the package names no model host at all,
+ * and switching it back on restores both the permission and the policy entry.
+ */
+const ENABLED_MODEL_HOST_ORIGINS = IS_IN_BROWSER_BACKEND_ENABLED ? MODEL_HOST_ORIGINS : [];
 
 export default defineConfig({
   srcDir: "src",
@@ -46,20 +54,31 @@ export default defineConfig({
     // after its group is gone is brought back into the session. `idle` tells
     // reading time from a user who has walked away, and `scripting` injects the
     // page observer into session tabs. `alarms` lets queued jobs wake the
-    // background after it was unloaded. Nothing else is requested.
-    permissions: ["tabGroups", "tabs", "webNavigation", "sessions", "scripting", "idle", "alarms"],
+    // background after it was unloaded, and `notifications` tells the user once,
+    // after install, that AI needs setting up. Nothing else is requested.
+    permissions: [
+      "tabGroups",
+      "tabs",
+      "webNavigation",
+      "sessions",
+      "scripting",
+      "idle",
+      "alarms",
+      "notifications",
+    ],
     // Reading a session page's scroll, copies and text needs access to page
     // contents. Optional, so it is never granted at install: the popup asks for
     // it when a session starts, and capture carries on without it if refused.
-    // The local Ollama server is reached only once the user connects to it from
-    // the options page; loopback only, so nothing leaves the machine.
-    optional_host_permissions: [
-      "<all_urls>",
-      ...LOCAL_INFERENCE_ORIGINS.map((origin) => `${origin}/*`),
-    ],
+    optional_host_permissions: ["<all_urls>"],
     // Derived from one list so the policy and the permissions cannot drift
     // apart from each other, nor from the code that builds the request URLs.
-    host_permissions: MODEL_HOST_ORIGINS.map((origin) => `${origin}/*`),
+    // The local Ollama server is required rather than optional, so setting AI
+    // up asks for no permission: it is loopback only, nothing leaves the
+    // machine, and nothing is sent there until the user starts setup, which the
+    // background records rather than reading it from this grant.
+    host_permissions: [...ENABLED_MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS].map(
+      (origin) => `${origin}/*`,
+    ),
     content_security_policy: {
       // `wasm-unsafe-eval` lets the packaged ONNX Runtime compile its own
       // WebAssembly. It permits compilation of bundled bytes, not fetching
@@ -72,7 +91,7 @@ export default defineConfig({
       extension_pages: [
         "script-src 'self' 'wasm-unsafe-eval'",
         "object-src 'none'",
-        `connect-src 'self' ${[...MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS].join(" ")}`,
+        `connect-src 'self' ${[...ENABLED_MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS].join(" ")}`,
       ].join("; "),
     },
   },

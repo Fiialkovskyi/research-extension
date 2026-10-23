@@ -16,13 +16,13 @@ how the code keeps those promises, and which changes are not ordinary code chang
 
 ## 10.1 The guarantees
 
-| Guarantee                              | Enforced by                                                                                                  |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| The package runs only its own code     | `script-src 'self' 'wasm-unsafe-eval'`; everything bundled                                                   |
-| It reaches only the model hosts        | `connect-src 'self'` + `MODEL_HOST_ORIGINS`; `host_permissions` from the same list                           |
-| Model bytes are what the manifest says | digest checked before storage; runtime remote loading off ([7.2](./MODEL_PIPELINE.md#72-the-two-invariants)) |
-| It collects nothing                    | `data_collection_permissions: ["none"]`; no content in any stored record                                     |
-| It sends no identity                   | every request is `credentials: "omit"`; no account, no token                                                 |
+| Guarantee                              | Enforced by                                                                                                                                  |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| The package runs only its own code     | `script-src 'self' 'wasm-unsafe-eval'`; everything bundled                                                                                   |
+| It reaches only the declared hosts     | `connect-src 'self'` + loopback Ollama (+ `MODEL_HOST_ORIGINS` only while in-extension models are on); `host_permissions` from the same list |
+| Model bytes are what the manifest says | digest checked before storage; runtime remote loading off ([7.2](./MODEL_PIPELINE.md#72-the-two-invariants))                                 |
+| It collects nothing                    | `data_collection_permissions: ["none"]`; no content in any stored record                                                                     |
+| It sends no identity                   | every request is `credentials: "omit"`; no account, no token                                                                                 |
 
 The enforcement points are **the browser's** wherever possible — the content security policy, not a
 check in our code. A check in our code can be forgotten by the next function; the policy cannot.
@@ -42,7 +42,12 @@ check in our code. A check in our code can be forgotten by the next function; th
 
 ## 10.3 No egress beyond declared hosts
 
-- **`MODEL_HOST_ORIGINS`** (`shared/huggingFace/constants.ts`) is the single list. The manifest's
+- **Ollama on loopback** (`LOCAL_INFERENCE_ORIGINS`) is a required host permission, so setting AI up
+  asks for no permission; nothing is sent there until the user starts setup, which the background
+  records in storage (`aiSetup`). A grant cannot express that: page access (`<all_urls>`) covers
+  loopback too, and the required permission is granted at install.
+- **`MODEL_HOST_ORIGINS`** (`shared/huggingFace/constants.ts`) is the single list of model hosts,
+  used only while `IS_IN_BROWSER_BACKEND_ENABLED` is on. The manifest's
   `connect-src` and `host_permissions` are built from it in `wxt.config.ts`, and the code that builds
   request URLs uses the same constants — so the policy, the permissions and the requests cannot
   drift apart.

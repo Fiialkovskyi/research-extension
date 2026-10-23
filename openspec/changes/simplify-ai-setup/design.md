@@ -25,11 +25,13 @@ See proposal.md for why. What the code does today, and that this design builds o
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One page, one button, no Terminal when Firefox permits it.
 - Keep every in-extension model path compiling and tested, switchable by one constant.
 - Keep the "nothing reaches Ollama unasked" guarantee after the permission stops expressing it.
 
 **Non-Goals:**
+
 - Redesigning the popup beyond the banner, or any other page.
 - Detecting the machine's memory to pick a smaller generation model.
 - Starting Ollama for the user (an extension cannot launch an app).
@@ -86,9 +88,13 @@ layout). It is read in three places:
 
 - `wxt.config.ts`: Hugging Face origins are added to `host_permissions` and `connect-src` only when
   it is on. The `MODEL_HOST_ORIGINS` line stays, commented to say it is gated, not removed.
-- the background: `model.install` and `benchmark.run` for a non-Ollama model answer `rpc.refused`
-  with a reason naming the setting; `modelRegistry/getActiveModel` ignores non-Ollama models while
-  it is off, so an in-extension model left active in a developer profile is not used.
+- the background: `model.install`, `model.activate` and `benchmark.run` for a non-Ollama model
+  answer `rpc.refused` with a reason naming the setting. `getActiveModel` is **not** filtered: an
+  in-extension model a developer profile already has active keeps working (its files are stored, it
+  needs no network), and activating an Ollama model of the same family deactivates it, as any
+  activation does. Filtering the lookup was tried and rejected: some thirty unit tests exercise the
+  in-extension path through it with Hugging Face fixtures, and would all have needed the flag
+  injected for no behaviour a user of a fresh install could see.
 - the options page: the in-extension sections are not rendered.
 
 A `constants.spec.ts` guard asserts the flag is off, since turning it on silently re-adds two host
@@ -161,4 +167,33 @@ moved or deleted. Rollback is flipping the flag and reverting the manifest lines
 
 ## Findings
 
-_To be filled by the spike (tasks 1.x)._
+### Spike: admitting the extension without `OLLAMA_ORIGINS` (2026-10-23)
+
+Firefox 158.0.1 on macOS, Ollama 0.40.6. A second Ollama ran on `127.0.0.1:11435` with
+`OLLAMA_ORIGINS` unset, so the user's own server was not reconfigured. Throwaway add-ons were
+installed temporarily through WebDriver, and each reported what it got; Ollama's own request log
+was the referee. Every MV3 candidate was run twice, once with host permissions granted after
+install the way the e2e suite grants page access (then reloaded), once granted at install through
+`extensions.originControls.grantByDefault`, with the same result. The spike's code is not kept.
+
+| Candidate                                                         | Own requests                  | Other add-on | Web page (`Origin: null`) |
+| ----------------------------------------------------------------- | ----------------------------- | ------------ | ------------------------- |
+| MV3, blocking `webRequest.onBeforeSendHeaders`                    | 403 — listener never called   | 403          | 403                       |
+| MV3, DNR `modifyHeaders` with `initiatorDomains: [own uuid]`      | 403 — rule set, not applied   | 403          | 403                       |
+| MV3, DNR `modifyHeaders` with no initiator condition              | 403 — rule set, not applied   | 403          | 403                       |
+| MV3, hidden `127.0.0.1` iframe in the background + content script | content script never injected | —            | —                         |
+| Control: MV2, `webRequest.onBeforeRequest`, `<all_urls>`          | seen, with `originUrl`        | not seen     | seen                      |
+
+- **Neither mechanism works for an MV3 add-on.** In MV3, `webRequest` is not given the add-on's
+  own requests at all (the MV2 control sees them), and DNR rules are not applied to them, scoped or
+  not. The iframe relay fails because Firefox injects no content script into a frame of the
+  background document. Moving to MV2 is not an option.
+- **Decision: none — keep the command step.** No rewrite permission is declared and task 3.4 has
+  nothing to implement. The wizard shows "allow this extension" only when Ollama refuses, with the
+  existing one-command, own-origin-only `buildOllamaOriginsCommand`.
+- **Side observations.** In the spike's add-ons a 403 from Ollama reached `fetch` as a
+  `NetworkError`, not a readable status, with the host permission granted either way, whereas
+  `readOllamaStatus` relies on reading `403`. Which one the shipped extension sees is checked in the
+  manual run (10.2), since the wizard's "allow this extension" step depends on it. A listener
+  registered after a `setTimeout` received nothing even in MV2, which is one more reason the
+  background registers everything synchronously.

@@ -1,6 +1,11 @@
 import { expect } from "@wdio/globals";
 
-import { BGE_SMALL_EN_V1_5, MINILM_L6_V2, OPTIONS_PATH } from "@/shared/config";
+import {
+  BGE_SMALL_EN_V1_5,
+  IS_IN_BROWSER_BACKEND_ENABLED,
+  MINILM_L6_V2,
+  OPTIONS_PATH,
+} from "@/shared/config";
 import {
   activateInstalledModel,
   installModelFromHub,
@@ -21,7 +26,9 @@ import {
  *
  * Run with: `E2E_NETWORK=true npm run test:e2e`
  */
-const networkSuite = process.env["E2E_NETWORK"] === "true" ? describe : describe.skip;
+// It installs in-extension models, so it needs that backend switched on as well.
+const networkSuite =
+  process.env["E2E_NETWORK"] === "true" && IS_IN_BROWSER_BACKEND_ENABLED ? describe : describe.skip;
 
 /** Repository and pinned revision, as the surface identifies an install. */
 const getRef = (profile: { repository: string; revision: string }) =>

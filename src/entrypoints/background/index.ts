@@ -7,8 +7,14 @@ import { SUMMARIES_PAGE_PATH } from "@/features/clusterSummaries";
 import { HOLD_PAGE_PATH } from "@/features/diagnostics";
 import { createInferenceWorker, INFERENCE_WORKER_PATH } from "@/features/inference";
 import { JOB_WAKE_ALARM } from "@/features/jobQueue";
-import { isOllamaAccessGranted } from "@/features/ollama";
 import { RECORDED_PAGE_PATH } from "@/features/recordedData";
+import {
+  BADGE_APPEARANCE,
+  NOTIFICATION_ICON_PATH,
+  SETUP_NOTIFICATION,
+  SETUP_NOTIFICATION_ID,
+  SETUP_PAGE_PATH,
+} from "@/features/aiSetup";
 import { MAP_PAGE_PATH, openMapTab, readMapTab } from "@/features/researchMap";
 import { NO_TAB_GROUP } from "@/features/researchSession";
 import { readCaptureTab, readFocusedTab } from "@/features/tabCapture";
@@ -111,6 +117,32 @@ export default defineBackground(() => {
         },
         browser.runtime.getURL(SUMMARIES_PAGE_PATH),
       ),
+    openSetupPage: () =>
+      openMapTab(
+        {
+          queryTabs: async () => (await browser.tabs.query({})).map(readMapTab),
+          createTab: async (url) => readMapTab(await browser.tabs.create({ url })),
+          focusTab: (tab) => focusBrowserTab(tab.id, tab.windowId),
+          ungroupTab: (tabId) => browser.tabs.ungroup(tabId),
+        },
+        browser.runtime.getURL(SETUP_PAGE_PATH),
+      ),
+    showSetupNotification: async () => {
+      await browser.notifications.create(SETUP_NOTIFICATION_ID, {
+        type: "basic",
+        iconUrl: browser.runtime.getURL(NOTIFICATION_ICON_PATH),
+        ...SETUP_NOTIFICATION,
+      });
+    },
+    setBadge: async (state) => {
+      const appearance = state === undefined ? undefined : BADGE_APPEARANCE[state];
+
+      await browser.action.setBadgeText({ text: appearance?.text ?? "" });
+
+      if (appearance !== undefined) {
+        await browser.action.setBadgeBackgroundColor({ color: appearance.color });
+      }
+    },
     sessionTabs: {
       // Firefox's per-tab session values, which the shared (Chrome) typings do
       // not declare. They need the `sessions` permission.
@@ -149,8 +181,6 @@ export default defineBackground(() => {
       createTabIn: (windowId) => browser.tabs.create({ windowId }),
       removeTabs: (tabIds) => browser.tabs.remove(tabIds),
     },
-    hasOllamaAccess: async () =>
-      isOllamaAccessGranted((await browser.permissions.getAll()).origins ?? []),
     backgroundLifetime: {
       // Read-only and cheap: it exists only to count as activity.
       touch: () => browser.runtime.getPlatformInfo(),
@@ -241,9 +271,17 @@ export default defineBackground(() => {
   // install or update, during which the extension heard none of the tab events.
   browser.runtime.onStartup.addListener(() => {
     void app.reconcileSession();
+    void app.handleStartup();
   });
-  browser.runtime.onInstalled.addListener(() => {
+  browser.runtime.onInstalled.addListener(({ reason }) => {
     void app.reconcileSession();
+    void app.handleInstalled(reason);
+  });
+  // The one notification after install leads to the setup page.
+  browser.notifications.onClicked.addListener((notificationId) => {
+    if (notificationId === SETUP_NOTIFICATION_ID) {
+      void app.handleSetupNotificationClicked();
+    }
   });
 
   // Capture: what happens in the session's tabs becomes the graph. Each event

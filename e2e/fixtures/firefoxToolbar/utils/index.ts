@@ -34,6 +34,7 @@ export { placeToolbarAction } from "./placeToolbarAction";
 export { type PopupPanelState, getPopupPanelState } from "./getPopupPanelState";
 export { type PopupSnapshot, readPopup } from "./readPopup";
 export { type TabGroupSnapshot, readTabGroups } from "./readTabGroups";
+export { readToolbarBadge } from "./readToolbarBadge";
 export { type TabSnapshot, readTabs } from "./readTabs";
 export { reopenSavedTabGroup } from "./reopenSavedTabGroup";
 export { saveAndCloseTabGroup } from "./saveAndCloseTabGroup";

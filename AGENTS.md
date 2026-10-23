@@ -10,7 +10,7 @@ The extension source lives in `src/`, organised in four layers that may only imp
 (`entrypoints` → `app` → `features` → `shared`):
 
 - `src/entrypoints/` — browser-facing entry points in WXT's convention: `popup/`, `options/`,
-  `background/` (the MV3 event page) and `inferenceWorker/` (an unlisted script loaded as a
+  `setup/` (the page that turns AI on), `background/` (the MV3 event page) and `inferenceWorker/` (an unlisted script loaded as a
   dedicated Worker). **Entrypoints are wiring only.** They mount a tree, or register listeners and
   forward to a composition root; logic belongs in `features/`, where it carries unit tests. Two
   rules follow from the contexts themselves:
@@ -44,6 +44,15 @@ beside it as `index.spec.ts(x)`. Add a capability by adding a directory, not by 
 The layering above says what may import what; it does not say what happens in which order. This is
 the one path that crosses most of the codebase, so it is worth reading once before changing any part
 of it. Each step names the module that owns it.
+
+**For now only the Ollama path is offered.** Models that run inside the extension are switched off
+by `IS_IN_BROWSER_BACKEND_ENABLED` in `shared/config`; their code, tests and stored files stay, and
+while it is off the manifest names no model host. A user turns AI on from the setup page
+(`setup.html`): `aiSetup.turnOn` asks Ollama for the recommended embedding model, then the
+recommended text-generation model, and each is registered, judged (step 6) and activated (step 7)
+like any model. Nothing is sent to Ollama until the user started setup, which the background records
+rather than reading it from the loopback permission, now granted at install. The seven steps below
+are the in-extension path, kept for when the flag is turned back on.
 
 1. **A profile says which model.** `shared/config/modelProfiles` — repository, pinned commit, which
    weight file, and the contract values a repository does not publish about itself (pooling,

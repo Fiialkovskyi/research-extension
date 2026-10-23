@@ -6,8 +6,6 @@ import { buildRpcMessage } from "@/shared/rpc";
 
 type Listener = (message: unknown) => void;
 
-const ORIGIN = "moz-extension://0f8e7a1c-1111-4222-8333-944455556666";
-
 const createStubClient = () => {
   const listeners = new Set<Listener>();
   const sent: { type: string; payload: unknown }[] = [];
@@ -52,18 +50,7 @@ const pushState = (push: (message: unknown) => void, state: string, models: unkn
 const renderCard = (
   client: OllamaCardClient,
   props: Partial<Parameters<typeof OllamaCard>[0]> = {},
-) =>
-  render(
-    <OllamaCard
-      client={client}
-      requestAccess={vi.fn()}
-      extensionOrigin={ORIGIN}
-      platform="mac"
-      {...props}
-    />,
-  );
-
-const getStatus = (testId: string) => screen.getByTestId(testId).getAttribute("data-status");
+) => render(<OllamaCard client={client} {...props} />);
 
 afterEach(() => {
   vi.useRealTimers();
@@ -76,66 +63,6 @@ describe("OllamaCard", () => {
     renderCard(client);
 
     expect(sent).toEqual([expect.objectContaining({ type: "ollama.status" })]);
-  });
-
-  it("is optional and closed until the user has connected", () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "notConnected");
-
-    const section = screen.getByTestId("ollama-card");
-
-    expect(section.hasAttribute("open")).toBe(false);
-    expect(section.textContent).toContain("(optional)");
-    expect(section.textContent).toContain("works without it");
-
-    pushState(push, "unreachable");
-
-    expect(section.hasAttribute("open")).toBe(true);
-  });
-
-  it("sets up with the permission request inside the click, then looks again", async () => {
-    const { client, sent, push } = createStubClient();
-    const requestAccess = vi.fn(() => Promise.resolve(true));
-
-    renderCard(client, { requestAccess });
-    pushState(push, "notConnected");
-    fireEvent.click(screen.getByTestId("ollama-connect"));
-
-    expect(requestAccess).toHaveBeenCalledOnce();
-    await vi.waitFor(() =>
-      expect(sent.filter(({ type }) => type === "ollama.status")).toHaveLength(2),
-    );
-  });
-
-  it("says so on the page when the permission is refused, and lets the user try again", async () => {
-    const { client, sent, push } = createStubClient();
-    const requestAccess = vi.fn(() => Promise.resolve(false));
-
-    renderCard(client, { requestAccess });
-    pushState(push, "notConnected");
-    fireEvent.click(screen.getByTestId("ollama-connect"));
-
-    expect(await screen.findByTestId("ollama-access-problem")).toBeTruthy();
-    expect(sent.filter(({ type }) => type === "ollama.status")).toHaveLength(1);
-
-    requestAccess.mockResolvedValueOnce(true);
-    fireEvent.click(screen.getByTestId("ollama-connect"));
-
-    await vi.waitFor(() => expect(screen.queryByTestId("ollama-access-problem")).toBeNull());
-  });
-
-  it("shows why the permission request failed", async () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client, { requestAccess: () => Promise.reject(new Error("not from a click")) });
-    pushState(push, "notConnected");
-    fireEvent.click(screen.getByTestId("ollama-connect"));
-
-    expect((await screen.findByTestId("ollama-access-problem")).textContent).toContain(
-      "not from a click",
-    );
   });
 
   it("looks again when told access was granted elsewhere, and not for other changes", () => {
@@ -153,216 +80,39 @@ describe("OllamaCard", () => {
     expect(count()).toBe(2);
   });
 
-  it("starts the checklist at installing and opening Ollama, and checks again by itself", () => {
-    vi.useFakeTimers();
-
+  it("says why there is no list while Ollama cannot give one, and looks again when asked", () => {
     const { client, sent, push } = createStubClient();
 
-    renderCard(client, { recheckIntervalMs: 1_000 });
+    renderCard(client);
     pushState(push, "unreachable");
 
-    expect(getStatus("ollama-step-install")).toBe("current");
-    expect(getStatus("ollama-step-open")).toBe("current");
-    expect(getStatus("ollama-step-turn-on")).toBe("pending");
-    expect(screen.queryByTestId("ollama-step-allow")).toBeNull();
-    expect(screen.getAllByRole("img", { name: "To do now" })).toHaveLength(2);
-    expect(screen.getAllByRole("img", { name: "Later" })).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Download Ollama" }).getAttribute("href")).toBe(
-      "https://ollama.com/download",
-    );
+    expect(screen.getByTestId("ollama-not-running").textContent).toContain("Ollama isn't running.");
 
-    act(() => {
-      vi.advanceTimersByTime(2_000);
-    });
+    fireEvent.click(screen.getByTestId("ollama-recheck"));
 
-    expect(sent.filter(({ type }) => type === "ollama.status")).toHaveLength(3);
+    expect(sent.filter(({ type }) => type === "ollama.status")).toHaveLength(2);
   });
 
-  it("asks to allow this extension, naming only its own origin, when Ollama refuses it", () => {
+  it("walks no one through setup: that is the setup page's", () => {
     const { client, push } = createStubClient();
 
     renderCard(client);
-    pushState(push, "refused");
+    pushState(push, "notConnected");
 
-    expect(getStatus("ollama-step-install")).toBe("done");
-    expect(getStatus("ollama-step-open")).toBe("done");
-    expect(getStatus("ollama-step-allow")).toBe("current");
-    expect(screen.getAllByRole("img", { name: "Done" })).toHaveLength(2);
-
-    const command = screen.getByTestId("ollama-allow-command").textContent ?? "";
-
-    expect(command).toContain(ORIGIN);
-    expect(command).not.toContain("moz-extension://*");
-    expect(screen.getByTestId("ollama-step-allow").textContent).toContain("Terminal");
+    expect(screen.getByTestId("ollama-not-running").textContent).toContain("AI isn't set up yet.");
+    expect(screen.queryByRole("button", { name: /set up|turn on/iu })).toBeNull();
   });
 
-  it("writes the allow command for the user's operating system", () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client, { platform: "win" });
-    pushState(push, "refused");
-
-    expect(screen.getByTestId("ollama-allow-command").textContent).toBe(
-      `setx OLLAMA_ORIGINS "${ORIGIN}"`,
-    );
-    expect(screen.getByTestId("ollama-step-allow").textContent).toContain("open it again");
-  });
-
-  it("says it is downloading only when Ollama does not have the model yet", () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "running", [{ ...MODEL, isPulled: false }]);
-    fireEvent.click(screen.getByTestId("ollama-turn-on"));
-
-    expect(screen.getByTestId("ollama-enable-progress").textContent).toBe("Downloading the model…");
-  });
-
-  it("goes straight to the check for a model Ollama already has", () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "running", [{ ...MODEL, isPulled: true }]);
-    fireEvent.click(screen.getByTestId("ollama-turn-on"));
-
-    expect(screen.getByTestId("ollama-enable-progress").textContent).toBe(
-      "Checking the model's quality…",
-    );
-  });
-
-  it("turns local AI on in one action, showing one progress", () => {
-    const { client, sent, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "running", [{ ...MODEL, name: "nomic-embed-text", isPulled: false }]);
-
-    expect(getStatus("ollama-step-turn-on")).toBe("current");
-
-    fireEvent.click(screen.getByTestId("ollama-turn-on"));
-
-    expect(sent.at(-1)).toMatchObject({
-      type: "ollama.enable",
-      payload: { name: "nomic-embed-text" },
-    });
-
-    push(
-      buildRpcMessage("ollama.enableProgress", {
-        name: "nomic-embed-text",
-        stage: "downloading",
-        percent: 40,
-      }),
-    );
-
-    expect(screen.getByTestId("ollama-enable-progress").textContent).toBe(
-      "Downloading the model 40%",
-    );
-
-    push(buildRpcMessage("ollama.enableProgress", { name: "nomic-embed-text", stage: "checking" }));
-
-    expect(screen.getByTestId("ollama-enable-progress").textContent).toBe(
-      "Checking the model's quality…",
-    );
-
-    push(buildRpcMessage("ollama.enabled", { name: "nomic-embed-text", ref: "ollama:x" }));
-    pushState(push, "running", [{ ...MODEL, registeredRef: "ollama:x", isActive: true }]);
-
-    expect(screen.getByTestId("ollama-on").textContent).toContain("Local AI is on");
-    expect(screen.getByTestId("ollama-on").querySelector("[data-tone]")).toHaveAttribute(
-      "data-tone",
-      "ok",
-    );
-    expect(screen.queryByTestId("ollama-checklist")).toBeNull();
-  });
-
-  it("says which stage failed, and lets the user try again", () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "running", [MODEL]);
-    fireEvent.click(screen.getByTestId("ollama-turn-on"));
-    push(
-      buildRpcMessage("ollama.enableFailed", {
-        name: "nomic-embed-text",
-        stage: "checking",
-        reason: "17 of 20 pairs ordered correctly, 18 required",
-      }),
-    );
-
-    expect(screen.getByTestId("ollama-enable-failure").textContent).toBe(
-      "The model did not pass its quality check: 17 of 20 pairs ordered correctly, 18 required",
-    );
-    expect(screen.getByTestId("ollama-turn-on")).not.toBeNull();
-  });
-
-  it("keeps the model list and commands under More", () => {
+  it("uses another model Ollama has, checking it before it is on", () => {
     const { client, sent, push } = createStubClient();
     const ref = `ollama:nomic-embed-text:latest@${"a".repeat(64)}`;
 
     renderCard(client);
     pushState(push, "running", [MODEL]);
-
-    expect(screen.getByTestId("ollama-more").contains(screen.getByTestId("ollama-use"))).toBe(true);
-
     fireEvent.click(screen.getByTestId("ollama-use"));
     push(buildRpcMessage("ollama.registered", { name: MODEL.name, ref }));
 
     expect(sent.at(-1)).toMatchObject({ type: "model.activate", payload: { ref } });
-  });
-
-  it("offers page summaries once local AI is on, saying what it downloads", () => {
-    const { client, sent, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "running", [{ ...MODEL, registeredRef: "ollama:x", isActive: true }]);
-
-    expect(screen.getByTestId("ollama-summaries").textContent).toContain("qwen3:4b (2.5 GB)");
-
-    fireEvent.click(screen.getByTestId("ollama-turn-on-summaries"));
-
-    expect(sent.at(-1)).toMatchObject({ type: "ollama.enable", payload: { name: "qwen3:4b" } });
-
-    push(
-      buildRpcMessage("ollama.enableProgress", {
-        name: "qwen3:4b",
-        stage: "downloading",
-        percent: 12,
-      }),
-    );
-
-    expect(screen.getByTestId("ollama-summaries-progress").textContent).toBe(
-      "Downloading the model 12%",
-    );
-    // The first step's progress is its own.
-    expect(screen.getByTestId("ollama-on").textContent).toContain("Local AI is on");
-  });
-
-  it("does not offer page summaries before local AI is on", () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "running", [MODEL]);
-
-    expect(screen.queryByTestId("ollama-summaries")).toBeNull();
-  });
-
-  it("says why page summaries could not be turned on", () => {
-    const { client, push } = createStubClient();
-
-    renderCard(client);
-    pushState(push, "running", [{ ...MODEL, registeredRef: "ollama:x", isActive: true }]);
-    fireEvent.click(screen.getByTestId("ollama-turn-on-summaries"));
-    push(
-      buildRpcMessage("ollama.enableFailed", {
-        name: "qwen3:4b",
-        stage: "checking",
-        reason: 'stops at its token limit: it reported "model"',
-      }),
-    );
-
-    expect(screen.getByTestId("ollama-summaries-failure").textContent).toBe(
-      'The model did not pass its quality check: stops at its token limit: it reported "model"',
-    );
-    expect(screen.getByTestId("ollama-turn-on-summaries")).not.toBeNull();
   });
 
   it("measures extraction time once summaries are on, against the budget", () => {

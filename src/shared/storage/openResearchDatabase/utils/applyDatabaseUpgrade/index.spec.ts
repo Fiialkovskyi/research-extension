@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UPGRADE_STEPS, applyDatabaseUpgrade } from ".";
 import {
   ACTIVITY_STORE,
+  AI_SETUP_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -487,6 +488,45 @@ describe("applyDatabaseUpgrade", () => {
     ]);
     expect(await after.get(NODE_STORE, "node-1")).toMatchObject({
       signals: { ...signals, pasteEvents: 0 },
+    });
+
+    after.close();
+  });
+
+  it("adds an empty AI setup store to a version-21 profile without an Ollama model", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 21);
+
+    await before.put(MODEL_STORE, {
+      ref: "owner/model@abc",
+      manifest: { reference: { hub: "huggingface" } },
+    } as never);
+    before.close();
+
+    const after = await openAt(name, 22);
+
+    expect(after.version).toBe(22);
+    expect(await after.count(AI_SETUP_STORE)).toBe(0);
+    expect(after.transaction(AI_SETUP_STORE).store.keyPath).toBe("id");
+
+    after.close();
+  });
+
+  it("records setup as started for a version-21 profile that registered an Ollama model", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 21);
+
+    await before.put(MODEL_STORE, {
+      ref: "ollama/nomic-embed-text@abc",
+      manifest: { reference: { hub: "ollama" } },
+    } as never);
+    before.close();
+
+    const after = await openAt(name, 22);
+
+    expect(await after.get(AI_SETUP_STORE, "user")).toMatchObject({
+      id: "user",
+      startedAt: expect.any(Number),
     });
 
     after.close();

@@ -1,4 +1,4 @@
-/** How long to wait for the surface to answer, which includes starting the worker. */
+/** How long to wait for the surface to answer, which may include starting the worker. */
 export const SURFACE_TIMEOUT_MS = 30_000;
 
 /**
@@ -20,6 +20,7 @@ export const INFERENCE_TIMEOUT_MS = 600_000;
 
 /** Test ids the surface exposes, kept in one place so a rename breaks one file. */
 export const CAPABILITIES_TEST_ID = "capabilities";
+export const AI_STATUS_TEST_ID = "ai-status";
 export const SURFACE_TEST_ID = "options-app";
 export const EMPTY_LIST_TEST_ID = "model-list-empty";
 export const MODEL_LIST_TEST_ID = "model-list";

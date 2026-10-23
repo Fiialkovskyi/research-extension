@@ -20,6 +20,7 @@ const SNAPSHOT = JSON.stringify({
   savedSessions: [],
   leftOff: null,
   reattachOffer: null,
+  setupBanner: null,
 });
 
 describe("parsePopupSnapshot", () => {
@@ -42,6 +43,7 @@ describe("parsePopupSnapshot", () => {
       savedSessions: [],
       leftOff: null,
       reattachOffer: null,
+      setupBanner: null,
     });
   });
 

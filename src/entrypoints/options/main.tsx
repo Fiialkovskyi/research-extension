@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { browser } from "wxt/browser";
 
 import { OptionsApp, type SurfaceClient } from "@/app/optionsApp";
-import { LOCAL_INFERENCE_ORIGINS } from "@/shared/config";
 import "@/shared/styles/tailwind.css";
 
 const container = document.getElementById("root");
@@ -36,23 +35,8 @@ const client: SurfaceClient = {
   },
 };
 
-// The command that lets Ollama trust this extension names this installation's
-// origin and is written for this operating system, so both are read first.
-void browser.runtime.getPlatformInfo().then(({ os }) => {
-  createRoot(container).render(
-    <StrictMode>
-      <OptionsApp
-        client={client}
-        requestOllamaAccess={() =>
-          browser.permissions.request({
-            origins: LOCAL_INFERENCE_ORIGINS.map((origin) => `${origin}/*`),
-          })
-        }
-        ollamaEnvironment={{
-          extensionOrigin: browser.runtime.getURL("/").replace(/\/$/u, ""),
-          platform: os === "mac" || os === "win" ? os : "linux",
-        }}
-      />
-    </StrictMode>,
-  );
-});
+createRoot(container).render(
+  <StrictMode>
+    <OptionsApp client={client} />
+  </StrictMode>,
+);

@@ -1,6 +1,7 @@
 import { browser } from "@wdio/globals";
 
 import {
+  AI_STATUS_TEST_ID,
   BENCHMARK_TEST_ID,
   CAPABILITIES_TEST_ID,
   EMPTY_LIST_TEST_ID,
@@ -32,6 +33,9 @@ export interface OptionsSnapshot {
   /** Where the Ollama card says the local server stands, from its `data-state`. */
   ollamaState: string;
   ollamaText: string;
+  /** What the AI section says, and whether it says AI is set up. */
+  aiStatus: string;
+  isAiSetUp: boolean;
 }
 
 /**
@@ -57,6 +61,7 @@ export const readOptionsSurface = async (): Promise<OptionsSnapshot> => {
       policyId: string,
       problemId: string,
       ollamaId: string,
+      aiStatusId: string,
     ) => {
       const surface = document.querySelector(`[data-testid="${surfaceId}"]`);
 
@@ -86,6 +91,11 @@ export const readOptionsSurface = async (): Promise<OptionsSnapshot> => {
           document.querySelector(`[data-testid="${ollamaId}"]`)?.getAttribute("data-state") ?? "",
         ollamaText:
           document.querySelector(`[data-testid="${ollamaId}"]`)?.textContent?.trim() ?? "",
+        aiStatus:
+          document.querySelector(`[data-testid="${aiStatusId}"]`)?.textContent?.trim() ?? "",
+        isAiSetUp:
+          document.querySelector(`[data-testid="${aiStatusId}"]`)?.getAttribute("data-set-up") ===
+          "true",
       };
     },
     SURFACE_TEST_ID,
@@ -96,5 +106,6 @@ export const readOptionsSurface = async (): Promise<OptionsSnapshot> => {
     POLICY_TEST_ID,
     PROBLEM_TEST_ID,
     OLLAMA_CARD_TEST_ID,
+    AI_STATUS_TEST_ID,
   );
 };

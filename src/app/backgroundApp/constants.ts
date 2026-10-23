@@ -4,6 +4,9 @@
  * in answer to a notification, and a read that notified would answer itself.
  */
 export const DATA_CHANGING_REQUESTS: ReadonlySet<string> = new Set([
+  "aiSetup.collapseBanner",
+  "aiSetup.start",
+  "aiSetup.turnOn",
   "denylist.save",
   "entity.separate",
   "facts.extractNow",
@@ -26,3 +29,7 @@ export const DATA_CHANGING_REQUESTS: ReadonlySet<string> = new Set([
   "tabGroup.create",
   "table.setColumns",
 ]);
+
+/** Why an in-extension model is refused while that backend is switched off. */
+export const IN_BROWSER_BACKEND_OFF_REASON =
+  "Models that run inside the extension are switched off; AI runs through Ollama.";
