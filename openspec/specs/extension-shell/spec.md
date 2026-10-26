@@ -243,3 +243,32 @@ banner and the options surface. It SHALL follow the system colour scheme like th
 
 - **WHEN** the built package is inspected
 - **THEN** it contains the setup page's document
+
+### Requirement: The suite gates the budgets that hold without a model
+
+The end-to-end suite SHALL fail WHEN, in a session tab, the 95th percentile of the time from a navigation to its node being recorded exceeds 1 s over 20 navigations (REQ-NFR-001), or WHEN the extension process, with no model loaded and after memory is minimised, settles above 150 MB (REQ-NFR-003).
+
+#### Scenario: Node latency
+
+- **WHEN** the suite makes 20 navigations in a session tab
+- **THEN** the 95th percentile of navigation-to-node time is at most 1 s
+
+#### Scenario: Background memory
+
+- **GIVEN** a session with recorded pages and no model loaded
+- **WHEN** the suite minimises memory and samples the extension process
+- **THEN** its settled memory is at most 150 MB
+
+### Requirement: The suite checks that the add-on reaches nowhere
+
+The end-to-end suite SHALL record every HTTP request whose triggering or loading principal belongs to the add-on, including requests from its pages, workers and content scripts. It SHALL show that the record sees such a request, and SHALL then assert that a session run with no model install produces none, apart from top-level pages the add-on opens in tabs at the user's request.
+
+#### Scenario: The record sees the add-on's traffic
+
+- **WHEN** a request is made with the add-on's principal
+- **THEN** the record lists it
+
+#### Scenario: A whole session reaches nowhere
+
+- **WHEN** the suite starts a session, allows page access, reads pages, opens the Synthesis page, runs a gap's search and opens the options page
+- **THEN** the add-on made no request, apart from the search tab it opened
