@@ -97,6 +97,7 @@ import {
   JOB_WAKE_ALARM,
   JOB_WAKE_DELAY_MS,
   type JobRunner,
+  markJobsRequested,
   readJobActivity,
   readPendingJobs,
   requeueRunningJobs,
@@ -1558,6 +1559,28 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return;
         }
 
+        case "signal.tick": {
+          // Nothing to record: the page only says it is visible. Reading time is
+          // brought up to date from what the browser says is focused, and the
+          // page's text is asked for if that made it deep read. A page its tab
+          // has left is not being read, so its tick starts nothing.
+          const target = await readSignalTarget(openedDatabase, sender);
+
+          if (target.node === undefined) {
+            answer = buildRpcMessage("signal.dropped", { stop: target.stop });
+            return;
+          }
+
+          if (!target.isCurrent) {
+            answer = buildRpcMessage("signal.dropped", { stop: false });
+            return;
+          }
+
+          await followFocus(openedDatabase);
+          answer = buildRpcMessage("signal.recorded", {});
+          return;
+        }
+
         case "page.metadata": {
           const target = await readSignalTarget(openedDatabase, sender);
 
@@ -1923,22 +1946,13 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             const pending = jobs.filter(
               ({ status }) => status === "queued" || status === "running",
             );
-            const transaction = openedDatabase.transaction(JOB_STORE, "readwrite");
 
             // Marked on the job itself, so the request outlives an unload.
-            await Promise.all([
-              ...pending.map(async ({ id }) => {
-                const stored = await transaction.store.get(id);
-
-                if (stored !== undefined) {
-                  await transaction.store.put({
-                    ...stored,
-                    payload: { ...(stored.payload as object), requestedAt },
-                  });
-                }
-              }),
-              transaction.done,
-            ]);
+            await markJobsRequested(
+              openedDatabase,
+              pending.map(({ id }) => id),
+              requestedAt,
+            );
 
             return pending.length;
           });
@@ -2438,6 +2452,30 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           await dependencies.openSetupPage();
 
           return buildRpcMessage("aiSetup.opened", {});
+        }
+
+        case "aiActivity.runNow": {
+          // Only what waits at this moment: work enqueued later still waits for
+          // the user to be away, and the mark outlives an unload.
+          const marked = await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const held = (await readPendingJobs(openedDatabase)).filter(
+              (job) =>
+                job.status === "queued" && GENERATION_JOBS.has(job.type) && !isRequested(job),
+            );
+
+            await markJobsRequested(
+              openedDatabase,
+              held.map(({ id }) => id),
+              getNow(),
+            );
+
+            return held.length;
+          });
+
+          void runJobs();
+
+          return buildRpcMessage("aiActivity.runStarted", { marked });
         }
 
         case "aiActivity.read": {

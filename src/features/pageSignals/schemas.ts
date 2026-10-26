@@ -22,6 +22,11 @@ export const pageContentRequestSchemas = {
     pasteEvents: v.pipe(v.number(), v.integer(), v.minValue(0)),
   }),
   /**
+   * The page is visible and may be being read. Carries nothing: the background
+   * decides whether it is, and brings reading time up to date either way.
+   */
+  "signal.tick": v.object({}),
+  /**
    * What the page says about itself in its head, sent once when the observer
    * starts. Unasked for: it is small, and wanted for every page.
    */

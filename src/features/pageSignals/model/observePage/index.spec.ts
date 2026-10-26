@@ -4,6 +4,8 @@ import { observePage, type PageObserverDependencies } from ".";
 import type { PageMetadata } from "@/features/pageMetadata";
 import { buildRpcMessage } from "@/shared/rpc";
 
+import { SIGNAL_FLUSH_INTERVAL_MS, TICK_INTERVAL_MS } from "../../constants";
+
 type Listener = (event: { isTrusted: boolean }) => void;
 
 /** An event target that remembers its listeners, so a test can fire them as the user would. */
@@ -40,7 +42,7 @@ const buildPage = () => {
 
 let page: ReturnType<typeof buildPage>;
 let frames: (() => void)[];
-let timers: Map<number, () => void>;
+let timers: Map<number, { callback: () => void; delayMs: number }>;
 let nextTimer: number;
 let sent: { type: string; payload: unknown }[];
 let answer: unknown;
@@ -69,9 +71,9 @@ const observe = () =>
     requestFrame: (callback) => {
       frames.push(callback);
     },
-    setTimer: (callback) => {
+    setTimer: (callback, delayMs) => {
       nextTimer += 1;
-      timers.set(nextTimer, callback);
+      timers.set(nextTimer, { callback, delayMs });
       return nextTimer;
     },
     clearTimer: (handle) => {
@@ -94,15 +96,21 @@ const paint = () => {
   });
 };
 
-/** Lets 2 s pass: fires every pending timer. */
-const elapse = () => {
-  const due = [...timers.values()];
+/** Fires every pending timer that waits `delayMs`: the batch timer's 2 s, unless told otherwise. */
+const elapse = (delayMs = SIGNAL_FLUSH_INTERVAL_MS) => {
+  const due = [...timers.entries()].filter(([, timer]) => timer.delayMs === delayMs);
 
-  timers.clear();
-  due.forEach((callback) => {
+  due.forEach(([handle, { callback }]) => {
+    timers.delete(handle);
     callback();
   });
 };
+
+/** How many pending timers wait `delayMs`. */
+const countTimers = (delayMs: number) =>
+  [...timers.values()].filter((timer) => timer.delayMs === delayMs).length;
+
+const ticksSent = () => sent.filter(({ type }) => type === "signal.tick").length;
 
 const scrollTo = (scrollY: number) => {
   page.window.scrollY = scrollY;
@@ -262,6 +270,67 @@ describe("observePage", () => {
     expect(timers.size).toBe(0);
   });
 
+  describe("telling the background it is still being read", () => {
+    it("ticks every beat while the page is visible, without a scroll or a copy", () => {
+      observe();
+
+      elapse(TICK_INTERVAL_MS);
+      elapse(TICK_INTERVAL_MS);
+      elapse(TICK_INTERVAL_MS);
+
+      expect(ticksSent()).toBe(3);
+      expect(sent.filter(({ type }) => type === "signal.tick")[0]).toEqual({
+        type: "signal.tick",
+        v: expect.anything(),
+        id: expect.anything(),
+        payload: {},
+      });
+    });
+
+    it("stops ticking while the page is hidden and starts again when it is visible", () => {
+      observe();
+      page.document.visibilityState = "hidden";
+      page.document.fire("visibilitychange");
+
+      expect(countTimers(TICK_INTERVAL_MS)).toBe(0);
+
+      elapse(TICK_INTERVAL_MS);
+
+      expect(ticksSent()).toBe(0);
+
+      page.document.visibilityState = "visible";
+      page.document.fire("visibilitychange");
+      elapse(TICK_INTERVAL_MS);
+
+      expect(ticksSent()).toBe(1);
+    });
+
+    it("does not start ticking when it is observed while hidden", () => {
+      page.document.visibilityState = "hidden";
+      observe();
+
+      expect(countTimers(TICK_INTERVAL_MS)).toBe(0);
+    });
+
+    it("stops observing when the answer to a tick says the tab left the session", async () => {
+      answer = buildRpcMessage("signal.dropped", { stop: true });
+      observe();
+      elapse(TICK_INTERVAL_MS);
+      await settle();
+
+      expect(page.window.countListeners() + page.document.countListeners()).toBe(0);
+      expect(countTimers(TICK_INTERVAL_MS)).toBe(0);
+    });
+
+    it("sends no tick after it was stopped", () => {
+      const stop = observe();
+
+      stop();
+
+      expect(countTimers(TICK_INTERVAL_MS)).toBe(0);
+    });
+  });
+
   it("keeps observing when only this batch was not recorded", async () => {
     answer = buildRpcMessage("signal.dropped", { stop: false });
     observe();
@@ -317,7 +386,7 @@ describe("observePage", () => {
 
     expect(sent.at(-1)).toMatchObject({ type: "signal.batch", payload: { maxScroll: 0.8 } });
     expect(flushed).toMatchObject({ type: "content.flushed" });
-    expect(timers.size).toBe(0);
+    expect(countTimers(SIGNAL_FLUSH_INTERVAL_MS)).toBe(0);
   });
 
   it("answers a flush at once when it holds nothing new", async () => {

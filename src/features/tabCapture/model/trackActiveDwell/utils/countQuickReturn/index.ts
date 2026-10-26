@@ -18,7 +18,7 @@ const isSerp = async (
 /**
  * Counts a quick return: a page reached from a search, left on its first visit
  * for a search before the quick-return threshold of active dwell
- * (`engagement_rules@2`). Going back in the same tab and switching to the
+ * (`engagement_rules@3`). Going back in the same tab and switching to the
  * search's tab both arrive here, as focus moving to a search node.
  *
  * Measured in active dwell rather than wall time: time in another application

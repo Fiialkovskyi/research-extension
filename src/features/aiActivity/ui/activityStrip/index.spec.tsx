@@ -16,6 +16,7 @@ describe("ActivityStrip", () => {
       <ActivityStrip
         state={{ kind: "working", label: "Extracting facts", settled: 3, total: 12, failed: 0 }}
         onOpenSetup={vi.fn()}
+        onRunNow={vi.fn()}
       />,
     );
 
@@ -44,6 +45,7 @@ describe("ActivityStrip", () => {
           failed: 0,
         }}
         onOpenSetup={vi.fn()}
+        onRunNow={vi.fn()}
         getNow={() => clock}
       />,
     );
@@ -61,18 +63,62 @@ describe("ActivityStrip", () => {
 
   it("says generation waits until the user steps away", () => {
     render(
-      <ActivityStrip state={{ kind: "waiting", waiting: 4, failed: 0 }} onOpenSetup={vi.fn()} />,
+      <ActivityStrip
+        state={{ kind: "waiting", waiting: 4, failed: 0 }}
+        onOpenSetup={vi.fn()}
+        onRunNow={vi.fn()}
+      />,
     );
 
     expect(text()).toBe("Runs when you step away · 4 waiting");
     expect(screen.queryByTestId("activity-bar")).toBeNull();
   });
 
+  it("offers to run the held work now only while it waits", () => {
+    const onRunNow = vi.fn();
+    const { rerender } = render(
+      <ActivityStrip
+        state={{ kind: "waiting", waiting: 4, failed: 0 }}
+        onOpenSetup={vi.fn()}
+        onRunNow={onRunNow}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("activity-run-now"));
+    expect(onRunNow).toHaveBeenCalledOnce();
+
+    for (const state of [
+      { kind: "working", label: "Reading pages", settled: 1, total: 3, failed: 0 },
+      { kind: "paused", waiting: 5, failed: 0 },
+      { kind: "ready", totals: {}, failed: 0 },
+    ] as const) {
+      rerender(<ActivityStrip state={state} onOpenSetup={vi.fn()} onRunNow={onRunNow} />);
+      expect(screen.queryByTestId("activity-run-now")).toBeNull();
+    }
+  });
+
+  it("disables run now while its request is in flight", () => {
+    render(
+      <ActivityStrip
+        state={{ kind: "waiting", waiting: 4, failed: 0 }}
+        onOpenSetup={vi.fn()}
+        onRunNow={vi.fn()}
+        isRunNowPending
+      />,
+    );
+
+    expect((screen.getByTestId("activity-run-now") as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("says the local AI is not answering and leads to setup", () => {
     const onOpenSetup = vi.fn();
 
     render(
-      <ActivityStrip state={{ kind: "paused", waiting: 5, failed: 0 }} onOpenSetup={onOpenSetup} />,
+      <ActivityStrip
+        state={{ kind: "paused", waiting: 5, failed: 0 }}
+        onOpenSetup={onOpenSetup}
+        onRunNow={vi.fn()}
+      />,
     );
 
     expect(text()).toBe("Local AI isn't answering · 5 waiting");
@@ -85,6 +131,7 @@ describe("ActivityStrip", () => {
       <ActivityStrip
         state={{ kind: "ready", totals: { pagesRead: 14, factsFrom: 12, summaries: 3 }, failed: 0 }}
         onOpenSetup={vi.fn()}
+        onRunNow={vi.fn()}
       />,
     );
 
@@ -96,7 +143,11 @@ describe("ActivityStrip", () => {
 
   it("shows no totals line when nothing was done yet", () => {
     render(
-      <ActivityStrip state={{ kind: "ready", totals: {}, failed: 0 }} onOpenSetup={vi.fn()} />,
+      <ActivityStrip
+        state={{ kind: "ready", totals: {}, failed: 0 }}
+        onOpenSetup={vi.fn()}
+        onRunNow={vi.fn()}
+      />,
     );
 
     expect(screen.queryByTestId("activity-totals")).toBeNull();
@@ -108,14 +159,18 @@ describe("ActivityStrip", () => {
     { kind: "paused", waiting: 1, failed: 2 },
     { kind: "ready", totals: {}, failed: 2 },
   ] as const)("counts failures in the $kind state", (state) => {
-    render(<ActivityStrip state={state} onOpenSetup={vi.fn()} />);
+    render(<ActivityStrip state={state} onOpenSetup={vi.fn()} onRunNow={vi.fn()} />);
 
     expect(screen.getByTestId("activity-failed").textContent).toContain("2 didn't finish");
   });
 
   it("shows no failures when there are none", () => {
     render(
-      <ActivityStrip state={{ kind: "ready", totals: {}, failed: 0 }} onOpenSetup={vi.fn()} />,
+      <ActivityStrip
+        state={{ kind: "ready", totals: {}, failed: 0 }}
+        onOpenSetup={vi.fn()}
+        onRunNow={vi.fn()}
+      />,
     );
 
     expect(screen.queryByTestId("activity-failed")).toBeNull();

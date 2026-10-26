@@ -27,6 +27,7 @@ export { enqueueJob } from "./model/enqueueJob";
 export { failJob } from "./model/failJob";
 export { getNextWakeTime } from "./model/getNextWakeTime";
 export { holdBackgroundAlive, type ReleaseHold } from "./model/holdBackgroundAlive";
+export { markJobsRequested } from "./model/markJobsRequested";
 export { readJobActivity } from "./model/readJobActivity";
 export type {
   JobActivity,

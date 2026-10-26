@@ -9,6 +9,10 @@ export interface ActivityStripProps {
   state: ActivityState;
   /** Opens the setup page, offered while the local server is not answering. */
   onOpenSetup: () => void;
+  /** Lets the work held until the user steps away run now, offered while it is waiting. */
+  onRunNow: () => void;
+  /** True while a run-now request is in flight, so it is not sent twice. */
+  isRunNowPending?: boolean;
   /** The clock, for the elapsed time of a lone job. */
   getNow?: () => number;
 }
@@ -20,7 +24,13 @@ export interface ActivityStripProps {
  * A batch fills its bar by jobs settled; a lone job's share done is not known,
  * so its bar moves without filling and a timer shows it is alive.
  */
-export function ActivityStrip({ state, onOpenSetup, getNow = Date.now }: ActivityStripProps) {
+export function ActivityStrip({
+  state,
+  onOpenSetup,
+  onRunNow,
+  isRunNowPending = false,
+  getNow = Date.now,
+}: ActivityStripProps) {
   const isLone = state.kind === "working" && state.total === 1;
   const startedAt = state.kind === "working" ? state.startedAt : undefined;
   const now = useNow(isLone && startedAt !== undefined, getNow);
@@ -89,6 +99,15 @@ export function ActivityStrip({ state, onOpenSetup, getNow = Date.now }: Activit
           <StatusDot tone="idle" />
           <span data-testid="activity-text">Runs when you step away · {state.waiting} waiting</span>
           {failure}
+          <button
+            type="button"
+            data-testid="activity-run-now"
+            className="ml-auto underline disabled:no-underline disabled:opacity-60"
+            disabled={isRunNowPending}
+            onClick={onRunNow}
+          >
+            Run now
+          </button>
         </div>
       )}
       {state.kind === "paused" && (

@@ -1,6 +1,7 @@
 # blocked-site-notice Specification
 
 ## Purpose
+
 Defines the short notice drawn on a page from a denylisted site, in a tab of a research session, saying the site is not tracked, and what the extension keeps about such a visit: nothing.
 
 ## Requirements

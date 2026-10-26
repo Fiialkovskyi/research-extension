@@ -28,13 +28,13 @@ describe("getNodeEngagement", () => {
   });
 
   it("calls a page read long enough and far enough deep read", () => {
-    expect(getNodeEngagement(buildNode({ activeDwellMs: 45_000, maxScroll: 0.4 }), FOCUSED)).toBe(
+    expect(getNodeEngagement(buildNode({ activeDwellMs: 30_000, maxScroll: 0.4 }), FOCUSED)).toBe(
       "deep_read",
     );
   });
 
   it("needs both the dwell and the scroll for a deep read by reading", () => {
-    expect(getNodeEngagement(buildNode({ activeDwellMs: 44_999, maxScroll: 1 }), LEFT)).toBe(
+    expect(getNodeEngagement(buildNode({ activeDwellMs: 29_999, maxScroll: 1 }), LEFT)).toBe(
       "skimmed",
     );
     expect(getNodeEngagement(buildNode({ activeDwellMs: 600_000, maxScroll: 0.39 }), LEFT)).toBe(

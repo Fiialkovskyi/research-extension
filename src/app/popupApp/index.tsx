@@ -219,10 +219,21 @@ export function PopupApp({ client, pageAccess, openSettings }: PopupAppProps) {
   const [library, setLibrary] = useState<SavedSessionSummary[]>([]);
   const [aiSetup, setAiSetup] = useState<AiSetupStatus | undefined>();
   const [activity, setActivity] = useState<ActivityState | undefined>();
+  /** True while a run-now request is in flight, so it is not sent twice. */
+  const [isRunNowPending, setIsRunNowPending] = useState(false);
 
   /** Opens the setup page; Firefox closes the popup as the page takes focus. */
   const openSetup = useCallback(() => {
     client.request(buildRpcMessage("aiSetup.open", {})).catch(() => undefined);
+  }, [client]);
+
+  /** Lets the work held until the user steps away run now; the strip hears the result through `jobs`. */
+  const runWaitingWork = useCallback(() => {
+    setIsRunNowPending(true);
+    client
+      .request(buildRpcMessage("aiActivity.runNow", {}))
+      .catch(() => undefined)
+      .finally(() => setIsRunNowPending(false));
   }, [client]);
 
   /** Folds or unfolds the banner, remembered by the background for the next open. */
@@ -530,7 +541,12 @@ export function PopupApp({ client, pageAccess, openSettings }: PopupAppProps) {
         />
       )}
       {aiSetup?.isSetUp === true && activity !== undefined && (
-        <ActivityStrip state={activity} onOpenSetup={openSetup} />
+        <ActivityStrip
+          state={activity}
+          onOpenSetup={openSetup}
+          onRunNow={runWaitingWork}
+          isRunNowPending={isRunNowPending}
+        />
       )}
       {state.status !== "loading" && (
         <div className="mt-3">

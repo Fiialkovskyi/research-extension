@@ -14,13 +14,15 @@ export const ENGAGEMENT_STATES = ["unread", "skimmed", "deep_read", "dead_end"] 
  * re-labels every node at once, and anything that records a decision taken on
  * a state — such as a snapshot — can say which rules took it.
  *
+ * Version 3 lowers the dwell that makes a page deep read from 45 s to 30 s.
+ *
  * Version 2 adds the target table's quick return to the search to the dead
  * end, and the co-attention thresholds capture links pages by.
  */
 export const ENGAGEMENT_RULES = {
-  version: "engagement_rules@2",
+  version: "engagement_rules@3",
   /** Deep read by reading: at least this much active dwell… */
-  deepReadDwellMs: 45_000,
+  deepReadDwellMs: 30_000,
   /** …together with at least this much of the page scrolled into view. */
   deepReadScroll: 0.4,
   /** Deep read by coming back: this many revisits, each of `revisitDwellMs` or more. */

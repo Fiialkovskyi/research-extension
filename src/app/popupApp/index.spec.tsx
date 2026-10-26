@@ -57,6 +57,10 @@ const createClient = ({
         return Promise.resolve(buildRpcMessage("aiActivity.state", activity));
       }
 
+      if (message.type === "aiActivity.runNow") {
+        return Promise.resolve(buildRpcMessage("aiActivity.runStarted", { marked: 1 }));
+      }
+
       if (message.type === "aiSetup.read" || message.type === "aiSetup.collapseBanner") {
         return Promise.resolve(
           buildRpcMessage("aiSetup.status", {
@@ -925,5 +929,18 @@ describe("PopupApp showing what the local AI is doing", () => {
     fireEvent.click(await screen.findByTestId("activity-open-setup"));
 
     expect(client.request).toHaveBeenCalledWith(expect.objectContaining({ type: "aiSetup.open" }));
+  });
+
+  it("asks the background to run the held work once when run now is pressed", async () => {
+    const client = createClient({ activity: { kind: "waiting", waiting: 3, failed: 0 } });
+
+    render(<PopupApp client={client} pageAccess={buildPageAccess()} />);
+    fireEvent.click(await screen.findByTestId("activity-run-now"));
+    fireEvent.click(screen.getByTestId("activity-run-now"));
+
+    expect(
+      vi.mocked(client.request).mock.calls.filter(([m]) => m.type === "aiActivity.runNow"),
+    ).toHaveLength(1);
+    await vi.waitFor(() => expect(screen.getByTestId("activity-run-now")).toBeEnabled());
   });
 });

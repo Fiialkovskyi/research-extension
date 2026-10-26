@@ -2,7 +2,7 @@ import type { PageMetadata } from "@/features/pageMetadata";
 import { EXTRACTOR_VERSION, type TruncatedText } from "@/features/pageSnapshots";
 import { buildRpcMessage, parseRpcMessage } from "@/shared/rpc";
 
-import { SIGNAL_FLUSH_INTERVAL_MS } from "../../constants";
+import { SIGNAL_FLUSH_INTERVAL_MS, TICK_INTERVAL_MS } from "../../constants";
 import { pageContentResponseSchemas, pageObserverRequestSchemas } from "../../schemas";
 
 /** Marks a page already observed, so a second injection adds no second observer. */
@@ -65,6 +65,7 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
   let pasteEvents = 0;
   let isFramePending = false;
   let timer: number | undefined;
+  let tickTimer: number | undefined;
   let hasExtracted = false;
 
   const readScroll = (): number => {
@@ -148,9 +149,28 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
     }
   };
 
+  /** While the page is visible, tells the background every beat that it may be being read. */
+  const scheduleTick = (): void => {
+    tickTimer ??= setTimer(() => {
+      tickTimer = undefined;
+      send(buildRpcMessage("signal.tick", {})).then(stopWhenDropped, stop);
+      scheduleTick();
+    }, TICK_INTERVAL_MS);
+  };
+
+  const stopTicking = (): void => {
+    if (tickTimer !== undefined) {
+      clearTimer(tickTimer);
+      tickTimer = undefined;
+    }
+  };
+
   const handleVisibilityChange = (): void => {
     if (document.visibilityState === "hidden") {
+      stopTicking();
       void flush();
+    } else {
+      scheduleTick();
     }
   };
 
@@ -213,6 +233,7 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
     window.removeEventListener("pagehide", handlePageHide);
     document.removeEventListener("visibilitychange", handleVisibilityChange);
     stopListening();
+    stopTicking();
 
     if (timer !== undefined) {
       clearTimer(timer);
@@ -225,6 +246,10 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
 
   // The part of the page in view before any scrolling counts too.
   handleScroll();
+
+  if (document.visibilityState === "visible") {
+    scheduleTick();
+  }
 
   const metadata = dependencies.readMetadata(document);
 

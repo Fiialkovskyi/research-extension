@@ -4,6 +4,7 @@
  * in answer to a notification, and a read that notified would answer itself.
  */
 export const DATA_CHANGING_REQUESTS: ReadonlySet<string> = new Set([
+  "aiActivity.runNow",
   "aiSetup.collapseBanner",
   "aiSetup.start",
   "aiSetup.turnOn",

@@ -11,6 +11,12 @@ export const PAGE_OBSERVER_PATH = "/content-scripts/pageObserver.js";
  */
 export const BLOCKED_NOTICE_PATH = "/content-scripts/blockedNotice.js";
 
+/**
+ * How often a visible page tells the background it is still being read, so
+ * reading time is brought up to date without waiting for a scroll or a copy.
+ */
+export const TICK_INTERVAL_MS = 10_000;
+
 /** The longest a page holds observations before sending them (REQ-CAP-005). */
 export const SIGNAL_FLUSH_INTERVAL_MS = 2_000;
 

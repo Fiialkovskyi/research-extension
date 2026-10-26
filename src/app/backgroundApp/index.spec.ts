@@ -5,6 +5,7 @@ import "fake-indexeddb/auto";
 
 import { type BackgroundApp, createBackgroundApp, type BackgroundDependencies } from ".";
 import { IN_BROWSER_BACKEND_OFF_REASON } from "./constants";
+import { JOB_WAKE_ALARM } from "@/features/jobQueue";
 import type { InferenceWorker } from "@/features/inference";
 import { EXTRACTION_PROBES, PARAPHRASE_PROBES } from "@/features/modelConformance";
 import { RECLUSTER_DELAY_MS } from "@/features/researchClusters";
@@ -1583,6 +1584,9 @@ const readNodeByUrl = async (
   url: string,
 ) => (await database.getAll(NODE_STORE)).find((node) => node.url === url);
 
+/** A visible page saying it may be being read. */
+const tick = () => buildRpcMessage("signal.tick", {});
+
 /** A page's report of what it says about itself. */
 const pageMetadata = (title: string) =>
   buildRpcMessage("page.metadata", { title, description: "How they work." });
@@ -1944,6 +1948,92 @@ describe("page signals and reading time through the background", () => {
     await app.handleTabActivated(8);
 
     expect(requestPageText).toHaveBeenCalledWith(7);
+  });
+
+  describe("a page saying it is still being read", () => {
+    it("brings reading time up to date and asks for the text once it makes the page deep read", async () => {
+      const { app, database, clock, requestPageText } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      clock.focusedTabId = 7;
+      await app.handleTabActivated(7);
+      // Scrolled through half of it at once; after that, nothing but reading.
+      await app.handleContentMessage(batch(0.5), FROM_PAGE_A);
+      clock.now += 20_000;
+
+      expect(await app.handleContentMessage(tick(), FROM_PAGE_A)).toMatchObject({
+        type: "signal.recorded",
+      });
+      expect(requestPageText).not.toHaveBeenCalled();
+
+      clock.now += 15_000;
+      await app.handleContentMessage(tick(), FROM_PAGE_A);
+
+      expect((await readNodeByUrl(database, "https://example.org/a"))?.signals).toMatchObject({
+        activeDwellMs: 35_000,
+        maxScroll: 0.5,
+      });
+      expect(requestPageText).toHaveBeenCalledWith(7);
+    });
+
+    it("records no signal of its own", async () => {
+      const { app, database, clock } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      clock.focusedTabId = 7;
+      await app.handleTabActivated(7);
+      await app.handleContentMessage(tick(), FROM_PAGE_A);
+
+      expect((await readNodeByUrl(database, "https://example.org/a"))?.signals).toMatchObject({
+        maxScroll: 0,
+        copyEvents: 0,
+        pasteEvents: 0,
+      });
+    });
+
+    it("adds nothing while Firefox is not focused or the user is idle", async () => {
+      const { app, database, clock } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      clock.focusedTabId = 7;
+      await app.handleTabActivated(7);
+      clock.now += 60_000;
+      clock.focusedTabId = undefined;
+      await app.handleContentMessage(tick(), FROM_PAGE_A);
+      clock.now += 60_000;
+      await app.handleContentMessage(tick(), FROM_PAGE_A);
+
+      // Only the first minute, up to the tick that found the window unfocused.
+      expect((await readNodeByUrl(database, "https://example.org/a"))?.signals.activeDwellMs).toBe(
+        60_000,
+      );
+    });
+
+    it("adds nothing for a page the tab has left, and is dropped", async () => {
+      const { app, database, clock, requestPageText } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      await app.handleNavigationCommitted(commit("https://example.org/b"));
+      clock.focusedTabId = 7;
+      await app.handleTabActivated(7);
+      clock.now += 60_000;
+
+      expect(await app.handleContentMessage(tick(), FROM_PAGE_A)).toMatchObject({
+        type: "signal.dropped",
+      });
+      expect((await readNodeByUrl(database, "https://example.org/a"))?.signals.activeDwellMs).toBe(
+        0,
+      );
+      expect(requestPageText).not.toHaveBeenCalled();
+    });
+
+    it("tells a page in a tab outside the session to stop", async () => {
+      const { app } = await createSignalsApp();
+
+      expect(
+        await app.handleContentMessage(tick(), { tabId: 99, url: "https://example.org/x" }),
+      ).toMatchObject({ type: "signal.dropped", payload: { stop: true } });
+    });
   });
 
   it("stores no text sent by a page its tab has left", async () => {
@@ -4091,6 +4181,53 @@ describe("fact extraction through the background", () => {
       type: "facts.extractionStarted",
       payload: { queued: 1 },
     });
+    await vi.waitFor(async () => expect(await database.count(FACT_STORE)).toBe(1));
+  });
+
+  it("runs the work held for the user's absence when they press run now, and only that work", async () => {
+    const { app, database, clock } = await createExtractionApp();
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await extractionJobs(database)).toHaveLength(1));
+
+    expect(await app.handleMessage(buildRpcMessage("aiActivity.runNow", {}))).toMatchObject({
+      type: "aiActivity.runStarted",
+      payload: { marked: 1 },
+    });
+    await vi.waitFor(async () => expect(await database.count(FACT_STORE)).toBe(1));
+
+    const [done] = await extractionJobs(database);
+
+    await database.put(JOB_STORE, { ...done, id: "later", status: "queued", payload: {} } as never);
+
+    await app.handleAlarm(JOB_WAKE_ALARM);
+
+    expect((await database.get(JOB_STORE, "later"))?.status).toBe("queued");
+  });
+
+  it("answers that nothing was marked when no work is held", async () => {
+    const { app } = await createExtractionApp();
+
+    expect(await app.handleMessage(buildRpcMessage("aiActivity.runNow", {}))).toMatchObject({
+      type: "aiActivity.runStarted",
+      payload: { marked: 0 },
+    });
+  });
+
+  it("runs a job a previous load marked as asked for, without a second request", async () => {
+    const { app, database, clock } = await createExtractionApp();
+
+    await readPageDeeply(app, clock);
+    await vi.waitFor(async () => expect(await extractionJobs(database)).toHaveLength(1));
+
+    const [job] = await extractionJobs(database);
+
+    await database.put(JOB_STORE, {
+      ...job,
+      payload: { ...(job?.payload as object), requestedAt: 1 },
+    } as never);
+    await app.handleAlarm(JOB_WAKE_ALARM);
+
     await vi.waitFor(async () => expect(await database.count(FACT_STORE)).toBe(1));
   });
 
