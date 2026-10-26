@@ -43,7 +43,7 @@ WHEN no session is active, the popup SHALL list the saved sessions, newest first
 
 ### Requirement: The user resumes a saved session
 
-Resuming SHALL be refused while another session is active, and SHALL end a closed session as starting one does. It SHALL recreate a tab group with the session's title holding the saved tabs in their saved order; every tab but the left-off page SHALL open without loading, and the left-off page SHALL open loaded and selected. The session's saved pages SHALL be reopened on the new tabs rather than recorded again, and the session SHALL become active, following the new group.
+Resuming SHALL be allowed while other sessions are active or closed, and SHALL leave them as they are. It SHALL recreate a tab group with the session's title holding the saved tabs in their saved order; every tab but the left-off page SHALL open without loading, and the left-off page SHALL open loaded and selected. The session's saved pages SHALL be reopened on the new tabs rather than recorded again, and the session SHALL become active, following the new group. The popup SHALL offer Resume beside Delete for a chosen saved session, with no warning, and SHALL make the resumed session the viewed one.
 
 #### Scenario: Resuming
 
@@ -55,8 +55,10 @@ Resuming SHALL be refused while another session is active, and SHALL end a close
 #### Scenario: Another session is active
 
 - **GIVEN** the active session `Batteries`
-- **WHEN** the user tries to resume `E-bike motors`
-- **THEN** resuming is refused and no tab is opened
+- **WHEN** the user resumes `E-bike motors`
+- **THEN** both sessions are active
+- **AND** the tabs and group of `Batteries` are untouched
+- **AND** `E-bike motors` is the viewed session
 
 ### Requirement: The popup says where the user left off
 

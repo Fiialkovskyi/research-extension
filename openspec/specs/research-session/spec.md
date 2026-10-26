@@ -39,22 +39,21 @@ IF creating the group or setting its title fails, THEN the extension SHALL close
 - **AND** no new group remains in the window
 - **AND** if the popup is still open, it shows the reason
 
-### Requirement: At most one session is active
+### Requirement: Several sessions may be active
 
-The extension SHALL record each started session in its database, with the id of its tab group. At most one session SHALL be active at a time. WHEN the user submits a title while a session is active, the extension SHALL refuse the start, SHALL NOT create a tab or tab group, and SHALL report which session is active. The check SHALL hold even when two starts are requested at the same time. WHEN the user starts a session while another session is closed, the extension SHALL end the closed session, keeping it as saved, in the same write that records the new one.
+The extension SHALL record each started session in its database, with the id of its tab group. Any number of sessions MAY be active at the same time, each following its own group, and a start SHALL NOT be refused because another session is active, closed or saved. WHEN the user submits a title that another live session already uses, the extension SHALL start the session anyway. The write that records a start SHALL either record the session or leave nothing behind, even when two starts are requested at the same time.
 
 #### Scenario: Starting while a session is active
 
 - **GIVEN** the session `E-bike motors` is active and its group still exists
 - **WHEN** a start is requested with the title `Batteries`
-- **THEN** no tab or tab group is created
-- **AND** the answer says that `E-bike motors` is active
+- **THEN** a tab group `Batteries` is created
+- **AND** both `E-bike motors` and `Batteries` are active
 
 #### Scenario: Two starts at once
 
-- **WHEN** two starts are requested at the same time with no active session
-- **THEN** exactly one session becomes active
-- **AND** the tab opened for the other attempt is closed
+- **WHEN** two starts are requested at the same time
+- **THEN** two sessions become active, each with its own group
 
 #### Scenario: Recording the session fails
 
@@ -67,8 +66,7 @@ The extension SHALL record each started session in its database, with the id of 
 - **GIVEN** the session `E-bike motors` is closed
 - **WHEN** the user starts the session `Batteries`
 - **THEN** `Batteries` is active
-- **AND** `E-bike motors` is ended and kept as saved
-- **AND** restoring the group of `E-bike motors` later does not make it active
+- **AND** `E-bike motors` is still closed, and restoring its group makes it active again
 
 ### Requirement: The session survives a restart
 
@@ -111,23 +109,29 @@ WHEN the session's group is renamed, the session's title SHALL change to match. 
 - **WHEN** the window holding the session's group closes
 - **THEN** the session is closed, with the group's id
 
-### Requirement: The popup shows the active session
+### Requirement: The popup shows the viewed session
 
-WHEN the popup opens and a session is active, it SHALL show that session's title and the number of pages the session has recorded, and SHALL NOT offer the title form. WHEN no session is active, it SHALL offer the form, and WHEN a session is closed, it SHALL also name the closed session and say that starting a new session ends it. Before deciding, the extension SHALL close a recorded active session whose group no longer exists, and SHALL reopen a closed session whose group exists again.
+WHEN the popup opens, it SHALL show a select over the user's sessions: the live ones first, then the saved ones, with the viewed session chosen, and a button to start a new session that is always available. For the viewed live session it SHALL show its title and the number of pages recorded. WHEN no session is live, it SHALL offer the title form. Before deciding, the extension SHALL close every recorded active session whose group no longer exists, and SHALL reopen every closed session whose group exists again.
 
 #### Scenario: Popup opened during a session
 
-- **GIVEN** the session `E-bike motors` is active and has recorded 2 pages
+- **GIVEN** the sessions `E-bike motors` (2 pages) and `Batteries` (5 pages) are active, and `Batteries` is viewed
 - **WHEN** the user opens the popup
-- **THEN** the popup says `E-bike motors` is active with 2 pages recorded
-- **AND** it has no title form
+- **THEN** the select lists both and shows `Batteries`, with 5 pages recorded
+- **AND** the button to start a new session is enabled
 
 #### Scenario: Popup opened after the group was closed
 
-- **GIVEN** the session's group was removed
+- **GIVEN** the only session's group was removed
 - **WHEN** the user opens the popup
 - **THEN** the popup offers the title form
-- **AND** it names the closed session, saying that a new start ends it
+- **AND** the select lists the closed session among the saved ones
+
+#### Scenario: Choosing another session in the select
+
+- **GIVEN** two active sessions
+- **WHEN** the user chooses the other one in the select
+- **THEN** the popup shows that session, and no tab or group is opened or closed
 
 ### Requirement: A returning group reopens its session
 
