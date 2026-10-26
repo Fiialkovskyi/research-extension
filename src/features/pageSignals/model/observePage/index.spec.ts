@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { observePage, type PageObserverDependencies } from ".";
+import type { PageMetadata } from "@/features/pageMetadata";
 import { buildRpcMessage } from "@/shared/rpc";
 
 type Listener = (event: { isTrusted: boolean }) => void;
@@ -46,6 +47,7 @@ let answer: unknown;
 let isExtensionGone: boolean;
 let requestListener: ((message: unknown) => Promise<unknown> | undefined) | undefined;
 let notices: string[];
+let metadata: PageMetadata | undefined;
 let extract: ReturnType<typeof vi.fn<PageObserverDependencies["extract"]>>;
 
 const observe = () =>
@@ -76,6 +78,7 @@ const observe = () =>
       timers.delete(handle);
     },
     extract,
+    readMetadata: () => metadata,
     showNotice: (sessionTitle) => {
       notices.push(sessionTitle);
     },
@@ -115,6 +118,7 @@ beforeEach(() => {
   nextTimer = 0;
   sent = [];
   notices = [];
+  metadata = undefined;
   answer = buildRpcMessage("signal.recorded", {});
   isExtensionGone = false;
   requestListener = undefined;
@@ -327,6 +331,56 @@ describe("observePage", () => {
       type: "content.flushed",
     });
     expect(sent).toHaveLength(count);
+  });
+
+  it("sends what the page says about itself once, as it starts", () => {
+    metadata = { title: "Mid-drive motors", description: "How they work." };
+    observe();
+
+    expect(sent.filter(({ type }) => type === "page.metadata")).toEqual([
+      expect.objectContaining({ payload: metadata }),
+    ]);
+
+    paint();
+    elapse();
+
+    expect(sent.filter(({ type }) => type === "page.metadata")).toHaveLength(1);
+  });
+
+  it("sends no metadata for a page that says nothing of itself", () => {
+    observe();
+
+    expect(sent.some(({ type }) => type === "page.metadata")).toBe(false);
+  });
+
+  it("stops observing when the background says the tab is no longer a session tab", async () => {
+    metadata = { title: "Mid-drive motors" };
+    answer = buildRpcMessage("signal.dropped", { stop: true });
+    observe();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(requestListener).toBeUndefined();
+  });
+
+  it("still observes when the metadata is refused for a page its tab has left", async () => {
+    metadata = { title: "Mid-drive motors" };
+    answer = buildRpcMessage("signal.dropped", { stop: false });
+    observe();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(requestListener).toBeDefined();
+  });
+
+  it("stops quietly when the extension is gone as it starts", async () => {
+    metadata = { title: "Mid-drive motors" };
+    isExtensionGone = true;
+    observe();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(requestListener).toBeUndefined();
   });
 
   it("shows the notice it is asked for, naming the session, and says it did", async () => {

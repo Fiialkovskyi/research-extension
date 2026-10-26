@@ -45,4 +45,31 @@ describe("readPageVectors", () => {
 
     expect([...vectors.keys()].toSorted()).toEqual(["a", "b"]);
   });
+
+  describe("a page's metadata vector", () => {
+    beforeEach(async () => {
+      const database = await openResearchDatabase();
+
+      await Promise.all(
+        [
+          vector("space-1", "metadata:m", 0, "m", "session-1", [0, 2]),
+          vector("space-1", "metadata:a", 0, "a", "session-1", [100, 0]),
+        ].map((record) => database.put(VECTOR_STORE, record)),
+      );
+    });
+
+    it("places a page that has no text vector", async () => {
+      const vectors = await readPageVectors(await openResearchDatabase(), "session-1", "space-1");
+
+      expect([...(vectors.get("m") ?? [])]).toEqual([0, 1]);
+    });
+
+    it("is ignored for a page that has one, so the text alone places it", async () => {
+      const vectors = await readPageVectors(await openResearchDatabase(), "session-1", "space-1");
+      const [x, y] = vectors.get("a") ?? [];
+
+      expect(x).toBeCloseTo(Math.SQRT1_2);
+      expect(y).toBeCloseTo(Math.SQRT1_2);
+    });
+  });
 });

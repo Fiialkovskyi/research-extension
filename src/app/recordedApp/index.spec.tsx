@@ -22,6 +22,7 @@ const page = {
     quickReturnCount: 0,
   },
   snapshot: { byteLength: 100, truncated: false, capturedAt: 2 },
+  metadata: null,
   vectorCount: 1,
   facts: null as { kept: number; dropped: number; isFinished: boolean } | null,
 };

@@ -38,6 +38,16 @@ const snapshot = {
       hasPlaintext: false,
     },
   ],
+  metadata: [
+    {
+      nodeId: "node-a",
+      title: "Mid-drive motors",
+      siteName: null,
+      canonicalUrl: "https://example.org/motors",
+      hasSealedDescription: true,
+      hasPlaintextDescription: false,
+    },
+  ],
   edges: [{ kind: "opener", from: "node-a", to: "node-b" }],
   groups: [{ id: 1791, title: "Motors" }],
 };

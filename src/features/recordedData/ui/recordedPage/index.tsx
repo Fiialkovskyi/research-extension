@@ -39,6 +39,25 @@ const describeFacts = (facts: RecordedPageEntry["facts"], isExtracting: boolean)
   return `${facts.kept} kept, ${facts.dropped} dropped${facts.isFinished ? "" : ", extracting…"}`;
 };
 
+/** Lists what a page said about itself that was kept; the description only as kept, not its words. */
+const describeMetadata = (metadata: RecordedPageEntry["metadata"]): string => {
+  if (metadata === null) {
+    return "none kept";
+  }
+
+  const parts = [
+    metadata.title,
+    metadata.siteName,
+    metadata.type,
+    metadata.author,
+    metadata.publishedAt,
+    metadata.canonicalUrl,
+    metadata.hasDescription ? "description kept" : undefined,
+  ].filter((part): part is string => part !== undefined);
+
+  return parts.join(" · ");
+};
+
 /** One recorded page: what it was, what was kept about it, and its controls. */
 function Entry({
   page,
@@ -84,6 +103,8 @@ function Entry({
             ? "none kept"
             : `${(snapshot.byteLength / 1024).toFixed(1)} KB${snapshot.truncated ? ", truncated" : ""}, kept ${formatTime(snapshot.capturedAt)}`}
         </dd>
+        <dt>Page details</dt>
+        <dd data-testid="recorded-metadata">{describeMetadata(page.metadata)}</dd>
         <dt>Vectors</dt>
         <dd data-testid="recorded-vectors">{page.vectorCount}</dd>
         {snapshot !== null && (

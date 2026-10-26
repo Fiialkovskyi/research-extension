@@ -13,7 +13,7 @@ export const DATABASE_NAME = "research-graph";
  * rather than editing an existing one, so a profile that has already migrated
  * is never asked to migrate differently.
  */
-export const DATABASE_VERSION = 24;
+export const DATABASE_VERSION = 25;
 
 export const MODEL_STORE = "models";
 export const MODEL_FILE_STORE = "modelFiles";
@@ -52,6 +52,8 @@ export const ACTIVITY_STORE = "activity";
 export const AI_SETUP_STORE = "aiSetup";
 /** What the user chose in the options that no feature owns a store for. One record. */
 export const SETTINGS_STORE = "settings";
+/** What each page says about itself in its head, one record per page, its description sealed. */
+export const PAGE_METADATA_STORE = "pageMetadata";
 
 /**
  * How many runs the log keeps. Runs are written on every embedding job and

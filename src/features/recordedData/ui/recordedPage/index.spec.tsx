@@ -26,6 +26,11 @@ const SESSION: RecordedSession = {
         quickReturnCount: 0,
       },
       snapshot: { byteLength: 12_288, truncated: false, capturedAt: 2 },
+      metadata: {
+        title: "Mid-drive motors explained",
+        siteName: "Bike Lab",
+        hasDescription: true,
+      },
       vectorCount: 4,
       facts: { kept: 7, dropped: 2, isFinished: true },
     },
@@ -59,8 +64,22 @@ describe("RecordedPage", () => {
     expect(within(entry).getByTestId("recorded-scroll")).toHaveTextContent("80%");
     expect(within(entry).getByTestId("recorded-copies")).toHaveTextContent("1");
     expect(within(entry).getByTestId("recorded-snapshot")).toHaveTextContent("12.0 KB");
+    expect(within(entry).getByTestId("recorded-metadata")).toHaveTextContent(
+      "Mid-drive motors explained · Bike Lab · description kept",
+    );
     expect(within(entry).getByTestId("recorded-vectors")).toHaveTextContent("4");
     expect(within(entry).getByTestId("recorded-facts")).toHaveTextContent("7 kept, 2 dropped");
+  });
+
+  it("says when no page details were kept", () => {
+    const [page] = SESSION.pages;
+
+    renderPage(new Map(), {
+      ...SESSION,
+      pages: [{ ...(page as NonNullable<typeof page>), metadata: null }],
+    });
+
+    expect(screen.getByTestId("recorded-metadata")).toHaveTextContent("none kept");
   });
 
   it("says a page is not extracted yet, or still extracting", () => {

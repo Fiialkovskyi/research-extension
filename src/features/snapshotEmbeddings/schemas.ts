@@ -10,3 +10,9 @@ export const embedSnapshotPayloadSchema = v.object({
 export const embedSnapshotCheckpointSchema = v.object({
   nextPart: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
+
+/** What an `embedPageMetadata` job carries beyond its identity. */
+export const embedMetadataPayloadSchema = v.object({
+  nodeId: v.string(),
+  spaceId: v.string(),
+});

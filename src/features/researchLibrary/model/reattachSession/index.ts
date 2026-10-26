@@ -7,6 +7,7 @@ import {
   EDGE_STORE,
   JOB_STORE,
   NODE_STORE,
+  PAGE_METADATA_STORE,
   type ResearchDatabaseSchema,
   SESSION_STORE,
   SNAPSHOT_STORE,
@@ -23,6 +24,7 @@ const SESSION_SCOPED_STORES = [
   VECTOR_STORE,
   JOB_STORE,
   ACTIVITY_STORE,
+  PAGE_METADATA_STORE,
 ] as const;
 
 export interface ReattachSessionOptions {

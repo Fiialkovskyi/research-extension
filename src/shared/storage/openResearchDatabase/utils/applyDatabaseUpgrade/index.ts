@@ -4,6 +4,7 @@ import {
   ACTIVITY_STORE,
   AI_SETUP_STORE,
   SETTINGS_STORE,
+  PAGE_METADATA_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -253,6 +254,11 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
   },
   24: (database) => {
     database.createObjectStore(SETTINGS_STORE, { keyPath: "id" });
+  },
+  25: (database) => {
+    database
+      .createObjectStore(PAGE_METADATA_STORE, { keyPath: "nodeId" })
+      .createIndex("sessionId", "sessionId");
   },
 };
 

@@ -12,6 +12,7 @@ import {
   JOB_STORE,
   NODE_STORE,
   openResearchDatabase,
+  PAGE_METADATA_STORE,
   type ResearchDatabaseSchema,
   SESSION_STORE,
   SNAPSHOT_STORE,
@@ -30,6 +31,7 @@ const STORES = [
   JOB_STORE,
   CLUSTERING_STORE,
   SESSION_STORE,
+  PAGE_METADATA_STORE,
 ] as const;
 
 const NEW: StoredSession = {
@@ -78,6 +80,7 @@ beforeEach(async () => {
     status: "done",
     priority: 0,
   } as never);
+  await database.put(PAGE_METADATA_STORE, { nodeId: "new-root", sessionId: "new" } as never);
   await database.put(CLUSTERING_STORE, { sessionId: "new", clusters: [] } as never);
 });
 
@@ -92,6 +95,7 @@ describe("reattachSession", () => {
       CHUNK_STORE,
       VECTOR_STORE,
       JOB_STORE,
+      PAGE_METADATA_STORE,
     ] as const) {
       const records = (await database.getAll(store)) as { sessionId: string }[];
 

@@ -7,6 +7,7 @@ import {
   ACTIVITY_STORE,
   AI_SETUP_STORE,
   SETTINGS_STORE,
+  PAGE_METADATA_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   DATABASE_VERSION,
@@ -64,6 +65,7 @@ describe("openResearchDatabase", () => {
         ACTIVITY_STORE,
         AI_SETUP_STORE,
         SETTINGS_STORE,
+        PAGE_METADATA_STORE,
       ].toSorted(),
     );
 

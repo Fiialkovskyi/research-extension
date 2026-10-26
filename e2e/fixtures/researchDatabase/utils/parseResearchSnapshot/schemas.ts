@@ -50,6 +50,19 @@ export const researchSnapshotSchema = v.object({
       hasPlaintext: v.boolean(),
     }),
   ),
+  /** Page metadata records, without the description's words. */
+  metadata: v.array(
+    v.object({
+      nodeId: v.string(),
+      title: v.nullable(v.string()),
+      siteName: v.nullable(v.string()),
+      canonicalUrl: v.nullable(v.string()),
+      /** Whether the description is stored encrypted. */
+      hasSealedDescription: v.boolean(),
+      /** Whether the record holds a description in the clear, which it must never. */
+      hasPlaintextDescription: v.boolean(),
+    }),
+  ),
   edges: v.array(v.object({ kind: v.string(), from: v.string(), to: v.string() })),
   /** The groups as the extension sees them, with the extension's ids. */
   groups: v.array(v.object({ id: v.number(), title: v.string() })),

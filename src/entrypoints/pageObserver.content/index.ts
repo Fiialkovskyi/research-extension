@@ -2,6 +2,7 @@ import { browser } from "wxt/browser";
 import { defineContentScript } from "wxt/utils/define-content-script";
 
 import { extractReadableText } from "@/features/pageSnapshots/model/extractReadableText";
+import { readPageMetadata } from "@/features/pageMetadata/model/readPageMetadata";
 import { showPageNotice } from "@/features/pageNotice/model/showPageNotice";
 import { observePage } from "@/features/pageSignals/model/observePage";
 
@@ -13,7 +14,7 @@ import { observePage } from "@/features/pageSignals/model/observePage";
  * no host permission of its own (REQ-RT-001).
  *
  * Wiring only — the rules live in `features/pageSignals/model/observePage`.
- * Both modules are imported by path: their barrels belong to the background.
+ * The modules are imported by path: their barrels belong to the background.
  */
 export default defineContentScript({
   registration: "runtime",
@@ -39,6 +40,7 @@ export default defineContentScript({
         window.clearTimeout(handle);
       },
       extract: extractReadableText,
+      readMetadata: readPageMetadata,
       showNotice: (sessionTitle) => {
         showPageNotice({
           document,

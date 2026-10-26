@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { readRecordedSession } from ".";
 import { readRecordedText } from "../readRecordedText";
+import { recordPageMetadata } from "@/features/pageMetadata";
 import { recordSnapshot } from "@/features/pageSnapshots";
 import {
   EXTRACTION_STORE,
@@ -12,6 +13,7 @@ import {
   MODEL_STORE,
   NODE_STORE,
   openResearchDatabase,
+  PAGE_METADATA_STORE,
   type ResearchDatabaseSchema,
   SESSION_STORE,
   SNAPSHOT_STORE,
@@ -60,6 +62,7 @@ beforeEach(async () => {
         KEY_STORE,
         EXTRACTION_STORE,
         MODEL_STORE,
+        PAGE_METADATA_STORE,
       ] as const
     ).map((store) => database.clear(store)),
   );
@@ -114,6 +117,24 @@ describe("readRecordedSession", () => {
       snapshot: null,
       vectorCount: 0,
     });
+  });
+
+  it("says what a page said about itself that was kept, never the description's words", async () => {
+    await recordPageMetadata(database, {
+      nodeId: "a",
+      metadata: { title: "Mid-drive motors", siteName: "Bike Lab", description: "How they work." },
+      capturedAt: 9,
+    });
+
+    const recorded = await readRecordedSession(database, "session-1");
+
+    expect(recorded?.pages[1]?.metadata).toEqual({
+      title: "Mid-drive motors",
+      siteName: "Bike Lab",
+      hasDescription: true,
+    });
+    expect(JSON.stringify(recorded)).not.toContain("How they work.");
+    expect(recorded?.pages[0]?.metadata).toBeNull();
   });
 
   it("counts a page's facts kept and dropped, and none for a page not extracted", async () => {

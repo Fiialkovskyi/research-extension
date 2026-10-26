@@ -1,3 +1,4 @@
+import type { PageMetadata } from "@/features/pageMetadata";
 import { EXTRACTOR_VERSION, type TruncatedText } from "@/features/pageSnapshots";
 import { buildRpcMessage, parseRpcMessage } from "@/shared/rpc";
 
@@ -27,6 +28,8 @@ export interface PageObserverDependencies {
   clearTimer: (handle: number) => void;
   /** Extracts the page's readable text, or `undefined` when it has none. */
   extract: (document: Document) => TruncatedText | undefined;
+  /** Reads what the page says about itself in its head, or `undefined` when it says nothing. */
+  readMetadata: (document: Document) => PageMetadata | undefined;
   /** Shows the notice that this page was added to the named session. */
   showNotice: (sessionTitle: string) => void;
 }
@@ -36,7 +39,8 @@ type MarkedWindow = Window & { [OBSERVED_MARKER]?: boolean };
 /**
  * Observes a session page: how far it was scrolled and how often it was
  * copied from and pasted into, sent to the background in batches (REQ-CAP-005), and its
- * readable text once, when the background asks for it (REQ-CAP-006).
+ * readable text once, when the background asks for it (REQ-CAP-006). What the
+ * page says about itself in its head is sent once, as the observer starts.
  *
  * Kept cheap on the page's main thread: a scroll event only asks for a frame,
  * and the frame does the one layout read. The clipboard, the selection and
@@ -69,6 +73,19 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
     return height > 0 ? Math.min(1, (window.scrollY + window.innerHeight) / height) : 0;
   };
 
+  /** Stops observing when the background says this tab is no longer a session tab. */
+  const stopWhenDropped = (answer: unknown): void => {
+    try {
+      const parsed = parseRpcMessage(answer, pageContentResponseSchemas);
+
+      if (parsed.type === "signal.dropped" && parsed.payload.stop) {
+        stop();
+      }
+    } catch {
+      // An answer this page cannot read changes nothing it does.
+    }
+  };
+
   /** Sends what is held now; resolves once it has been sent, or at once with nothing to send. */
   const flush = (): Promise<void> => {
     if (timer !== undefined) {
@@ -87,21 +104,9 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
     pasteEvents = 0;
 
     return send(buildRpcMessage("signal.batch", batch)).then(
-      (answer) => {
-        try {
-          const parsed = parseRpcMessage(answer, pageContentResponseSchemas);
-
-          if (parsed.type === "signal.dropped" && parsed.payload.stop) {
-            stop();
-          }
-        } catch {
-          // An answer this page cannot read changes nothing it does.
-        }
-      },
+      stopWhenDropped,
       // The extension was reloaded or removed: this script is orphaned.
-      () => {
-        stop();
-      },
+      stop,
     );
   };
 
@@ -220,6 +225,13 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
 
   // The part of the page in view before any scrolling counts too.
   handleScroll();
+
+  const metadata = dependencies.readMetadata(document);
+
+  if (metadata !== undefined) {
+    // Once, unasked: it is small, and the page is not read deeply yet.
+    send(buildRpcMessage("page.metadata", metadata)).then(stopWhenDropped, stop);
+  }
 
   return stop;
 };

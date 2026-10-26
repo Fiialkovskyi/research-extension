@@ -16,6 +16,7 @@ import {
   KEY_STORE,
   NODE_STORE,
   openResearchDatabase,
+  PAGE_METADATA_STORE,
   type ResearchDatabaseSchema,
   SNAPSHOT_STORE,
   type StoredNode,
@@ -75,6 +76,7 @@ beforeEach(async () => {
         JOB_STORE,
         KEY_STORE,
         ACTIVITY_STORE,
+        PAGE_METADATA_STORE,
       ] as const
     ).map((store) => database.clear(store)),
   );
@@ -155,6 +157,37 @@ beforeEach(async () => {
     }),
     database.put(FACT_STORE, { id: "other:0:0", nodeId: "b", sessionId: "session-1" } as never),
     database.put(EXTRACTION_STORE, { snapshotId, nodeId: "a", sessionId: "session-1" } as never),
+    database.put(PAGE_METADATA_STORE, { nodeId: "a", sessionId: "session-1", capturedAt: 1 }),
+    database.put(PAGE_METADATA_STORE, { nodeId: "b", sessionId: "session-1", capturedAt: 1 }),
+    database.put(VECTOR_STORE, vector("space-1", "a", "metadata:a")),
+    database.put(JOB_STORE, {
+      id: "job-meta-a",
+      type: "embedPageMetadata",
+      sessionId: "session-1",
+      inputHashes: [],
+      producerVersion: "space-1",
+      status: "queued",
+      priority: 0,
+      attempts: 0,
+      nextAttemptAt: 0,
+      createdAt: 0,
+      updatedAt: 0,
+      payload: { nodeId: "a", spaceId: "space-1" },
+    }),
+    database.put(JOB_STORE, {
+      id: "job-meta-b",
+      type: "embedPageMetadata",
+      sessionId: "session-1",
+      inputHashes: [],
+      producerVersion: "space-1",
+      status: "queued",
+      priority: 0,
+      attempts: 0,
+      nextAttemptAt: 0,
+      createdAt: 0,
+      updatedAt: 0,
+      payload: { nodeId: "b", spaceId: "space-1" },
+    }),
     database.put(JOB_STORE, {
       id: "job-a",
       type: "embedSnapshot",
@@ -204,7 +237,11 @@ describe("deleteNode", () => {
     expect(await database.count(SNAPSHOT_STORE)).toBe(0);
     expect(await database.count(CHUNK_STORE)).toBe(0);
     expect((await database.getAll(VECTOR_STORE)).map(({ nodeId }) => nodeId)).toEqual(["b"]);
-    expect((await database.getAll(JOB_STORE)).map(({ id }) => id)).toEqual(["job-b"]);
+    expect((await database.getAll(JOB_STORE)).map(({ id }) => id).toSorted()).toEqual([
+      "job-b",
+      "job-meta-b",
+    ]);
+    expect((await database.getAll(PAGE_METADATA_STORE)).map(({ nodeId }) => nodeId)).toEqual(["b"]);
     expect((await database.getAll(FACT_STORE)).map(({ nodeId }) => nodeId)).toEqual(["b"]);
     expect(await database.count(EXTRACTION_STORE)).toBe(0);
     expect((await database.getAll(ACTIVITY_STORE)).map(({ id }) => id)).toEqual(["activity-b"]);

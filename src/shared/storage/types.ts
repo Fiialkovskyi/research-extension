@@ -5,6 +5,7 @@ import type {
   ACTIVITY_STORE,
   AI_SETUP_STORE,
   SETTINGS_STORE,
+  PAGE_METADATA_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -447,8 +448,33 @@ export interface StoredAiSetup {
 /** The user's choices from the options page. One record, `id: "user"`. */
 export interface StoredSettings {
   id: "user";
-  /** Whether a page that was just recorded shows a notice; on unless this is `false`. */
+  /** Whether a page whose text was just taken shows a notice; on unless this is `false`. */
   isPageNoticeEnabled?: boolean;
+}
+
+/**
+ * What a page says about itself in its head, kept per node. The description is
+ * stored only sealed with the data key, like a snapshot's text (REQ-SEC-005);
+ * the other fields are of the kind the node already shows in the clear.
+ */
+export interface StoredPageMetadata {
+  /** The node it describes; one record per node, a later one replaces it. */
+  nodeId: string;
+  sessionId: string;
+  capturedAt: number;
+  title?: string;
+  siteName?: string;
+  type?: string;
+  author?: string;
+  /** As the page wrote it: not parsed, since pages write dates every way. */
+  publishedAt?: string;
+  canonicalUrl?: string;
+  /** The data key that sealed the description; present with the rest of the seal. */
+  keyId?: string;
+  cipher?: "aes-gcm-256";
+  iv?: Uint8Array;
+  /** The description, encrypted; there is none when the page gave none. */
+  encryptedDescription?: ArrayBuffer;
 }
 
 export interface StoredBlockedSites {
@@ -775,5 +801,10 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [SETTINGS_STORE]: {
     key: string;
     value: StoredSettings;
+  };
+  [PAGE_METADATA_STORE]: {
+    key: string;
+    value: StoredPageMetadata;
+    indexes: { sessionId: string };
   };
 }

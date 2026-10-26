@@ -1,6 +1,7 @@
 # page-captured-notice Specification
 
 ## Purpose
+
 Defines the short notice drawn on a page when the page was taken into a research session, so the user can see what is being recorded without opening the popup.
 
 ## Requirements

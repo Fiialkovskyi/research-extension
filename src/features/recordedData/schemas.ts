@@ -20,6 +20,21 @@ export const recordedPageSchema = v.object({
   snapshot: v.nullable(
     v.object({ byteLength: v.number(), truncated: v.boolean(), capturedAt: v.number() }),
   ),
+  /**
+   * What the page said about itself in its head; null when it said nothing.
+   * The description is not included, only that one is kept.
+   */
+  metadata: v.nullable(
+    v.object({
+      title: v.optional(v.string()),
+      siteName: v.optional(v.string()),
+      type: v.optional(v.string()),
+      author: v.optional(v.string()),
+      publishedAt: v.optional(v.string()),
+      canonicalUrl: v.optional(v.string()),
+      hasDescription: v.boolean(),
+    }),
+  ),
   vectorCount: v.number(),
   /** Facts extracted from the page and facts dropped as ungrounded; null before extraction starts. */
   facts: v.nullable(v.object({ kept: v.number(), dropped: v.number(), isFinished: v.boolean() })),

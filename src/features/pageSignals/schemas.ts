@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { pageMetadataSchema } from "@/features/pageMetadata";
 import { MAXIMUM_SNAPSHOT_BYTES } from "@/features/pageSnapshots";
 
 /**
@@ -20,6 +21,11 @@ export const pageContentRequestSchemas = {
     copyEvents: v.pipe(v.number(), v.integer(), v.minValue(0)),
     pasteEvents: v.pipe(v.number(), v.integer(), v.minValue(0)),
   }),
+  /**
+   * What the page says about itself in its head, sent once when the observer
+   * starts. Unasked for: it is small, and wanted for every page.
+   */
+  "page.metadata": pageMetadataSchema,
   /** The page's readable text, asked for when its node became deep read. */
   "content.extracted": v.object({
     text: v.pipe(v.string(), v.maxBytes(MAXIMUM_SNAPSHOT_BYTES)),
@@ -32,6 +38,7 @@ export const pageContentRequestSchemas = {
 export const pageContentResponseSchemas = {
   "signal.recorded": v.object({}),
   "content.stored": v.object({}),
+  "metadata.stored": v.object({}),
   /**
    * Nothing was recorded. `stop` when the tab is no longer a session tab, so
    * the page stops observing; otherwise the page is merely not its tab's

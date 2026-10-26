@@ -17,6 +17,7 @@ import {
   INFERENCE_RUN_STORE,
   JOB_STORE,
   SETTINGS_STORE,
+  PAGE_METADATA_STORE,
   KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
@@ -565,6 +566,24 @@ describe("applyDatabaseUpgrade", () => {
 
     expect(after.version).toBe(24);
     expect(after.transaction(SETTINGS_STORE).store.keyPath).toBe("id");
+    expect(await after.count(JOB_STORE)).toBe(1);
+
+    after.close();
+  });
+
+  it("adds a page metadata store keyed by node and indexed by session, keeping what a version-24 profile had", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 24);
+
+    await before.put(JOB_STORE, { id: "old", updatedAt: 100 } as never);
+    before.close();
+
+    const after = await openAt(name, 25);
+    const store = after.transaction(PAGE_METADATA_STORE).store;
+
+    expect(after.version).toBe(25);
+    expect(store.keyPath).toBe("nodeId");
+    expect([...store.indexNames]).toEqual(["sessionId"]);
     expect(await after.count(JOB_STORE)).toBe(1);
 
     after.close();

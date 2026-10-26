@@ -18,6 +18,7 @@ import { buildRpcMessage } from "@/shared/rpc";
 import {
   AI_SETUP_STORE,
   SETTINGS_STORE,
+  PAGE_METADATA_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -203,6 +204,7 @@ const createFreshDatabase = async () => {
   await database.clear(BLOCKED_SITES_STORE);
   await database.clear(AI_SETUP_STORE);
   await database.clear(SETTINGS_STORE);
+  await database.clear(PAGE_METADATA_STORE);
 
   return database;
 };
@@ -1580,6 +1582,10 @@ const readNodeByUrl = async (
   url: string,
 ) => (await database.getAll(NODE_STORE)).find((node) => node.url === url);
 
+/** A page's report of what it says about itself. */
+const pageMetadata = (title: string) =>
+  buildRpcMessage("page.metadata", { title, description: "How they work." });
+
 /** Opens a page in the session and makes it deep read with a copy. */
 const deepRead = async (app: Awaited<ReturnType<typeof createSignalsApp>>["app"]) => {
   await app.handleNavigationCommitted(commit("https://example.org/a"));
@@ -1868,6 +1874,79 @@ describe("page signals and reading time through the background", () => {
     expect(await database.count(SNAPSHOT_STORE)).toBe(0);
   });
 
+  describe("what a page says about itself", () => {
+    it("is stored for the page the tab shows, at once and without a deep read", async () => {
+      const { app, database } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+      expect(
+        await app.handleContentMessage(pageMetadata("Mid-drive motors"), FROM_PAGE_A),
+      ).toMatchObject({ type: "metadata.stored" });
+
+      const node = await readNodeByUrl(database, "https://example.org/a");
+
+      expect(await database.get(PAGE_METADATA_STORE, node?.id ?? "")).toMatchObject({
+        nodeId: node?.id,
+        sessionId: "session-1",
+        title: "Mid-drive motors",
+      });
+    });
+
+    it("is dropped for a page its tab has left", async () => {
+      const { app, database } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      await app.handleNavigationCommitted(commit("https://example.org/b"));
+
+      expect(await app.handleContentMessage(pageMetadata("Old page"), FROM_PAGE_A)).toMatchObject({
+        type: "signal.dropped",
+        payload: { stop: false },
+      });
+      expect(await database.count(PAGE_METADATA_STORE)).toBe(0);
+    });
+
+    it("is dropped, and the page told to stop, for a tab outside every session", async () => {
+      const { app, database } = await createSignalsApp({
+        tabCapture: createTabCapture(sessionTab({ id: 9, groupId: 5 })),
+      });
+
+      expect(
+        await app.handleContentMessage(pageMetadata("Elsewhere"), {
+          tabId: 9,
+          url: "https://example.org/z",
+        }),
+      ).toMatchObject({ type: "signal.dropped", payload: { stop: true } });
+      expect(await database.count(PAGE_METADATA_STORE)).toBe(0);
+    });
+
+    it("is not stored for a denylisted page, which has no node", async () => {
+      const { app, database } = await createSignalsApp();
+
+      await app.handleMessage(buildRpcMessage("denylist.save", { sites: ["example.org"] }));
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+      expect(await app.handleContentMessage(pageMetadata("Private"), FROM_PAGE_A)).toMatchObject({
+        type: "signal.dropped",
+      });
+      expect(await database.count(PAGE_METADATA_STORE)).toBe(0);
+    });
+
+    it("is refused when a field is past its limit", async () => {
+      const { app, database } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+
+      expect(
+        await app.handleContentMessage(
+          buildRpcMessage("page.metadata", { description: "x".repeat(1001) }),
+          FROM_PAGE_A,
+        ),
+      ).toMatchObject({ type: "rpc.refused" });
+      expect(await database.count(PAGE_METADATA_STORE)).toBe(0);
+    });
+  });
+
   it("pushes the map a co-attention edge once the user flips between two pages", async () => {
     const { app, clock } = await createSignalsApp();
 
@@ -2074,6 +2153,34 @@ describe("embedding deep-read pages through the background", () => {
       ),
     );
     expect(await database.getAll(JOB_STORE)).toEqual([expect.objectContaining({ status: "done" })]);
+  });
+
+  it("embeds what a page says about itself, when the page has no text yet", async () => {
+    const embedding = createEmbeddingStub();
+    const { app, database } = await createSignalsApp({ loadEmbeddingSession: embedding.load });
+
+    await database.put(MODEL_STORE, EMBEDDING_MODEL as never);
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleContentMessage(pageMetadata("Mid-drive motors"), FROM_PAGE_A);
+
+    await vi.waitFor(async () =>
+      expect(await database.getAll(VECTOR_STORE)).toEqual([
+        expect.objectContaining({ chunkId: expect.stringMatching(/^metadata:/u) }),
+      ]),
+    );
+    expect(await database.getAll(JOB_STORE)).toEqual([
+      expect.objectContaining({ type: "embedPageMetadata" }),
+    ]);
+  });
+
+  it("keeps the metadata, and fails nothing, when no embedding model is active", async () => {
+    const { app, database } = await createSignalsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleContentMessage(pageMetadata("Mid-drive motors"), FROM_PAGE_A);
+
+    expect(await database.count(PAGE_METADATA_STORE)).toBe(1);
+    expect(await database.count(JOB_STORE)).toBe(0);
   });
 
   it("holds the background loaded while an embedding job runs, and lets go after", async () => {

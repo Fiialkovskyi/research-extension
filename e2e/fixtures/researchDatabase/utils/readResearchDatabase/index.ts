@@ -35,11 +35,13 @@ export const readResearchDatabase = (): Promise<ResearchSnapshot> =>
               "nodes",
               "edges",
               "snapshots",
+              "pageMetadata",
             ]);
             const sessions = transaction.objectStore("sessions").getAll();
             const nodes = transaction.objectStore("nodes").getAll();
             const edges = transaction.objectStore("edges").getAll();
             const snapshots = transaction.objectStore("snapshots").getAll();
+            const metadata = transaction.objectStore("pageMetadata").getAll();
 
             transaction.addEventListener("complete", () => {
               void extension.tabGroups.query({}).then(
@@ -76,6 +78,14 @@ export const readResearchDatabase = (): Promise<ResearchSnapshot> =>
                         truncated: snapshot.truncated,
                         cipher: snapshot.cipher ?? null,
                         hasPlaintext: "compressedText" in snapshot,
+                      })),
+                      metadata: metadata.result.map((record) => ({
+                        nodeId: record.nodeId,
+                        title: record.title ?? null,
+                        siteName: record.siteName ?? null,
+                        canonicalUrl: record.canonicalUrl ?? null,
+                        hasSealedDescription: record.encryptedDescription !== undefined,
+                        hasPlaintextDescription: "description" in record,
                       })),
                       edges: edges.result.map(({ kind, from, to }) => ({ kind, from, to })),
                       groups: groups.map(({ id, title }) => ({ id, title: title ?? "" })),

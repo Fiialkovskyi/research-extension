@@ -9,6 +9,7 @@ import {
   FACT_STORE,
   JOB_STORE,
   NODE_STORE,
+  PAGE_METADATA_STORE,
   type ResearchDatabaseSchema,
   SNAPSHOT_STORE,
   VECTOR_STORE,
@@ -24,7 +25,7 @@ const isJobFor = (payload: unknown, snapshotId: string): boolean =>
 /**
  * Deletes a page and everything derived from it, in one transaction
  * (REQ-STO-008): the node, every edge touching it, its activity, its snapshot, its chunks,
- * its vectors in every space, its facts and their extraction record, the
+ * its metadata, its vectors in every space (a metadata vector included), its facts and their extraction record, the
  * entities left with no facts, and the jobs working on it. Pages reached from
  * it keep their own records.
  *
@@ -46,6 +47,7 @@ export const deleteNode = async (
       ENTITY_STORE,
       JOB_STORE,
       ACTIVITY_STORE,
+      PAGE_METADATA_STORE,
     ],
     "readwrite",
   );
@@ -71,6 +73,7 @@ export const deleteNode = async (
   ]);
   const deletions: Promise<unknown>[] = [
     nodes.delete(nodeId),
+    transaction.objectStore(PAGE_METADATA_STORE).delete(nodeId),
     ...sessionEdges
       .filter((edge) => edge.from === nodeId || edge.to === nodeId)
       .map((edge) => edges.delete(edge.id)),
@@ -97,6 +100,19 @@ export const deleteNode = async (
         .map((job) => jobs.delete(job.id)),
     );
   }
+
+  // A job that embeds the page's metadata names the node, not a snapshot.
+  const metadataJobs = (
+    await transaction.objectStore(JOB_STORE).index("sessionId").getAll(node.sessionId)
+  ).filter(
+    ({ payload }) =>
+      typeof payload === "object" &&
+      payload !== null &&
+      "nodeId" in payload &&
+      payload.nodeId === nodeId,
+  );
+
+  deletions.push(...metadataJobs.map((job) => transaction.objectStore(JOB_STORE).delete(job.id)));
 
   await Promise.all(deletions);
 

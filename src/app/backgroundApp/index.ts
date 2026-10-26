@@ -48,6 +48,7 @@ import {
   recordSnapshot,
   sealPlaintextSnapshots,
 } from "@/features/pageSnapshots";
+import { recordPageMetadata } from "@/features/pageMetadata";
 import {
   readClustering,
   reclusterActiveSession,
@@ -78,11 +79,14 @@ import {
 } from "@/features/researchLibrary";
 import {
   buildEmbeddingSpace,
+  EMBED_METADATA_JOB,
   EMBED_SNAPSHOT_JOB,
   type EmbeddingSession,
+  enqueueMetadataEmbeddings,
   enqueueSnapshotEmbeddings,
   readSpaceCoverage,
   runEmbeddingJob,
+  runMetadataEmbeddingJob,
 } from "@/features/snapshotEmbeddings";
 import {
   checkpointJob,
@@ -875,6 +879,13 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         loadSession: loadEmbeddingSession,
       });
     }),
+    [EMBED_METADATA_JOB]: runHeld(async (job) => {
+      await runMetadataEmbeddingJob({
+        database: await getDatabase(),
+        job,
+        loadSession: loadEmbeddingSession,
+      });
+    }),
     [EXTRACT_FACTS_JOB]: runHeld(async (job) => {
       const openedDatabase = await getDatabase();
       const model = await getActiveModel(openedDatabase, "text-generation");
@@ -1411,6 +1422,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     await enqueueCapture(async (openedDatabase) => {
       for (const { id } of await listActiveSessions(openedDatabase)) {
         await enqueueSnapshotEmbeddings(openedDatabase, id, getNow());
+        await enqueueMetadataEmbeddings(openedDatabase, id, getNow());
         await enqueueFactExtractions(openedDatabase, id);
         await enqueueEntityResolutions(openedDatabase, id);
       }
@@ -1482,6 +1494,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
     let answer: RpcMessage<string, unknown> | undefined;
     let isSnapshotStored = false;
+    let isMetadataStored = false;
     let noticeTitle: string | undefined;
 
     await captureAndPush(async (openedDatabase) => {
@@ -1501,6 +1514,27 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           }
 
           answer = buildRpcMessage("signal.recorded", {});
+          return;
+        }
+
+        case "page.metadata": {
+          const target = await readSignalTarget(openedDatabase, sender);
+
+          // What a page the tab has already left said of itself is not its node's any more.
+          if (target.node === undefined || !target.isCurrent) {
+            answer = buildRpcMessage("signal.dropped", {
+              stop: target.node === undefined && target.stop,
+            });
+            return;
+          }
+
+          await recordPageMetadata(openedDatabase, {
+            nodeId: target.node.id,
+            metadata: request.payload,
+            capturedAt: getNow(),
+          });
+          answer = buildRpcMessage("metadata.stored", {});
+          isMetadataStored = true;
           return;
         }
 
@@ -1529,7 +1563,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     });
 
     // Not awaited into the answer: embedding takes seconds, the page needs none of it.
-    if (isSnapshotStored) {
+    if (isSnapshotStored || isMetadataStored) {
       void queueSnapshotWork();
     }
 

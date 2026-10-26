@@ -15,6 +15,7 @@ import {
   JOB_STORE,
   NODE_STORE,
   openResearchDatabase,
+  PAGE_METADATA_STORE,
   type ResearchDatabaseSchema,
   SESSION_STORE,
   SNAPSHOT_STORE,
@@ -46,6 +47,7 @@ const STORES = [
   SESSION_STORE,
   SPACE_STORE,
   ACTIVITY_STORE,
+  PAGE_METADATA_STORE,
 ] as const;
 
 /** One record of every session-scoped kind for `sessionId`. */
@@ -96,6 +98,7 @@ const record = async (sessionId: string) => {
     status: "done",
     priority: 0,
   } as never);
+  await database.put(PAGE_METADATA_STORE, { nodeId: `${sessionId}-n`, sessionId } as never);
   await database.put(CLUSTERING_STORE, { sessionId, clusters: [] } as never);
 };
 
@@ -127,6 +130,7 @@ describe("deleteSession", () => {
     expect(await database.get(SESSION_STORE, "session-2")).toBeDefined();
     expect(await database.count(NODE_STORE)).toBe(1);
     expect(await database.count(VECTOR_STORE)).toBe(1);
+    expect(await database.count(PAGE_METADATA_STORE)).toBe(1);
     expect(await database.count(FACT_STORE)).toBe(1);
     expect(await database.count(ENTITY_STORE)).toBe(1);
     expect(await database.count(SUMMARY_STORE)).toBe(1);

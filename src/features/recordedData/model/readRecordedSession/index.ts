@@ -5,6 +5,7 @@ import {
   EXTRACTION_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
+  PAGE_METADATA_STORE,
   SNAPSHOT_STORE,
   VECTOR_STORE,
   SESSION_STORE,
@@ -37,8 +38,9 @@ export const readRecordedSession = async (
   );
   const pages = await Promise.all(
     nodes.map(async (node) => {
-      const [snapshot, vectorCount, extraction] = await Promise.all([
+      const [snapshot, metadata, vectorCount, extraction] = await Promise.all([
         node.snapshotId === undefined ? undefined : database.get(SNAPSHOT_STORE, node.snapshotId),
+        database.get(PAGE_METADATA_STORE, node.id),
         database.countFromIndex(VECTOR_STORE, "nodeId", node.id),
         node.snapshotId === undefined ? undefined : database.get(EXTRACTION_STORE, node.snapshotId),
       ]);
@@ -59,6 +61,22 @@ export const readRecordedSession = async (
                 byteLength: snapshot.byteLength,
                 truncated: snapshot.truncated,
                 capturedAt: snapshot.capturedAt,
+              },
+        metadata:
+          metadata === undefined
+            ? null
+            : {
+                ...(metadata.title === undefined ? {} : { title: metadata.title }),
+                ...(metadata.siteName === undefined ? {} : { siteName: metadata.siteName }),
+                ...(metadata.type === undefined ? {} : { type: metadata.type }),
+                ...(metadata.author === undefined ? {} : { author: metadata.author }),
+                ...(metadata.publishedAt === undefined
+                  ? {}
+                  : { publishedAt: metadata.publishedAt }),
+                ...(metadata.canonicalUrl === undefined
+                  ? {}
+                  : { canonicalUrl: metadata.canonicalUrl }),
+                hasDescription: metadata.encryptedDescription !== undefined,
               },
         vectorCount,
         facts:
