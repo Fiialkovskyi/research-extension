@@ -50,12 +50,14 @@ const storeFact = async (
   attribute: string,
   value: string,
   unit?: string,
+  concept?: string,
 ) => {
   count += 1;
 
   const sealed = await seal({
     subject: "s",
     attribute,
+    ...(concept === undefined ? {} : { concept }),
     value,
     ...(unit === undefined ? {} : { unit }),
     quote: `${attribute} ${value}`,
@@ -131,7 +133,7 @@ describe("readComparisonTable", () => {
       { type: "company", rowCount: 1 },
     ]);
     expect(view?.table.entityType).toBe("product");
-    expect(view?.table.columns.map(({ key }) => key)).toEqual(["price", "weight"]);
+    expect(view?.table.columns.map(({ key }) => key)).toEqual(["weight", "price"]);
     expect(view?.table.rows.map(({ name }) => name)).toEqual(["Volta E5", "Corsa"]);
 
     const [volta] = view?.table.rows ?? [];
@@ -270,13 +272,40 @@ describe("readComparisonTable", () => {
   });
 
   it("gives attributes that name one thing in two languages one column", async () => {
-    await storeFact("volta", "review", "діафрагма", "f/1.8");
-    await storeFact("corsa", "shop", "aperture", "f/2.0");
+    await storeFact("volta", "review", "діафрагма", "f/1.8", undefined, "aperture");
+    await storeFact("corsa", "shop", "aperture", "f/2.0", undefined, "aperture");
 
     const view = await readComparisonTable(await openResearchDatabase(), "s");
     const apertures = view?.table.columns.filter(({ key }) => key === "aperture") ?? [];
 
     expect(apertures).toHaveLength(1);
     expect(view?.table.rows.every(({ cells }) => cells["aperture"] !== undefined)).toBe(true);
+  });
+
+  it("merges concepts by meaning when an embedding is given, and not without one", async () => {
+    await storeFact("volta", "review", "weight class", "light", undefined, "mass");
+    await storeFact("corsa", "shop", "weight class", "heavy", undefined, "mass");
+
+    const vectors: Record<string, [number, number]> = { weight: [1, 0], mass: [0.99, 0.1] };
+    const embed = (texts: readonly string[]) =>
+      Promise.resolve(texts.map((text) => Float32Array.from(vectors[text] ?? [0, -1])));
+    const database = await openResearchDatabase();
+    const keysOf = async (withEmbedding: boolean) =>
+      (
+        await readComparisonTable(database, "s", undefined, withEmbedding ? embed : undefined)
+      )?.table.columns.map(({ key }) => key);
+
+    expect(await keysOf(true)).toContain("weight");
+    expect(await keysOf(true)).not.toContain("mass");
+    expect(await keysOf(false)).toContain("mass");
+  });
+
+  it("gives a fact without a concept the column of its normalised attribute", async () => {
+    await storeFact("volta", "review", "Fingerprint  Reader", "rear");
+    await storeFact("corsa", "shop", "fingerprint reader", "side");
+
+    const view = await readComparisonTable(await openResearchDatabase(), "s");
+
+    expect(view?.table.columns.map(({ key }) => key)).toContain("fingerprint reader");
   });
 });

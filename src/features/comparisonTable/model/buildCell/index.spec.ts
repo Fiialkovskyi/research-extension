@@ -16,7 +16,7 @@ const fact = (id: string, value: string, unit?: string, nodeId = `page-${id}`): 
   url: `https://example.org/${id}`,
 });
 
-/** A fact of the storage column, a variant attribute. */
+/** A fact of the storage column. */
 const variant = (id: string, value: string): TableFact => ({
   ...fact(id, value, "GB"),
   attributeKey: "storage",
@@ -109,10 +109,10 @@ describe("buildCell", () => {
       expect(cell).toMatchObject({ isConflict: false, isOptions: true });
     });
 
-    it("shows the variants of storage as options even from separate pages", () => {
+    it("shows what separate pages state differently as a conflict, whatever the attribute", () => {
       const cell = buildCell([variant("a", "128"), variant("b", "256"), variant("c", "512")]);
 
-      expect(cell).toMatchObject({ isConflict: false, isOptions: true, alternativeCount: 0 });
+      expect(cell).toMatchObject({ isConflict: true, alternativeCount: 2 });
       expect(cell.groups).toHaveLength(3);
     });
 

@@ -24,6 +24,8 @@ export const buildProductFacts = (product: PageProduct | undefined): ExtractedFa
     facts.push({
       subject,
       attribute,
+      // The page's own data is named by the extension, in English, so the concept is the attribute.
+      concept: attribute,
       value,
       ...(unit === undefined ? {} : { unit }),
       quote: `${PRODUCT_DATA_QUOTE_PREFIX}${said}`,

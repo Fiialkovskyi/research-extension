@@ -19,16 +19,24 @@ const fact = (overrides: Partial<SummaryFact> = {}): SummaryFact => ({
 });
 
 describe("scoreSummaryFact", () => {
-  it("puts the page's own data first, then key specs by their order, then what two pages state", () => {
-    const data = scoreSummaryFact(fact({ isPageData: true, attributeKey: "price" }), false);
-    const screen = scoreSummaryFact(fact({ attributeKey: "screen size" }), false);
-    const battery = scoreSummaryFact(fact({ attributeKey: "battery capacity" }), false);
-    const corroborated = scoreSummaryFact(fact(), true);
-    const trivia = scoreSummaryFact(fact(), false);
+  it("puts the page's own data first, then key specs by their place, then what two pages state", () => {
+    const data = scoreSummaryFact(
+      fact({ isPageData: true, attributeKey: "price" }),
+      false,
+      undefined,
+    );
+    const first = scoreSummaryFact(fact(), false, 0);
+    const second = scoreSummaryFact(fact(), false, 1);
+    const corroborated = scoreSummaryFact(fact(), true, undefined);
+    const trivia = scoreSummaryFact(fact(), false, undefined);
 
-    expect(data).toBeGreaterThan(screen);
-    expect(screen).toBeGreaterThan(battery);
-    expect(battery).toBeGreaterThan(corroborated);
+    expect(data).toBeGreaterThan(first);
+    expect(first).toBeGreaterThan(second);
+    expect(second).toBeGreaterThan(corroborated);
     expect(corroborated).toBeGreaterThan(trivia);
+  });
+
+  it("does not count a place past the key specs", () => {
+    expect(scoreSummaryFact(fact(), false, 10)).toBe(0);
   });
 });

@@ -27,11 +27,12 @@ export const sealFact = async (
   place: FactPlace,
   provenance: StoredFactProvenance,
 ): Promise<StoredFact> => {
-  const { subject, attribute, value, unit, quote } = fact;
+  const { subject, attribute, concept, value, unit, quote } = fact;
   const text = JSON.stringify({
     subject,
     entityType,
     attribute,
+    concept,
     value,
     ...(unit === undefined ? {} : { unit }),
     quote,

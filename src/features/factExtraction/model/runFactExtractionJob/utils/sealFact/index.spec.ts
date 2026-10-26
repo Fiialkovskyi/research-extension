@@ -19,6 +19,7 @@ describe("sealFact", () => {
     const fact = {
       subject: "Volta E5",
       attribute: "weight",
+      concept: "weight",
       value: "23.5",
       unit: "kg",
       quote: "weighs 23.5 kg",

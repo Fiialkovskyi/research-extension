@@ -1,4 +1,6 @@
 import type { IDBPDatabase } from "idb";
+
+import type { EmbedConcepts } from "@/shared/resolveConceptKeys";
 import * as v from "valibot";
 
 import { encryptBytes, getDataKey } from "@/features/dataProtection";
@@ -31,6 +33,8 @@ export interface RunClusterSummaryJobOptions {
   /** The active generation model's ref, which the summary records. */
   modelRef: string;
   generate: (request: GenerateRequest) => GenerationStream;
+  /** Merges attribute concepts by meaning, when an embedding model is active. */
+  embed?: EmbedConcepts;
   now?: () => number;
 }
 
@@ -52,6 +56,7 @@ export const runClusterSummaryJob = async ({
   job,
   modelRef,
   generate,
+  embed,
   now = Date.now,
 }: RunClusterSummaryJobOptions): Promise<boolean> => {
   const { clusterId, factSetHash } = v.parse(summarizeClusterPayloadSchema, job.payload);
@@ -73,7 +78,7 @@ export const runClusterSummaryJob = async ({
 
   const dataKey = await getDataKey(database);
   const { selected, omittedCount } = selectSummaryFacts(
-    await readSummaryFacts(database, dataKey, factIds),
+    await readSummaryFacts(database, dataKey, factIds, embed),
     MAXIMUM_SUMMARY_FACTS,
   );
   const { messages, labels } = buildSummaryMessages(selected);

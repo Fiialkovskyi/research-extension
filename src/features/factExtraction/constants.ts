@@ -1,5 +1,5 @@
-import factExtractionInstructions from "./prompts/factExtraction@2.md?raw";
-import factExtractionJsonSchema from "./prompts/factExtraction@2.schema.json";
+import factExtractionInstructions from "./prompts/factExtraction@3.md?raw";
+import factExtractionJsonSchema from "./prompts/factExtraction@3.schema.json";
 
 /**
  * The fact-extraction prompt (REQ-SYN-010): its id and version, which every
@@ -8,7 +8,7 @@ import factExtractionJsonSchema from "./prompts/factExtraction@2.schema.json";
  */
 export const FACT_EXTRACTION_PROMPT = {
   id: "factExtraction",
-  version: 2,
+  version: 3,
   instructions: factExtractionInstructions,
   jsonSchema: factExtractionJsonSchema,
 } as const;

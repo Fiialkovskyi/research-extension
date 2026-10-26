@@ -3009,8 +3009,20 @@ const answerChat = (init: RequestInit | undefined, isChatBroken: boolean) => {
             JSON.stringify({
               entities: [{ name: "Motor", entity_type: "product" }],
               facts: [
-                { subject: "Motor", attribute: "placement", value: "x", quote: text.slice(0, 20) },
-                { subject: "Motor", attribute: "colour", value: "red", quote: "comes in red" },
+                {
+                  subject: "Motor",
+                  attribute: "placement",
+                  concept: "placement",
+                  value: "x",
+                  quote: text.slice(0, 20),
+                },
+                {
+                  subject: "Motor",
+                  attribute: "colour",
+                  concept: "colour",
+                  value: "red",
+                  quote: "comes in red",
+                },
               ],
             }),
           ) + chatLine("", "stop"),

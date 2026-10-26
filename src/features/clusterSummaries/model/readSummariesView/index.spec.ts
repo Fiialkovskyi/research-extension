@@ -370,8 +370,8 @@ describe("readSummariesView", () => {
         name: "Pixel 10a",
         price: { value: "24399 UAH", citations: [{ url: "https://example.org/volta" }] },
         specs: [
-          { label: "battery capacity", value: "5100 mAh" },
           { label: "weight", value: "190 g" },
+          { label: "battery capacity", value: "5100 mAh" },
         ],
       });
     });

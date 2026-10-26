@@ -6,6 +6,7 @@ import { readSealedFact } from "@/features/factExtraction";
 import { readPageSourceDetails } from "@/features/pageMetadata";
 import { filterRejectedFacts, readRejectedKeys } from "@/features/factRejections";
 import { normalizeEntityName } from "@/shared/normalizeEntityName";
+import { type EmbedConcepts, resolveConceptKeys } from "@/shared/resolveConceptKeys";
 import {
   ENTITY_STORE,
   FACT_STORE,
@@ -16,7 +17,6 @@ import {
 
 import type { ComparisonTable, TableFact } from "../../types";
 import { buildCell } from "../buildCell";
-import { getAttributeKey } from "@/shared/getAttributeKey";
 import { proposeColumns } from "../proposeColumns";
 import { readSavedColumns } from "../readSavedColumns";
 
@@ -31,7 +31,9 @@ export interface ComparisonTableView {
  * REQ-SYN-006), with no model: rows are the root entities of one type that
  * have facts — `entityType`, or the type with most such entities — columns are
  * the user's or the proposed ones, and each cell chooses a value and flags a
- * conflict. Facts not yet assigned to an entity are left out.
+ * conflict. Facts not yet assigned to an entity are left out. A column is a
+ * concept the facts name, merged with equal concepts and, when `embed` is given,
+ * similar ones.
  *
  * @returns The table, or `undefined` without a live session.
  */
@@ -39,6 +41,7 @@ export const readComparisonTable = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
   sessionId: string,
   entityType?: string,
+  embed?: EmbedConcepts,
 ): Promise<ComparisonTableView | undefined> => {
   const session = await database.get(SESSION_STORE, sessionId);
 
@@ -75,7 +78,7 @@ export const readComparisonTable = async (
     return mergedInto !== undefined && byId.has(mergedInto) ? mergedInto : entityId;
   };
   const pages = new Map<string, { title: string; url: string }>();
-  const read: (TableFact & { type: string; subject: string })[] = [];
+  const read: (TableFact & { type: string; subject: string; concept: string })[] = [];
 
   for (const fact of stored) {
     if (fact.entityId !== undefined) {
@@ -87,7 +90,7 @@ export const readComparisonTable = async (
         continue;
       }
 
-      const { subject, attribute, value, unit, quote } = sealed;
+      const { subject, attribute, concept, value, unit, quote } = sealed;
 
       if (!pages.has(fact.nodeId)) {
         const node = await database.get(NODE_STORE, fact.nodeId);
@@ -104,7 +107,8 @@ export const readComparisonTable = async (
         rowId,
         nodeId: fact.nodeId,
         attribute,
-        attributeKey: getAttributeKey(attribute),
+        attributeKey: "",
+        concept: concept ?? attribute,
         value,
         ...(unit === undefined ? {} : { unit }),
         quote,
@@ -113,6 +117,16 @@ export const readComparisonTable = async (
         type,
       });
     }
+  }
+
+  // Facts that name the same thing, in any language, share a column.
+  const conceptKeys = await resolveConceptKeys(
+    read.map(({ concept }) => concept),
+    embed,
+  );
+
+  for (const fact of read) {
+    fact.attributeKey = conceptKeys.get(fact.concept) ?? normalizeEntityName(fact.concept);
   }
 
   // A source names its page's site and day when the page said them.

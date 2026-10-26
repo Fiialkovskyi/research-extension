@@ -41,23 +41,8 @@ export const SUMMARIES_PAGE_PATH = "/summaries.html";
 /** Below fact extraction: a summary is only as good as the facts it is built from. */
 export const SUMMARIZE_CLUSTER_PRIORITY = -20;
 
-/**
- * What a shopper compares first, as attribute column keys (`getAttributeKey`):
- * facts in these are chosen for a summary, and shown on a product card, before
- * the rest, the earlier the more important.
- */
-export const KEY_SPEC_ORDER = [
-  "screen size",
-  "display",
-  "battery capacity",
-  "storage",
-  "ram",
-  "main camera",
-  "processor",
-  "charging",
-  "weight",
-  "water resistance",
-] as const;
+/** How many of a cluster's most comparable concepts count as key specs when facts are chosen for a summary. */
+export const KEY_SPEC_COUNT = 10;
 
 /** How much less a product's next fact counts than its last: so no product takes every slot. */
 export const FACT_POSITION_PENALTY = 5;

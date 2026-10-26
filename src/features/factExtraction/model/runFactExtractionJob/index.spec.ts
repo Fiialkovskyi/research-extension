@@ -50,8 +50,20 @@ const honestAndInventive = (request: GenerateRequest): GenerationStream => {
     JSON.stringify({
       entities: [],
       facts: [
-        { subject: "Model", attribute: "weight", value: "1", quote: firstSentence },
-        { subject: "Model", attribute: "colour", value: "red", quote: "comes in red" },
+        {
+          subject: "Model",
+          attribute: "weight",
+          concept: "weight",
+          value: "1",
+          quote: firstSentence,
+        },
+        {
+          subject: "Model",
+          attribute: "colour",
+          concept: "colour",
+          value: "red",
+          quote: "comes in red",
+        },
       ],
     }),
   );
@@ -180,7 +192,7 @@ describe("runFactExtractionJob", () => {
       nodeId: "node-a",
       provenance: {
         modelRef: "ollama:qwen3:4b@abc",
-        prompt: "factExtraction@2",
+        prompt: "factExtraction@3",
         chunkerVersion: "chunker@1",
       },
     });
@@ -205,8 +217,20 @@ describe("runFactExtractionJob", () => {
           JSON.stringify({
             entities: [{ name: "MODEL  ", entity_type: "product" }],
             facts: [
-              { subject: "Model", attribute: "weight", value: "1", quote: firstSentence },
-              { subject: "Scale", attribute: "kind", value: "shop", quote: firstSentence },
+              {
+                subject: "Model",
+                attribute: "weight",
+                concept: "weight",
+                value: "1",
+                quote: firstSentence,
+              },
+              {
+                subject: "Scale",
+                attribute: "kind",
+                concept: "kind",
+                value: "shop",
+                quote: firstSentence,
+              },
             ],
           }),
         );
@@ -359,10 +383,17 @@ describe("runFactExtractionJob", () => {
           JSON.stringify({
             entities: [],
             facts: [
-              { subject: "Model", attribute: "weight", value: "1", quote: firstSentence },
+              {
+                subject: "Model",
+                attribute: "weight",
+                concept: "weight",
+                value: "1",
+                quote: firstSentence,
+              },
               {
                 subject: "6,3″ Super Retina XDR",
                 attribute: "type",
+                concept: "type",
                 value: "OLED",
                 quote: firstSentence,
               },

@@ -3,8 +3,8 @@ import * as v from "valibot";
 import { MAXIMUM_FACTS_PER_CHUNK, UNKNOWN_ENTITY_TYPE } from "./constants";
 
 /**
- * A `factExtraction@2` answer, as it must be before anything is stored.
- * Mirrors `prompts/factExtraction@2.schema.json`, which is what the model is
+ * A `factExtraction@3` answer, as it must be before anything is stored.
+ * Mirrors `prompts/factExtraction@3.schema.json`, which is what the model is
  * asked to follow; `constants.spec.ts` keeps the two in step.
  */
 export const factExtractionAnswerSchema = v.object({
@@ -19,6 +19,8 @@ export const factExtractionAnswerSchema = v.object({
       v.object({
         subject: v.string(),
         attribute: v.string(),
+        /** The attribute as a short English noun phrase, the same for the same thing in any language. */
+        concept: v.pipe(v.string(), v.maxLength(40)),
         value: v.string(),
         unit: v.optional(v.string()),
         quote: v.string(),
@@ -48,6 +50,8 @@ export const sealedFactSchema = v.object({
   subject: v.string(),
   entityType: v.optional(v.string(), UNKNOWN_ENTITY_TYPE),
   attribute: v.string(),
+  /** Absent on facts stored before concepts were kept: they read as the attribute. */
+  concept: v.optional(v.string()),
   value: v.string(),
   unit: v.optional(v.string()),
   quote: v.string(),

@@ -6,8 +6,6 @@
  */
 
 export { ANCHOR_RULES } from "./anchorRules/constants";
-export { ATTRIBUTE_SYNONYMS, GENERIC_ATTRIBUTES } from "./attributeSynonyms/constants";
-export type { AttributeSynonym } from "./attributeSynonyms/types";
 export { CAPTURE_DENYLIST } from "./captureDenylist/constants";
 export type {
   CaptureDenylist,

@@ -9,7 +9,6 @@ describe("isImplausibleSubject", () => {
     ["", "x", undefined],
     ["—", "x", undefined],
     ["256 GB", "yes", undefined],
-    ["5100 мАг", "yes", undefined],
     ["30 Вт", "yes", undefined],
     ['6.3" display', "OLED", undefined],
   ])("drops %j as a subject", (subject, value, unit) => {
@@ -31,6 +30,12 @@ describe("isImplausibleSubject", () => {
     "Apple Watch SE 3",
   ])("keeps %j", (subject) => {
     expect(isImplausibleSubject({ subject, value: "x" })).toBe(false);
+  });
+
+  it("keeps a subject with a unit the normaliser does not know, and one that only starts like a unit", () => {
+    expect(isImplausibleSubject({ subject: "5100 мАг", value: "yes" })).toBe(false);
+    expect(isImplausibleSubject({ subject: "3M Scotch", value: "x" })).toBe(false);
+    expect(isImplausibleSubject({ subject: "20 Minutes", value: "x" })).toBe(false);
   });
 
   it("keeps a Ukrainian product name", () => {

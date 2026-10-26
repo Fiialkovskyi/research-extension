@@ -1,4 +1,6 @@
 import type { IDBPDatabase } from "idb";
+
+import type { EmbedConcepts } from "@/shared/resolveConceptKeys";
 import * as v from "valibot";
 
 import {
@@ -32,6 +34,8 @@ export interface RunOpenQuestionsJobOptions {
   job: StoredJob;
   modelRef: string;
   generate: (request: GenerateRequest) => GenerationStream;
+  /** Merges attribute concepts by meaning, when an embedding model is active. */
+  embed?: EmbedConcepts;
   now?: () => number;
 }
 
@@ -49,6 +53,7 @@ export const runOpenQuestionsJob = async ({
   job,
   modelRef,
   generate,
+  embed,
   now = Date.now,
 }: RunOpenQuestionsJobOptions): Promise<boolean> => {
   const { factSetHash } = v.parse(suggestQuestionsPayloadSchema, job.payload);
@@ -66,7 +71,7 @@ export const runOpenQuestionsJob = async ({
 
   const dataKey = await getDataKey(database);
   const { selected } = selectSummaryFacts(
-    await readSummaryFacts(database, dataKey, factIds),
+    await readSummaryFacts(database, dataKey, factIds, embed),
     MAXIMUM_QUESTION_FACTS,
   );
   const { messages } = buildSummaryMessages(selected, OPEN_QUESTIONS_PROMPT.instructions);

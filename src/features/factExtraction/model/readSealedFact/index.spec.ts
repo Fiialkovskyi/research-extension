@@ -39,4 +39,17 @@ describe("readSealedFact", () => {
 
     expect((await readSealedFact(dataKey, await storeFact(FACT))).entityType).toBe("unknown");
   });
+
+  it("reads a fact stored before concepts were kept as one without a concept", async () => {
+    const dataKey = await getDataKey(await openResearchDatabase());
+
+    expect((await readSealedFact(dataKey, await storeFact(FACT))).concept).toBeUndefined();
+  });
+
+  it("reads a fact's concept when it has one", async () => {
+    const dataKey = await getDataKey(await openResearchDatabase());
+    const stored = await storeFact({ ...FACT, concept: "weight" });
+
+    expect((await readSealedFact(dataKey, stored)).concept).toBe("weight");
+  });
 });

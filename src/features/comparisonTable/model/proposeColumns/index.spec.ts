@@ -3,13 +3,15 @@ import { describe, expect, it } from "vitest";
 import { proposeColumns } from ".";
 import type { TableFact } from "../../types";
 
-const fact = (rowId: string, attribute: string): TableFact => ({
+const PROSE = "a long description of the product that runs on for more than eight words";
+
+const fact = (rowId: string, attribute: string, value = rowId): TableFact => ({
   id: `${rowId}-${attribute}`,
   rowId,
   nodeId: "n",
   attribute,
   attributeKey: attribute.toLowerCase(),
-  value: "1",
+  value,
   quote: "q",
   pageTitle: "p",
   url: "u",
@@ -31,8 +33,11 @@ describe("proposeColumns", () => {
     ]);
   });
 
-  it("leaves a generic attribute among the other columns", () => {
-    const facts = ["a", "b"].flatMap((row) => [fact(row, "description"), fact(row, "weight")]);
+  it("leaves prose among the other columns, whatever the attribute is called", () => {
+    const facts = ["a", "b"].flatMap((row) => [
+      fact(row, "description", `${PROSE} ${row}`),
+      fact(row, "weight"),
+    ]);
     const { columns, otherColumns } = proposeColumns(facts);
 
     expect(columns.map(({ key }) => key)).toEqual(["weight"]);
@@ -46,15 +51,26 @@ describe("proposeColumns", () => {
     expect(otherColumns.map(({ key }) => key)).toEqual(["colour"]);
   });
 
-  it("proposes by rank everything a single row has, but a generic attribute", () => {
+  it("leaves out what every row states with the same value", () => {
+    const facts = ["a", "b", "c"].flatMap((row) => [
+      fact(row, "category", "bath mat"),
+      fact(row, "pile height"),
+    ]);
+    const { columns, otherColumns } = proposeColumns(facts);
+
+    expect(columns.map(({ key }) => key)).toEqual(["pile height"]);
+    expect(otherColumns.map(({ key }) => key)).toEqual(["category"]);
+  });
+
+  it("proposes by rank everything a single row has, but prose", () => {
     const { columns, otherColumns } = proposeColumns([
       fact("a", "weight"),
       fact("a", "colour"),
-      fact("a", "type"),
+      fact("a", "summary", PROSE),
     ]);
 
     expect(columns.map(({ key }) => key)).toEqual(["colour", "weight"]);
-    expect(otherColumns.map(({ key }) => key)).toEqual(["type"]);
+    expect(otherColumns.map(({ key }) => key)).toEqual(["summary"]);
   });
 
   it("proposes at most 8 and offers the rest", () => {

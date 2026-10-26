@@ -50,18 +50,55 @@ describe("readProductCards", () => {
     ]);
   });
 
-  it("makes none for an entity with too few facts, or one that is not a product", () => {
+  it("makes none for an entity with too few facts, or one of another type than the rest", () => {
     const { cards, omittedProductCount } = readProductCards(
       [
         ...manyFacts("Tiny", 2),
+        ...manyFacts("Pixel 10a", 4),
+        ...manyFacts("iPhone 17", 4),
         ...manyFacts("Acme", 10).map((item) => ({ ...item, entityType: "company" })),
         ...manyFacts("Thing", 10).map((item) => ({ ...item, entityType: "unknown" })),
       ],
       toCitation,
     );
 
-    expect(cards).toEqual([]);
+    expect(cards.map(({ name }) => name).toSorted()).toEqual(["Pixel 10a", "iPhone 17"]);
     expect(omittedProductCount).toBe(0);
+  });
+
+  it("makes cards for the commonest type however it is named", () => {
+    const mats = ["Мийка", "Ворс", "Лотос"].flatMap((name) =>
+      manyFacts(name, 4).map((item) => ({ ...item, entityType: "килимок" })),
+    );
+    const { cards } = readProductCards(
+      [...mats, ...manyFacts("Acme", 9).map((item) => ({ ...item, entityType: "company" }))],
+      toCitation,
+    );
+
+    expect(cards.map(({ name }) => name).toSorted()).toEqual(["Ворс", "Лотос", "Мийка"]);
+  });
+
+  it("makes a card for an entity with a fact from the page's own data, of any type", () => {
+    const shopMat = manyFacts("Shop mat", 3).map((item, index) => ({
+      ...item,
+      entityType: "other",
+      isPageData: index === 0,
+    }));
+    const { cards } = readProductCards(
+      [...manyFacts("A", 4), ...manyFacts("B", 4), ...shopMat],
+      toCitation,
+    );
+
+    expect(cards.map(({ name }) => name)).toContain("Shop mat");
+  });
+
+  it("makes no card when no entity has a type or the page's data", () => {
+    const { cards } = readProductCards(
+      manyFacts("Thing", 10).map((item) => ({ ...item, entityType: "unknown" })),
+      toCitation,
+    );
+
+    expect(cards).toEqual([]);
   });
 
   it("shows six cards and says how many products were left out", () => {
@@ -109,6 +146,6 @@ describe("readProductCards", () => {
       toCitation,
     );
 
-    expect(cards[0]?.specs.map(({ label }) => label)).toEqual(["battery capacity", "weight"]);
+    expect(cards[0]?.specs.map(({ label }) => label)).toEqual(["weight", "battery capacity"]);
   });
 });

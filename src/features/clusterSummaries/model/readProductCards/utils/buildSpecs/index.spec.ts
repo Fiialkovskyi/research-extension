@@ -25,8 +25,12 @@ const toCitation = ({ id, quote }: SummaryFact): SummaryCitation => ({
   quote,
 });
 
+/** Where each key spec stands among the cluster's, by the order of the keys given. */
+const placesOf = (...keys: string[]): Map<string, number> =>
+  new Map(keys.map((key, place) => [key, place]));
+
 describe("buildSpecs", () => {
-  it("orders key specs by importance, then the rest by how many facts state them, at most five", () => {
+  it("orders the specs by their place among the cluster's key specs, at most five", () => {
     const specs = buildSpecs(
       [
         fact("a", "weight", "190", "g"),
@@ -38,6 +42,7 @@ describe("buildSpecs", () => {
         fact("g", "feature z", "yes"),
         fact("h", "storage", "256", "GB"),
       ],
+      placesOf("screen size", "battery capacity", "storage", "weight", "feature y", "feature x"),
       toCitation,
     );
 
@@ -50,7 +55,7 @@ describe("buildSpecs", () => {
     ]);
   });
 
-  it("leaves out the header attributes and generic ones", () => {
+  it("leaves out the header attributes and what is not a key spec", () => {
     const specs = buildSpecs(
       [
         fact("a", "price", "1", "UAH"),
@@ -58,6 +63,7 @@ describe("buildSpecs", () => {
         fact("c", "description", "text"),
         fact("d", "weight", "190", "g"),
       ],
+      placesOf("price", "brand", "weight"),
       toCitation,
     );
 
@@ -71,6 +77,7 @@ describe("buildSpecs", () => {
         fact("b", "battery capacity", "5100", "mAh"),
         fact("c", "battery capacity", "5100", "mAh"),
       ],
+      placesOf("battery capacity"),
       toCitation,
     );
 
@@ -78,17 +85,28 @@ describe("buildSpecs", () => {
     expect(spec?.citations.map(({ factId }) => factId)).toEqual(["b", "c"]);
   });
 
-  it("shows a variant's values together, one source each", () => {
+  it("shows the values one page states together, one source each", () => {
     const [spec] = buildSpecs(
       [
-        fact("a", "storage", "128", "GB"),
-        fact("b", "storage", "256", "GB"),
-        fact("c", "storage", "256", "GB"),
+        { ...fact("a", "storage", "128", "GB"), nodeId: "x" },
+        { ...fact("b", "storage", "256", "GB"), nodeId: "x" },
+        { ...fact("c", "storage", "256", "GB"), nodeId: "y" },
       ],
+      placesOf("storage"),
       toCitation,
     );
 
     expect(spec?.value).toBe("128 GB / 256 GB");
     expect(spec?.citations.map(({ factId }) => factId)).toEqual(["a", "b"]);
+  });
+
+  it("does not take the values of separate pages for options, whatever the attribute", () => {
+    const [spec] = buildSpecs(
+      [fact("a", "storage", "128", "GB"), fact("b", "storage", "256", "GB")],
+      placesOf("storage"),
+      toCitation,
+    );
+
+    expect(spec?.value).toBe("128 GB");
   });
 });

@@ -1,23 +1,7 @@
-import { isVariantAttributeKey } from "@/shared/isVariantAttributeKey";
-import { normalizeEntityName } from "@/shared/normalizeEntityName";
-import { GENERIC_ATTRIBUTES } from "@/shared/config";
-
-import {
-  CARD_HEADER_KEYS,
-  KEY_SPEC_ORDER,
-  MAXIMUM_CARD_SPECS,
-  MAXIMUM_VALUE_SOURCES,
-} from "../../../../constants";
+import { CARD_HEADER_KEYS, MAXIMUM_CARD_SPECS, MAXIMUM_VALUE_SOURCES } from "../../../../constants";
 import type { CardValue, SummaryCitation, SummaryFact } from "../../../../types";
 import { pickValue } from "../pickValue";
 import { writeFactValue } from "../writeFactValue";
-
-/** How a spec ranks: its place in the order of key specs, or after them. */
-const readPlace = (key: string): number => {
-  const place = (KEY_SPEC_ORDER as readonly string[]).indexOf(key);
-
-  return place === -1 ? KEY_SPEC_ORDER.length : place;
-};
 
 /** The label the pages most often write for a spec; the earlier of two equally common wins. */
 const readLabel = (facts: readonly SummaryFact[]): string =>
@@ -29,39 +13,42 @@ const readLabel = (facts: readonly SummaryFact[]): string =>
   ].toSorted(([, a], [, b]) => b.length - a.length)[0]?.[0] ?? "";
 
 /**
- * Builds a product's key specs from its facts: leaving out the price and the
- * other header attributes and generic ones, ordered by importance — the key
- * specs in their order, then the rest by how many facts state them — at most
- * five. A spec shows the value most facts state and names the pages that state
- * it; a variant, such as storage, shows its values together.
+ * Builds a product's key specs from its facts: the concepts that are key specs
+ * of the cluster (`readKeySpecPlaces`: stated by more products, not prose, not
+ * the same on every product), in that order, leaving out the price and the
+ * other header attributes — at most five. A spec shows the value most facts
+ * state and names the pages that state it; when one page states several values
+ * of it, they are options and are shown together.
  */
 export const buildSpecs = (
   facts: readonly SummaryFact[],
+  places: ReadonlyMap<string, number>,
   toCitation: (fact: SummaryFact) => SummaryCitation,
 ): CardValue[] => {
-  const skipped = new Set<string>([
-    ...CARD_HEADER_KEYS,
-    ...GENERIC_ATTRIBUTES.map((attribute) => normalizeEntityName(attribute)),
-  ]);
+  const skipped = new Set<string>(CARD_HEADER_KEYS);
 
   return [...Map.groupBy(facts, ({ attributeKey }) => attributeKey).entries()]
-    .filter(([key]) => !skipped.has(key))
+    .filter(([key]) => !skipped.has(key) && places.has(key))
     .toSorted(
       ([keyA, a], [keyB, b]) =>
-        readPlace(keyA) - readPlace(keyB) || b.length - a.length || keyA.localeCompare(keyB),
+        (places.get(keyA) ?? 0) - (places.get(keyB) ?? 0) ||
+        b.length - a.length ||
+        keyA.localeCompare(keyB),
     )
     .slice(0, MAXIMUM_CARD_SPECS)
-    .flatMap(([key, group]): CardValue[] => {
+    .flatMap(([, group]): CardValue[] => {
       const label = readLabel(group);
+      const values = [
+        ...Map.groupBy(
+          group.toSorted((a, b) => a.id.localeCompare(b.id)),
+          writeFactValue,
+        ).entries(),
+      ];
+      const isOptions = [...Map.groupBy(group, ({ nodeId }) => nodeId).values()].some(
+        (page) => new Set(page.map(writeFactValue)).size > 1,
+      );
 
-      if (isVariantAttributeKey(key)) {
-        const values = [
-          ...Map.groupBy(
-            group.toSorted((a, b) => a.id.localeCompare(b.id)),
-            writeFactValue,
-          ).entries(),
-        ];
-
+      if (isOptions) {
         return [
           {
             label,

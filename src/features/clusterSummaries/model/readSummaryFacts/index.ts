@@ -3,7 +3,8 @@ import type { IDBPDatabase } from "idb";
 import type { DataKey } from "@/features/dataProtection";
 import { readSealedEntity } from "@/features/entityResolution";
 import { PRODUCT_DATA_PROMPT, readSealedFact } from "@/features/factExtraction";
-import { getAttributeKey } from "@/shared/getAttributeKey";
+import { normalizeEntityName } from "@/shared/normalizeEntityName";
+import { type EmbedConcepts, resolveConceptKeys } from "@/shared/resolveConceptKeys";
 import { ENTITY_STORE, FACT_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
 
 import type { SummaryFact } from "../../types";
@@ -19,6 +20,7 @@ export const readSummaryFacts = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
   dataKey: DataKey,
   factIds: readonly string[],
+  embed?: EmbedConcepts,
 ): Promise<SummaryFact[]> => {
   const stored = (await Promise.all(factIds.map((id) => database.get(FACT_STORE, id)))).flatMap(
     (fact) => fact ?? [],
@@ -51,27 +53,33 @@ export const readSummaryFacts = async (
     ).flat(),
   );
 
-  return Promise.all(
-    stored.map(async (fact) => {
-      const { subject, attribute, value, unit, quote } = await readSealedFact(dataKey, fact);
-      const entity = fact.entityId === undefined ? undefined : entities.get(fact.entityId);
-
-      const rootId = entity?.mergedInto ?? entity?.id;
-
-      return {
-        id: fact.id,
-        nodeId: fact.nodeId,
-        groupKey: rootId ?? `subject:${subject}`,
-        entityName: (rootId === undefined ? undefined : roots.get(rootId)?.name) ?? subject,
-        entityType: (rootId === undefined ? undefined : roots.get(rootId)?.type) ?? "unknown",
-        subject,
-        attribute,
-        attributeKey: getAttributeKey(attribute),
-        isPageData: fact.provenance.prompt === PRODUCT_DATA_PROMPT,
-        value,
-        ...(unit === undefined ? {} : { unit }),
-        quote,
-      };
-    }),
+  const sealed = await Promise.all(
+    stored.map(async (fact) => ({ fact, text: await readSealedFact(dataKey, fact) })),
   );
+  // Facts that name the same thing, in any language, share an attribute key.
+  const conceptKeys = await resolveConceptKeys(
+    sealed.map(({ text }) => text.concept ?? text.attribute),
+    embed,
+  );
+
+  return sealed.map(({ fact, text: { subject, attribute, concept, value, unit, quote } }) => {
+    const entity = fact.entityId === undefined ? undefined : entities.get(fact.entityId);
+    const rootId = entity?.mergedInto ?? entity?.id;
+
+    return {
+      id: fact.id,
+      nodeId: fact.nodeId,
+      groupKey: rootId ?? `subject:${subject}`,
+      entityName: (rootId === undefined ? undefined : roots.get(rootId)?.name) ?? subject,
+      entityType: (rootId === undefined ? undefined : roots.get(rootId)?.type) ?? "unknown",
+      subject,
+      attribute,
+      attributeKey:
+        conceptKeys.get(concept ?? attribute) ?? normalizeEntityName(concept ?? attribute),
+      isPageData: fact.provenance.prompt === PRODUCT_DATA_PROMPT,
+      value,
+      ...(unit === undefined ? {} : { unit }),
+      quote,
+    };
+  });
 };

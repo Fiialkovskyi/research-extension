@@ -7,6 +7,7 @@ import { filterRejectedFacts, getFactKey, readRejectedKeys } from "@/features/fa
 import { getActiveModel } from "@/features/modelRegistry";
 import { readPageSourceDetails } from "@/features/pageMetadata";
 import { readClustering } from "@/features/researchClusters";
+import type { EmbedConcepts } from "@/shared/resolveConceptKeys";
 import {
   FACT_STORE,
   JOB_STORE,
@@ -62,6 +63,7 @@ export interface SummariesView {
 export const readSummariesView = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
   sessionId: string,
+  embed?: EmbedConcepts,
 ): Promise<SummariesView | undefined> => {
   const session = await database.get(SESSION_STORE, sessionId);
 
@@ -153,7 +155,7 @@ export const readSummariesView = async (
       const factIds = await readClusterFactIds(database, cluster, session.id);
       const summary = await database.get(SUMMARY_STORE, `${session.id}:${cluster.id}`);
       const clusterFacts = await filterRejectedFacts(
-        await readSummaryFacts(database, dataKey, factIds),
+        await readSummaryFacts(database, dataKey, factIds, embed),
         rejectedKeys,
       );
       // The products the cluster's facts describe, which a statement must name to be shown.

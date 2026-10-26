@@ -1,5 +1,5 @@
 /** The cosine similarity of two vectors of the same length. */
-export const getSimilarity = (first: Float32Array, second: Float32Array): number => {
+export const getCosineSimilarity = (first: Float32Array, second: Float32Array): number => {
   let dot = 0;
   let firstNorm = 0;
   let secondNorm = 0;

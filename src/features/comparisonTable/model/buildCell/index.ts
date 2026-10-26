@@ -1,6 +1,5 @@
 import type { ComparisonCell, TableFact, ValueGroup } from "../../types";
 import { isSameValue } from "../isSameValue";
-import { isVariantAttributeKey } from "@/shared/isVariantAttributeKey";
 
 /** A value as the cell writes it: the number or text, then its unit. */
 const writeValue = ({ value, unit }: Pick<TableFact, "value" | "unit">): string =>
@@ -32,8 +31,8 @@ const findNewestGroup = (
 
 /**
  * Whether the groups disagree: at least two pages that each state a single
- * value state different ones. A page that states several values, and the
- * values of a variant attribute, are options and never a disagreement.
+ * value state different ones. A page that states several values is
+ * giving options and never a disagreement.
  */
 const isDisagreement = (groups: readonly (readonly TableFact[])[]): boolean => {
   const valuesByPage = new Map<string, Set<number>>();
@@ -59,7 +58,7 @@ const isDisagreement = (groups: readonly (readonly TableFact[])[]): boolean => {
  * each within tolerance of the next cannot drift. The group with the most
  * facts is chosen, then the one from more pages, then the earlier. It is a
  * conflict when at least two pages that each state one value state different
- * ones; several values from one page, or of a variant attribute, are options
+ * ones; several values from one page are options
  * and the cell says so instead.
  */
 export const buildCell = (facts: readonly TableFact[]): ComparisonCell => {
@@ -84,8 +83,7 @@ export const buildCell = (facts: readonly TableFact[]): ComparisonCell => {
         a.order - b.order,
     )
     .map(({ group }) => group);
-  const isVariant = facts.every(({ attributeKey }) => isVariantAttributeKey(attributeKey));
-  const isConflict = ranked.length > 1 && !isVariant && isDisagreement(ranked);
+  const isConflict = ranked.length > 1 && isDisagreement(ranked);
   const isOptions = ranked.length > 1 && !isConflict;
 
   const newest = isConflict ? findNewestGroup(ranked) : undefined;

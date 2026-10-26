@@ -67,7 +67,7 @@ describe("selectSummaryFacts", () => {
   });
 
   describe("by importance", () => {
-    it("takes a price and a battery capacity before trivia in a cluster of 187 facts", () => {
+    it("takes a price and what two products state before trivia in a cluster of 188 facts", () => {
       const trivia = Array.from({ length: 185 }, (_, index) =>
         spec(`t${String(index).padStart(3, "0")}`, `subject:t${index}`, `feature ${index}`),
       );
@@ -75,13 +75,15 @@ describe("selectSummaryFacts", () => {
         ...trivia,
         spec("price", "phone", "price", { isPageData: true, value: "24399" }),
         spec("battery", "phone", "battery capacity", { value: "5100" }),
+        spec("battery2", "tablet", "battery capacity", { value: "7000" }),
       ];
       const ids = selectSummaryFacts(facts, 60).selected.map(({ id }) => id);
 
-      expect(facts).toHaveLength(187);
+      expect(facts).toHaveLength(188);
       expect(ids).toContain("price");
       expect(ids).toContain("battery");
-      expect(ids.slice(0, 2)).toEqual(["price", "battery"]);
+      expect(ids).toContain("battery2");
+      expect(ids.slice(0, 3).toSorted()).toEqual(["battery", "battery2", "price"]);
     });
 
     it("does not let one attribute's variants fill the list before another gets a fact", () => {

@@ -21,6 +21,7 @@ export {
 export type { ResolveEntitiesPayload, SealedEntity } from "./types";
 export { enqueueEntityResolutions } from "./model/enqueueEntityResolutions";
 export { type EntityCandidate, type EntityMatch, matchEntity } from "./model/matchEntity";
+export { isKnownUnit } from "./model/isKnownUnit";
 export { type NormalizedValue, readNormalizedValue } from "./model/readNormalizedValue";
 export { readSealedEntity } from "./model/readSealedEntity";
 export {

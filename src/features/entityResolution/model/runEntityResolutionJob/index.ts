@@ -18,7 +18,7 @@ import { resolveEntitiesPayloadSchema } from "../../schemas";
 import { type EntityCandidate, matchEntity } from "../matchEntity";
 import { readSealedEntity } from "../readSealedEntity";
 import { sealEntity } from "../sealEntity";
-import { getSimilarity } from "./utils/getSimilarity";
+import { getCosineSimilarity } from "@/shared/getCosineSimilarity";
 
 export interface RunEntityResolutionJobOptions {
   database: IDBPDatabase<ResearchDatabaseSchema>;
@@ -118,7 +118,7 @@ export const runEntityResolutionJob = async ({
 
       return subjectVector === undefined || vector === undefined
         ? undefined
-        : getSimilarity(subjectVector, vector);
+        : getCosineSimilarity(subjectVector, vector);
     });
     let entityId: string;
 

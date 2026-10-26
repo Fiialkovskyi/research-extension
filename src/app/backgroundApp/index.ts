@@ -113,6 +113,7 @@ import {
 } from "@/features/clusterSummaries";
 import { readSessionActivity } from "@/features/activityLog";
 import { readComparisonTable, saveTableColumns } from "@/features/comparisonTable";
+import type { EmbedConcepts } from "@/shared/resolveConceptKeys";
 import { openGapSearch, readResearchGaps } from "@/features/researchGaps";
 import { rejectFacts, restoreRejections } from "@/features/factRejections";
 import { purgeRetiredSpaces, readSpaceUsage, removeSpace } from "@/features/embeddingSpaces";
@@ -232,6 +233,9 @@ export type {
 } from "./types";
 
 /** Answers a request that could not be trusted, saying which check it failed. */
+/** The cache key of a concept's vector: the embedding model it came from, and the label. */
+const getConceptVectorKey = (modelRef: string, text: string): string => `${modelRef}\u0000${text}`;
+
 const refuse = (candidate: unknown, error: unknown): RpcMessage<string, unknown> => {
   if (error instanceof RpcMessageError) {
     return buildRpcMessage("rpc.refused", { rejection: error.rejection, reason: error.message });
@@ -817,6 +821,52 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       return loading;
     });
 
+  /** Concept vectors by embedding model and label: a table read repeats no work. */
+  const conceptVectors = new Map<string, Float32Array>();
+
+  /**
+   * What merges the columns of a table by meaning: the active embedding model
+   * asked for short concept labels, cached; `undefined` without one, or when it
+   * cannot be loaded, so a read never waits on or fails for it.
+   */
+  const readConceptEmbedder = async (
+    openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+  ): Promise<EmbedConcepts | undefined> => {
+    try {
+      const model = await getActiveModel(openedDatabase, "embedding");
+
+      if (model === undefined) {
+        return undefined;
+      }
+
+      const session = await loadEmbeddingSession(model);
+
+      return async (texts) => {
+        const missing = texts.filter(
+          (text) => !conceptVectors.has(getConceptVectorKey(model.ref, text)),
+        );
+
+        if (missing.length > 0) {
+          const embedded = await session.embed(missing, "document");
+
+          for (const [index, text] of missing.entries()) {
+            const vector = embedded[index];
+
+            if (vector !== undefined) {
+              conceptVectors.set(getConceptVectorKey(model.ref, text), vector);
+            }
+          }
+        }
+
+        return texts.flatMap(
+          (text) => conceptVectors.get(getConceptVectorKey(model.ref, text)) ?? [],
+        );
+      };
+    } catch {
+      return undefined;
+    }
+  };
+
   /** Identifies this load of the background page, which a probe's beats record. */
   const pageLoadId = crypto.randomUUID();
   /** The hold page's ports, which the `hostPage` strategy posts to. */
@@ -1010,6 +1060,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         job,
         modelRef: model.ref,
         generate: generator.generate,
+        embed: await readConceptEmbedder(openedDatabase),
         now: getNow,
       });
     }),
@@ -1032,6 +1083,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         modelRef: model.ref,
         generate: createOllamaGenerator(dependencies.fetchResource, ollamaOrigin, model.manifest)
           .generate,
+        embed: await readConceptEmbedder(openedDatabase),
         now: getNow,
       });
     }),
@@ -1858,7 +1910,12 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           const view =
             sessionId === undefined
               ? undefined
-              : await readComparisonTable(openedDatabase, sessionId, request.payload.entityType);
+              : await readComparisonTable(
+                  openedDatabase,
+                  sessionId,
+                  request.payload.entityType,
+                  await readConceptEmbedder(openedDatabase),
+                );
 
           return buildRpcMessage("table.view", {
             title: view?.title ?? "",
@@ -1890,7 +1947,11 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             session:
               sessionId === undefined
                 ? null
-                : ((await readSummariesView(openedDatabase, sessionId)) ?? null),
+                : ((await readSummariesView(
+                    openedDatabase,
+                    sessionId,
+                    await readConceptEmbedder(openedDatabase),
+                  )) ?? null),
           });
         }
 
