@@ -36,6 +36,7 @@ import {
 import { runEmbeddingConformance, runGenerationConformance } from "@/features/modelConformance";
 import { installModel } from "@/features/modelInstall";
 import {
+  injectBlockedNotice,
   injectPageObserver,
   injectSessionTabs,
   pageContentRequestSchemas,
@@ -170,12 +171,14 @@ import {
   closeTabNode,
   followTabMembership,
   linkRefinement,
+  readBlockedNavigation,
   reconcileSessionTabs,
   recordNavigation,
   recordTabFocus,
   trackActiveDwell,
   updateTabTitle,
 } from "@/features/tabCapture";
+import type { CommittedNavigation } from "@/features/tabCapture";
 import {
   BUNDLED_MODEL_PROFILES,
   ENGAGEMENT_RULES,
@@ -690,6 +693,44 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
    */
   const observeTab = (tabId: number): void => {
     void injectPageObserver(dependencies.pageSignals, tabId);
+  };
+
+  /**
+   * Sites already told "not tracked" in a session, as `<session id> <host>`.
+   * Kept in memory only: writing the host of a bank down would be a record of
+   * the visit, which the denylist exists to prevent. An unloaded background
+   * forgets it and may repeat a notice, which is harmless.
+   */
+  const blockedNoticeShown = new Set<string>();
+
+  /** Says once per site and session that a denylisted page in a session tab is not tracked. */
+  const noticeBlockedPage = async (
+    openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+    navigation: CommittedNavigation,
+  ): Promise<void> => {
+    const blocked = await readBlockedNavigation({
+      database: openedDatabase,
+      api: dependencies.tabCapture,
+      navigation,
+    });
+
+    if (blocked === undefined || !(await isPageNoticeEnabled(openedDatabase))) {
+      return;
+    }
+
+    const key = `${blocked.sessionId} ${blocked.host}`;
+
+    if (blockedNoticeShown.has(key)) {
+      return;
+    }
+
+    blockedNoticeShown.add(key);
+
+    if (await injectBlockedNotice(dependencies.pageSignals, navigation.tabId)) {
+      dependencies.pageSignals
+        .requestNotice(navigation.tabId, blocked.sessionTitle, "blocked")
+        .catch(() => undefined);
+    }
   };
 
   /** Starts observing a tab's page if capture follows the tab. */
@@ -2797,6 +2838,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             void checkReattach(node.id);
           }
         } else if (navigation.frameId === 0) {
+          await noticeBlockedPage(openedDatabase, navigation);
           // A page the tab's node already had, loaded again — a resumed tab
           // loading when shown — is observed like a new one.
           await observeIfCaptured(openedDatabase, navigation.tabId);

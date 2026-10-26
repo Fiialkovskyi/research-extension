@@ -67,9 +67,12 @@ export function PageNoticeToggle({ client }: { client: PageNoticeClient }) {
           }}
         />
         <span>
-          Show a short notice in the corner of a page when it is added to research.
+          Show a short notice in the corner of a page when it is added to research, or when its site
+          is not tracked.
           <span className="block text-slate-600 dark:text-slate-300">
-            It takes no clicks and goes away on its own.
+            It takes no clicks and goes away on its own. On a site from your do-not-record list the
+            notice is drawn by a small script that reads nothing from the page; turn this off and
+            nothing is added to those pages.
           </span>
         </span>
       </label>

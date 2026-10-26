@@ -24,6 +24,13 @@ export interface PageSignalsApi {
   requestPageText: (tabId: number) => Promise<unknown>;
   /** Asks a tab's observer to send what it holds now. Rejects when nothing listens. */
   requestFlush: (tabId: number) => Promise<unknown>;
-  /** Asks a tab's observer to show the notice that its page was added to the session. */
-  requestNotice: (tabId: number, sessionTitle: string) => Promise<unknown>;
+  /**
+   * Asks a tab's script to show the notice that its page was added to the
+   * session, or (`blocked`) that its site is not tracked.
+   */
+  requestNotice: (
+    tabId: number,
+    sessionTitle: string,
+    kind?: "added" | "blocked",
+  ) => Promise<unknown>;
 }

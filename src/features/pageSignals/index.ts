@@ -12,7 +12,7 @@
 // page, and the background imports this barrel; the page observer's entrypoint
 // imports it by path, so neither bundle carries the other's code.
 
-export { PAGE_ACCESS_ORIGINS, PAGE_OBSERVER_PATH } from "./constants";
+export { BLOCKED_NOTICE_PATH, PAGE_ACCESS_ORIGINS, PAGE_OBSERVER_PATH } from "./constants";
 export {
   pageContentRequestSchemas,
   pageContentResponseSchemas,
@@ -20,6 +20,7 @@ export {
   pageObserverResponseSchemas,
 } from "./schemas";
 export type { PageInjection, PageSender, PageSignalsApi } from "./types";
+export { injectBlockedNotice } from "./model/injectBlockedNotice";
 export { injectPageObserver } from "./model/injectPageObserver";
 export { injectSessionTabs } from "./model/injectSessionTabs";
 export { readSignalTarget } from "./model/readSignalTarget";

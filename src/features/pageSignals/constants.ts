@@ -5,6 +5,12 @@
  */
 export const PAGE_OBSERVER_PATH = "/content-scripts/pageObserver.js";
 
+/**
+ * Where the built blocked-site notice script lands. It is injected only into a
+ * session tab that shows a page of a denylisted site, to draw one notice.
+ */
+export const BLOCKED_NOTICE_PATH = "/content-scripts/blockedNotice.js";
+
 /** The longest a page holds observations before sending them (REQ-CAP-005). */
 export const SIGNAL_FLUSH_INTERVAL_MS = 2_000;
 

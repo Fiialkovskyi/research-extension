@@ -5,17 +5,21 @@ export interface BuildNoticeOptions {
   sessionTitle: string;
   /** The page prefers a dark colour scheme. */
   isDark: boolean;
+  /** What the notice says: the page was added, or its site is not tracked. Defaults to added. */
+  kind?: "added" | "blocked";
 }
 
 /**
  * Builds the notice's content: a dot, "Added to research" and the session's
- * title. Styled through the element's own style object, not a style sheet, so a
+ * title — or, for a site on the denylist, a grey dot, "Not tracked" and a line
+ * saying the site is not recorded in the session. Styled through the element's own style object, not a style sheet, so a
  * page's content security policy cannot take the styling away.
  */
 export const buildNotice = ({
   document,
   sessionTitle,
   isDark,
+  kind = "added",
 }: BuildNoticeOptions): HTMLElement => {
   const notice = document.createElement("div");
   const dot = document.createElement("span");
@@ -48,7 +52,8 @@ export const buildNotice = ({
     width: "8px",
     height: "8px",
     borderRadius: "50%",
-    background: isDark ? "#4ade80" : "#16a34a",
+    background:
+      kind === "blocked" ? (isDark ? "#94a3b8" : "#64748b") : isDark ? "#4ade80" : "#16a34a",
   });
   Object.assign(title.style, {
     overflow: "hidden",
@@ -59,8 +64,8 @@ export const buildNotice = ({
   });
   Object.assign(text.style, { minWidth: "0" });
   heading.style.fontWeight = "600";
-  heading.textContent = "Added to research";
-  title.textContent = cut;
+  heading.textContent = kind === "blocked" ? "Not tracked" : "Added to research";
+  title.textContent = kind === "blocked" ? `This site is not recorded in ${cut}` : cut;
   dot.setAttribute("aria-hidden", "true");
   text.append(heading, title);
   notice.append(dot, text);

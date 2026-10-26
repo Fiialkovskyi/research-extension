@@ -72,4 +72,15 @@ describe("PageNoticeToggle", () => {
 
     expect(screen.queryByTestId("page-notice-toggle")).toBeNull();
   });
+
+  it("says the switch covers both notices", () => {
+    const { client, push } = createClient();
+
+    render(<PageNoticeToggle client={client} />);
+    push(buildRpcMessage("pageNotice.status", { isEnabled: true }));
+
+    expect(screen.getByTestId("page-notice-card")).toHaveTextContent(
+      "when it is added to research, or when its site is not tracked",
+    );
+  });
 });

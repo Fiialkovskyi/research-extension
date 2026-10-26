@@ -1,6 +1,7 @@
 # page-source-details Specification
 
 ## Purpose
+
 Defines how the sources of the comparison table and of the cluster summaries name the site and the date of the pages they come from, and how a conflict points at its newest dated source, using what each page said about itself.
 
 ## Requirements

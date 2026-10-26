@@ -6,6 +6,8 @@ export interface ShowPageNoticeOptions {
   sessionTitle: string;
   /** The page prefers a dark colour scheme. */
   isDark: boolean;
+  /** Whether the page was added to the session, or its site is not tracked. Defaults to added. */
+  kind?: "added" | "blocked";
   /** The user prefers no motion: the notice appears and goes without a fade. */
   isReducedMotion: boolean;
   setTimer: (callback: () => void, delayMs: number) => number;
@@ -43,13 +45,18 @@ const dismiss = (document: Document, clearTimer: (handle: number) => void): void
  * makes a screen reader announce a live region.
  */
 export const showPageNotice = (options: ShowPageNoticeOptions): void => {
-  const { document, sessionTitle, isDark, isReducedMotion, setTimer, clearTimer } = options;
+  const { document, sessionTitle, isDark, kind, isReducedMotion, setTimer, clearTimer } = options;
 
   dismiss(document, clearTimer);
 
   const host = document.createElement("research-graph-notice");
   const root = host.attachShadow({ mode: "closed" });
-  const notice = buildNotice({ document, sessionTitle, isDark });
+  const notice = buildNotice({
+    document,
+    sessionTitle,
+    isDark,
+    ...(kind === undefined ? {} : { kind }),
+  });
   const content = Array.from(notice.childNodes);
   const current: Showing = { host, timers: [] };
 

@@ -53,8 +53,14 @@ export const pageObserverRequestSchemas = {
   "content.extract": v.object({}),
   /** The session is being saved: send what is held now, without waiting for the timer. */
   "content.flush": v.object({}),
-  /** The page was just added to a session: show the notice, naming it. */
-  "pageNotice.show": v.object({ sessionTitle: v.pipe(v.string(), v.maxLength(500)) }),
+  /**
+   * Show the notice, naming the session: the page was just added to it, or
+   * (`blocked`) its site is on the denylist and is not tracked.
+   */
+  "pageNotice.show": v.object({
+    sessionTitle: v.pipe(v.string(), v.maxLength(500)),
+    kind: v.optional(v.picklist(["added", "blocked"])),
+  }),
 } as const;
 
 /** The observer's answers to the background. */

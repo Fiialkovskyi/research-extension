@@ -1561,8 +1561,9 @@ const createSignalsApp = async (overrides: Partial<BackgroundDependencies> = {})
   const executeScript = vi.fn((_injection: unknown) => Promise.resolve([]));
   const requestPageText = vi.fn((_tabId: number) => Promise.resolve(undefined));
   const requestFlush = vi.fn((_tabId: number) => Promise.resolve(undefined));
-  const requestNotice = vi.fn((_tabId: number, _sessionTitle: string) =>
-    Promise.resolve(undefined),
+  const requestNotice = vi.fn(
+    (_tabId: number, _sessionTitle: string, _kind?: "added" | "blocked") =>
+      Promise.resolve(undefined),
   );
   const { app, database } = await createSessionApp({
     tabCapture: createTabCapture(sessionTab(), sessionTab({ id: 8, url: "https://example.org/c" })),
@@ -1656,6 +1657,94 @@ describe("page signals and reading time through the background", () => {
     });
   });
 
+  describe("the notice that a site is not tracked", () => {
+    const BANK = "https://www.paypal.com/myaccount";
+    const noticeInjection = {
+      target: { tabId: 7, frameIds: [0] },
+      files: ["/content-scripts/blockedNotice.js"],
+    };
+
+    it("is shown for a denylisted page in a session tab, naming the session, and records nothing", async () => {
+      const { app, database, executeScript, requestNotice } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit(BANK));
+
+      expect(executeScript).toHaveBeenCalledTimes(1);
+      expect(executeScript).toHaveBeenCalledWith(noticeInjection);
+      expect(requestNotice).toHaveBeenCalledWith(7, "E-bike motors", "blocked");
+      expect(await database.count(NODE_STORE)).toBe(0);
+      expect(await database.count(SNAPSHOT_STORE)).toBe(0);
+    });
+
+    it("is shown for a site the user added", async () => {
+      const { app, requestNotice } = await createSignalsApp();
+
+      await app.handleMessage(buildRpcMessage("denylist.save", { sites: ["myclinic.example"] }));
+      await app.handleNavigationCommitted(commit("https://portal.myclinic.example/"));
+
+      expect(requestNotice).toHaveBeenCalledWith(7, "E-bike motors", "blocked");
+    });
+
+    it("is shown once for a site in a session, and again for another site", async () => {
+      const { app, requestNotice } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit(BANK));
+      await app.handleNavigationCommitted(commit("https://www.paypal.com/activity"));
+      await app.handleNavigationCommitted(commit("https://mail.google.com/mail/u/0/"));
+
+      expect(requestNotice).toHaveBeenCalledTimes(2);
+    });
+
+    it("is not shown for an ordinary page, a page that is not a web page or a tab outside a session", async () => {
+      const { app, requestNotice } = await createSignalsApp({
+        tabCapture: createTabCapture(sessionTab(), sessionTab({ id: 9, groupId: 5 })),
+      });
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      await app.handleNavigationCommitted(commit("about:preferences"));
+      await app.handleNavigationCommitted({ ...commit(BANK), tabId: 9 });
+
+      expect(requestNotice).not.toHaveBeenCalled();
+    });
+
+    it("is not shown, and nothing is injected, once the user turned the notice off", async () => {
+      const { app, executeScript, requestNotice } = await createSignalsApp();
+
+      await app.handleMessage(buildRpcMessage("pageNotice.set", { isEnabled: false }));
+      await app.handleNavigationCommitted(commit(BANK));
+
+      expect(executeScript).not.toHaveBeenCalled();
+      expect(requestNotice).not.toHaveBeenCalled();
+    });
+
+    it("asks for nothing when the page may not be scripted", async () => {
+      const { app, executeScript, requestNotice } = await createSignalsApp();
+
+      executeScript.mockRejectedValue(new Error("Missing host permission"));
+      await app.handleNavigationCommitted(commit(BANK));
+
+      expect(requestNotice).not.toHaveBeenCalled();
+    });
+
+    it("keeps no record of the site, so a visit leaves nothing to read", async () => {
+      const { app, database } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit(BANK));
+
+      const everything = JSON.stringify(
+        await Promise.all(
+          database.objectStoreNames.length === 0
+            ? []
+            : [...database.objectStoreNames]
+                .filter((name) => name !== "keys" && name !== "models" && name !== "modelFiles")
+                .map(async (name) => database.getAll(name)),
+        ),
+      );
+
+      expect(everything).not.toContain("paypal");
+    });
+  });
+
   it("records nothing on a site the user added, and refuses an entry that names no site", async () => {
     const { app, database, executeScript } = await createSignalsApp();
 
@@ -1673,7 +1762,9 @@ describe("page signals and reading time through the background", () => {
     await app.handleNavigationCommitted(commit("https://portal.myclinic.example/"));
 
     expect(await database.count(NODE_STORE)).toBe(0);
-    expect(executeScript).not.toHaveBeenCalled();
+    expect(executeScript).not.toHaveBeenCalledWith(
+      expect.objectContaining({ files: ["/content-scripts/pageObserver.js"] }),
+    );
     expect(await app.handleMessage(buildRpcMessage("denylist.read", {}))).toMatchObject({
       payload: { sites: ["myclinic.example"] },
     });
