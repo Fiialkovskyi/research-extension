@@ -16,6 +16,14 @@ const fact = (id: string, value: string, unit?: string, nodeId = `page-${id}`): 
   url: `https://example.org/${id}`,
 });
 
+/** A fact whose page was published on `date`, from a site when given. */
+const dated = (id: string, value: string, date: string, siteName?: string): TableFact => ({
+  ...fact(id, value),
+  publishedDate: date,
+  publishedTime: Date.parse(date),
+  ...(siteName === undefined ? {} : { siteName }),
+});
+
 describe("buildCell", () => {
   it("shows the value its sources agree on, without a conflict", () => {
     const cell = buildCell([fact("a", "23.5", "kg"), fact("b", "23 500", "g")]);
@@ -59,5 +67,58 @@ describe("buildCell", () => {
     ]);
 
     expect(cell.groups.map(({ value }) => value)).toEqual(["100 kg", "108 kg"]);
+  });
+
+  describe("the newest source of a conflict", () => {
+    it("marks the value whose source is strictly newest, and changes nothing else", () => {
+      const plain = buildCell([fact("a", "23"), fact("b", "25")]);
+      const cell = buildCell([
+        dated("a", "23", "2025-01-10"),
+        dated("b", "25", "2026-05-01", "Bike Lab"),
+      ]);
+
+      expect(
+        cell.groups.filter(({ isNewest }) => isNewest === true).map(({ value }) => value),
+      ).toEqual(["25"]);
+      expect(cell.groups.find(({ value }) => value === "25")?.sources[0]).toMatchObject({
+        siteName: "Bike Lab",
+        publishedDate: "2026-05-01",
+      });
+      expect(cell).toMatchObject({
+        value: plain.value,
+        alternativeCount: plain.alternativeCount,
+        isConflict: true,
+      });
+      expect(cell.groups.map(({ value }) => value)).toEqual(plain.groups.map(({ value }) => value));
+    });
+
+    it("uses a value's newest source when it has several", () => {
+      const cell = buildCell([
+        dated("a", "23", "2024-01-01"),
+        dated("b", "23", "2026-06-01"),
+        dated("c", "25", "2026-05-01"),
+      ]);
+
+      expect(cell.groups.find(({ isNewest }) => isNewest === true)?.value).toBe("23");
+    });
+
+    it("marks none when only one value has a dated source", () => {
+      const cell = buildCell([dated("a", "23", "2026-05-01"), fact("b", "25")]);
+
+      expect(cell.groups.some(({ isNewest }) => isNewest === true)).toBe(false);
+    });
+
+    it("marks none when the newest dates tie", () => {
+      const cell = buildCell([dated("a", "23", "2026-05-01"), dated("b", "25", "2026-05-01")]);
+
+      expect(cell.groups.some(({ isNewest }) => isNewest === true)).toBe(false);
+    });
+
+    it("marks none where there is no conflict", () => {
+      const cell = buildCell([dated("a", "23", "2026-05-01"), dated("b", "23", "2025-01-01")]);
+
+      expect(cell.isConflict).toBe(false);
+      expect(cell.groups.some(({ isNewest }) => isNewest === true)).toBe(false);
+    });
   });
 });

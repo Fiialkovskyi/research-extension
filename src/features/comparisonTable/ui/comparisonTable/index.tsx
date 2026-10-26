@@ -1,3 +1,4 @@
+import { describePageSource } from "@/shared/describePageSource";
 import { Button } from "@/shared/ui";
 
 import type { ComparisonCell, ComparisonTable as Table } from "../../types";
@@ -72,7 +73,18 @@ function Cell({
         <ul className="mt-1 flex flex-col gap-1 text-xs">
           {cell.groups.map((group) => (
             <li key={group.value} data-testid="table-value">
-              <span className="font-medium">{group.value}</span>{" "}
+              <span className="font-medium">{group.value}</span>
+              {group.isNewest === true && (
+                <>
+                  {" "}
+                  <span
+                    data-testid="table-newest"
+                    className="rounded bg-neutral-200 px-1 text-xs dark:bg-neutral-800"
+                  >
+                    newest source
+                  </span>
+                </>
+              )}{" "}
               <button
                 type="button"
                 data-testid="table-reject"
@@ -89,6 +101,15 @@ function Cell({
                     <a href={source.url} target="_blank" rel="noreferrer" className="underline">
                       {source.pageTitle}
                     </a>
+                    {describePageSource(source) !== "" && (
+                      <span
+                        data-testid="table-source-details"
+                        className="text-neutral-500 dark:text-neutral-400"
+                      >
+                        {" "}
+                        ({describePageSource(source)})
+                      </span>
+                    )}
                     : <q>{source.quote}</q>
                   </li>
                 ))}

@@ -21,6 +21,11 @@ export interface TableFact {
   quote: string;
   pageTitle: string;
   url: string;
+  /** What names the page as a source, when its metadata gave it. */
+  siteName?: string;
+  publishedDate?: string;
+  /** The same moment as `publishedDate`, in epoch milliseconds, for comparing sources. */
+  publishedTime?: number;
 }
 
 export type ValueGroup = v.InferOutput<typeof valueGroupSchema>;

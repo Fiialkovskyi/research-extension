@@ -11,6 +11,7 @@ import {
   MODEL_STORE,
   NODE_STORE,
   openResearchDatabase,
+  PAGE_METADATA_STORE,
   REJECTION_STORE,
   SESSION_STORE,
   SUMMARY_STORE,
@@ -18,7 +19,9 @@ import {
 
 import { rejectFacts } from "@/features/factRejections";
 
+import { buildSummaryMessages } from "../buildSummaryMessages";
 import { getFactSetHash } from "../getFactSetHash";
+import { readSummaryFacts } from "../readSummaryFacts";
 
 const MODEL = "ollama:qwen3:4b@abc";
 
@@ -79,6 +82,7 @@ beforeEach(async () => {
         SESSION_STORE,
         SUMMARY_STORE,
         REJECTION_STORE,
+        PAGE_METADATA_STORE,
       ] as const
     ).map((store) => database.clear(store)),
   );
@@ -155,6 +159,54 @@ describe("readSummariesView", () => {
         },
         { clusterId: "shops", label: "Shops", factCount: 0, isPending: false, summary: null },
       ],
+    });
+  });
+
+  describe("what names a citation", () => {
+    it("gives a citation its page's site and day, and leaves a page without them as it was", async () => {
+      await storeSummary(await getFactSetHash(["a:0:0"]));
+
+      const database = await openResearchDatabase();
+      const citationOf = async () =>
+        (await readSummariesView(database, "s"))?.clusters[0]?.summary?.statements[0]?.citations[0];
+
+      expect(await citationOf()).not.toHaveProperty("siteName");
+      expect(await citationOf()).not.toHaveProperty("publishedDate");
+
+      await database.put(PAGE_METADATA_STORE, {
+        nodeId: "a",
+        sessionId: "s",
+        capturedAt: 1,
+        siteName: "Bike Lab",
+        publishedAt: "2026-05-01T08:00:00Z",
+      });
+
+      expect(await citationOf()).toMatchObject({
+        siteName: "Bike Lab",
+        publishedDate: "2026-05-01",
+      });
+    });
+
+    it("leaves a summary not stale, and what a model is given unchanged, when metadata arrives", async () => {
+      await storeSummary(await getFactSetHash(["a:0:0"]));
+
+      const database = await openResearchDatabase();
+      const readMessages = async () =>
+        buildSummaryMessages(
+          await readSummaryFacts(database, await getDataKey(database), ["a:0:0"]),
+        );
+      const before = await readMessages();
+
+      await database.put(PAGE_METADATA_STORE, {
+        nodeId: "a",
+        sessionId: "s",
+        capturedAt: 1,
+        siteName: "Bike Lab",
+        publishedAt: "2026-05-01",
+      });
+
+      expect((await readSummariesView(database, "s"))?.clusters[0]?.summary?.isStale).toBe(false);
+      expect(await readMessages()).toEqual(before);
     });
   });
 

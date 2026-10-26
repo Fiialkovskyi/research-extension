@@ -1,6 +1,7 @@
 # page-metadata Specification
 
 ## Purpose
+
 Defines what a page says about itself in its head, how the extension reads and stores it for pages in a research session, how it can label a page, and how it stands in for the page's text until the page is read deeply.
 
 ## Requirements

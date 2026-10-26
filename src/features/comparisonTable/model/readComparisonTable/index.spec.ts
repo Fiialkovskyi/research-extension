@@ -9,6 +9,7 @@ import {
   FACT_STORE,
   NODE_STORE,
   openResearchDatabase,
+  PAGE_METADATA_STORE,
   REJECTION_STORE,
   SESSION_STORE,
   TABLE_COLUMNS_STORE,
@@ -85,6 +86,7 @@ beforeEach(async () => {
         SESSION_STORE,
         TABLE_COLUMNS_STORE,
         REJECTION_STORE,
+        PAGE_METADATA_STORE,
       ] as const
     ).map((store) => database.clear(store)),
   );
@@ -139,6 +141,49 @@ describe("readComparisonTable", () => {
       "https://example.org/review",
       "https://shop.example/volta",
     ]);
+  });
+
+  describe("what names a source", () => {
+    it("gives each source its page's site and publication day, and marks the newest in a conflict", async () => {
+      const database = await openResearchDatabase();
+
+      await database.put(PAGE_METADATA_STORE, {
+        nodeId: "review",
+        sessionId: "s",
+        capturedAt: 1,
+        siteName: "Bike Lab",
+        publishedAt: "2025-01-10",
+      });
+      await database.put(PAGE_METADATA_STORE, {
+        nodeId: "shop",
+        sessionId: "s",
+        capturedAt: 1,
+        siteName: "Volta Shop",
+        publishedAt: "2026-05-01T08:00:00Z",
+      });
+
+      const price = (await readComparisonTable(database, "s"))?.table.rows[0]?.cells["price"];
+
+      expect(price?.groups.map(({ sources }) => sources[0])).toEqual([
+        expect.objectContaining({ siteName: "Bike Lab", publishedDate: "2025-01-10" }),
+        expect.objectContaining({ siteName: "Volta Shop", publishedDate: "2026-05-01" }),
+      ]);
+      expect(price?.groups.map(({ isNewest }) => isNewest)).toEqual([undefined, true]);
+      expect(price).toMatchObject({ isConflict: true, alternativeCount: 1 });
+    });
+
+    it("shows a source without metadata as before", async () => {
+      const price = (await readComparisonTable(await openResearchDatabase(), "s"))?.table.rows[0]
+        ?.cells["price"];
+
+      expect(price?.groups[0]?.sources[0]).toEqual({
+        factId: expect.any(String),
+        pageTitle: "review",
+        url: "https://example.org/review",
+        quote: "price 1749",
+      });
+      expect(price?.groups.some(({ isNewest }) => isNewest === true)).toBe(false);
+    });
   });
 
   it("leaves out a rejected value, which ends the cell's conflict, and counts rejections", async () => {

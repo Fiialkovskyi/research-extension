@@ -3,6 +3,7 @@ import type { IDBPDatabase } from "idb";
 import { getDataKey } from "@/features/dataProtection";
 import { readSealedEntity } from "@/features/entityResolution";
 import { readSealedFact } from "@/features/factExtraction";
+import { readPageSourceDetails } from "@/features/pageMetadata";
 import { filterRejectedFacts, readRejectedKeys } from "@/features/factRejections";
 import { normalizeEntityName } from "@/shared/normalizeEntityName";
 import {
@@ -113,8 +114,13 @@ export const readComparisonTable = async (
     }
   }
 
+  // A source names its page's site and day when the page said them.
+  const details = await readPageSourceDetails(database, [...pages.keys()]);
   // Facts the user marked wrong are left out of every cell (REQ-LIN-008).
-  const facts = await filterRejectedFacts(read, rejectedKeys);
+  const facts = await filterRejectedFacts(
+    read.map((fact) => ({ ...fact, ...details.get(fact.nodeId) })),
+    rejectedKeys,
+  );
   const rejectedCount = rejectedKeys.size;
   const rowsByType = Map.groupBy(facts, ({ type }) => type);
   const types = [...rowsByType.entries()]

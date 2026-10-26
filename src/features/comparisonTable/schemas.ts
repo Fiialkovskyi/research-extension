@@ -4,8 +4,22 @@ import * as v from "valibot";
 export const valueGroupSchema = v.object({
   value: v.string(),
   sources: v.array(
-    v.object({ factId: v.string(), pageTitle: v.string(), url: v.string(), quote: v.string() }),
+    v.object({
+      factId: v.string(),
+      pageTitle: v.string(),
+      url: v.string(),
+      quote: v.string(),
+      /** The page's site, when it said. */
+      siteName: v.optional(v.string()),
+      /** The day the page says it was published (`2026-05-01`), when it parsed and was plausible. */
+      publishedDate: v.optional(v.string()),
+    }),
   ),
+  /**
+   * Set on the one value, in a conflict, whose newest dated source is strictly
+   * later than any other value's. A hint to the reader; it changes no ranking.
+   */
+  isNewest: v.optional(v.boolean()),
 });
 
 /** A cell: the chosen value, its alternatives, and every value with its sources. */

@@ -38,6 +38,46 @@ describe("buildComparisonCsv", () => {
     ]);
   });
 
+  it("follows a source with its site and publication day when the page gave them", () => {
+    const csv = buildComparisonCsv({
+      columns: [{ key: "weight", label: "weight" }],
+      rows: [
+        {
+          entityId: "v",
+          name: "Volta",
+          cells: {
+            weight: {
+              value: "23.5 kg",
+              alternativeCount: 0,
+              isConflict: false,
+              groups: [
+                {
+                  value: "23.5 kg",
+                  sources: [
+                    {
+                      factId: "a",
+                      pageTitle: "p",
+                      url: "https://a",
+                      quote: "q",
+                      siteName: "Bike Lab",
+                      publishedDate: "2026-05-01",
+                    },
+                    { factId: "b", pageTitle: "p", url: "https://b", quote: "q", siteName: "Shop" },
+                    { factId: "c", pageTitle: "p", url: "https://c", quote: "q" },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+
+    expect(lines(csv)[1]).toBe(
+      'Volta,23.5 kg,"https://a [Bike Lab, 2026-05-01] https://b [Shop] https://c"',
+    );
+  });
+
   it("notes a conflict in the value", () => {
     const csv = buildComparisonCsv({
       columns: [{ key: "price", label: "price" }],

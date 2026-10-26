@@ -5,6 +5,7 @@
 // it. The content script imports it by path.
 
 export { pageMetadataSchema } from "./schemas";
-export type { PageMetadata } from "./types";
+export type { PageMetadata, PageSourceDetails } from "./types";
 export { recordPageMetadata, type RecordedMetadata } from "./model/recordPageMetadata";
 export { readStoredPageMetadata, type ReadPageMetadata } from "./model/readStoredPageMetadata";
+export { readPageSourceDetails } from "./model/readPageSourceDetails";

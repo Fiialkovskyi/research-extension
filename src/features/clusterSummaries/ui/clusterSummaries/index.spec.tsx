@@ -30,6 +30,28 @@ const SUMMARIZED: ClusterSummaryView = {
   },
 };
 
+const WITH_DETAILS: ClusterSummaryView = {
+  ...SUMMARIZED,
+  summary: {
+    ...(SUMMARIZED.summary as NonNullable<ClusterSummaryView["summary"]>),
+    statements: [
+      {
+        text: "The Volta E5 weighs 23.5 kg.",
+        citations: [
+          {
+            factId: "a:0:0",
+            pageTitle: "Volta review",
+            url: "https://example.org/volta",
+            quote: "weighs 23.5 kg",
+            siteName: "Bike Lab",
+            publishedDate: "2026-05-01",
+          },
+        ],
+      },
+    ],
+  },
+};
+
 const onReject = vi.fn();
 
 const renderSummaries = (clusters: ClusterSummaryView[], canSummarize = true) => {
@@ -59,6 +81,20 @@ describe("ClusterSummaries", () => {
     expect(link).toHaveAttribute("href", "https://example.org/volta");
     expect(within(statement).getByTestId("summary-citation")).toHaveTextContent("weighs 23.5 kg");
     expect(screen.queryByTestId("summary-summarize")).toBeNull();
+  });
+
+  it("names a citation's site and day when its page gave them", () => {
+    renderSummaries([WITH_DETAILS]);
+
+    expect(screen.getByTestId("summary-citation-details")).toHaveTextContent(
+      "(Bike Lab, 2026-05-01)",
+    );
+  });
+
+  it("shows a citation without details as it was", () => {
+    renderSummaries([SUMMARIZED]);
+
+    expect(screen.queryByTestId("summary-citation-details")).toBeNull();
   });
 
   it("marks a cited fact wrong", () => {

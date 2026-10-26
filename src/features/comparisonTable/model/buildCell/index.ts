@@ -10,6 +10,26 @@ const countPages = (group: readonly TableFact[]): number =>
   new Set(group.map(({ nodeId }) => nodeId)).size;
 
 /**
+ * The group whose newest dated source is strictly later than every other
+ * group's, in a conflict; none when fewer than two groups have a dated source
+ * or the newest dates tie. Only a hint for the reader: nothing is ranked by it.
+ */
+const findNewestGroup = (
+  groups: readonly (readonly TableFact[])[],
+): readonly TableFact[] | undefined => {
+  const dated = groups.flatMap((group) => {
+    const times = group.flatMap(({ publishedTime }) => publishedTime ?? []);
+
+    return times.length === 0 ? [] : [{ group, time: Math.max(...times) }];
+  });
+  const [newest, next] = dated.toSorted((a, b) => b.time - a.time);
+
+  return newest !== undefined && next !== undefined && newest.time > next.time
+    ? newest.group
+    : undefined;
+};
+
+/**
  * Builds one cell from a row's facts for one column (REQ-SYN-006).
  *
  * Facts are grouped greedily, in id order: each joins the first group whose
@@ -40,9 +60,18 @@ export const buildCell = (facts: readonly TableFact[]): ComparisonCell => {
         a.order - b.order,
     )
     .map(({ group }) => group);
+  const newest = findNewestGroup(ranked);
   const asValueGroup = (group: readonly TableFact[]): ValueGroup => ({
     value: writeValue(group[0]!),
-    sources: group.map(({ id, pageTitle, url, quote }) => ({ factId: id, pageTitle, url, quote })),
+    sources: group.map(({ id, pageTitle, url, quote, siteName, publishedDate }) => ({
+      factId: id,
+      pageTitle,
+      url,
+      quote,
+      ...(siteName === undefined ? {} : { siteName }),
+      ...(publishedDate === undefined ? {} : { publishedDate }),
+    })),
+    ...(group === newest ? { isNewest: true } : {}),
   });
 
   return {

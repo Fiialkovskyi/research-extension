@@ -4,11 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { ComparisonTable } from ".";
 import type { ComparisonTable as Table } from "../../types";
 
-const source = (factId: string, url: string) => ({
+const source = (
+  factId: string,
+  url: string,
+  details: { siteName?: string; publishedDate?: string } = {},
+) => ({
   factId,
   pageTitle: url,
   url,
   quote: `quote ${factId}`,
+  ...details,
 });
 
 const TABLE: Table = {
@@ -39,8 +44,17 @@ const TABLE: Table = {
           alternativeCount: 1,
           isConflict: true,
           groups: [
-            { value: "1749 USD", sources: [source("b", "https://a")] },
-            { value: "1999 USD", sources: [source("c", "https://b")] },
+            {
+              value: "1749 USD",
+              sources: [
+                source("b", "https://a", { siteName: "Bike Lab", publishedDate: "2025-01-10" }),
+              ],
+            },
+            {
+              value: "1999 USD",
+              sources: [source("c", "https://b", { publishedDate: "2026-05-01" })],
+              isNewest: true,
+            },
           ],
         },
       },
@@ -87,8 +101,34 @@ describe("ComparisonTable", () => {
       within(price!)
         .getAllByTestId("table-value")
         .map((value) => value.textContent),
-    ).toEqual(["1749 USD Wronghttps://a: quote b", "1999 USD Wronghttps://b: quote c"]);
+    ).toEqual([
+      "1749 USD Wronghttps://a (Bike Lab, 2025-01-10): quote b",
+      "1999 USD newest source Wronghttps://b (2026-05-01): quote c",
+    ]);
     expect(within(price!).getAllByRole("link")[1]).toHaveAttribute("href", "https://b");
+  });
+
+  it("names a source's site and day, and tags the newest source of a conflict", () => {
+    renderTable();
+
+    const [, price] = within(screen.getAllByTestId("table-row")[0]!).getAllByTestId("table-cell");
+
+    expect(
+      within(price!)
+        .getAllByTestId("table-source-details")
+        .map((details) => details.textContent),
+    ).toEqual([" (Bike Lab, 2025-01-10)", " (2026-05-01)"]);
+    expect(within(price!).getAllByTestId("table-newest")).toHaveLength(1);
+    expect(within(price!).getByTestId("table-newest")).toHaveTextContent("newest source");
+  });
+
+  it("shows a source without details, and no tag, as it was", () => {
+    renderTable();
+
+    const [weight] = within(screen.getAllByTestId("table-row")[0]!).getAllByTestId("table-cell");
+
+    expect(within(weight!).queryByTestId("table-source-details")).toBeNull();
+    expect(within(weight!).queryByTestId("table-newest")).toBeNull();
   });
 
   it("chooses another type", () => {

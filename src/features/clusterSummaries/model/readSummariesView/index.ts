@@ -5,6 +5,7 @@ import { decryptBytes, getDataKey } from "@/features/dataProtection";
 import { readSealedFact } from "@/features/factExtraction";
 import { getFactKey, readRejectedKeys } from "@/features/factRejections";
 import { getActiveModel } from "@/features/modelRegistry";
+import { readPageSourceDetails } from "@/features/pageMetadata";
 import { readClustering } from "@/features/researchClusters";
 import {
   FACT_STORE,
@@ -109,11 +110,18 @@ export const readSummariesView = async (
                 return undefined;
               }
 
+              // A citation names its page's site and day when the page said them.
+              const details = (await readPageSourceDetails(database, [node.id])).get(node.id);
+
               return {
                 factId,
                 pageTitle: node.title.trim() === "" ? node.url : node.title,
                 url: node.url,
                 quote: sealed.quote,
+                ...(details?.siteName === undefined ? {} : { siteName: details.siteName }),
+                ...(details?.publishedDate === undefined
+                  ? {}
+                  : { publishedDate: details.publishedDate }),
               };
             }),
           )

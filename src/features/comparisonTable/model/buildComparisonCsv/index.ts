@@ -1,3 +1,5 @@
+import { describePageSource } from "@/shared/describePageSource";
+
 import { FORMULA_TRIGGERS } from "../../constants";
 import type { ComparisonTable } from "../../types";
 
@@ -14,7 +16,7 @@ const writeField = (text: string): string => {
 
 /**
  * Writes the table as CSV (REQ-SYN-007): the entity, then each column's value
- * — noting a conflict — and a column of that cell's source URLs. Lines end in
+ * — noting a conflict — and a column of that cell's source URLs, each followed by its site and publication day in brackets when the page gave them. Lines end in
  * CRLF and the text starts with a byte-order mark, so spreadsheets read
  * non-Latin text correctly.
  */
@@ -30,7 +32,15 @@ export const buildComparisonCsv = (table: Pick<ComparisonTable, "columns" | "row
       }
 
       const urls = [
-        ...new Set(cell.groups.flatMap(({ sources }) => sources.map(({ url }) => url))),
+        ...new Set(
+          cell.groups.flatMap(({ sources }) =>
+            sources.map((source) => {
+              const details = describePageSource(source);
+
+              return details === "" ? source.url : `${source.url} [${details}]`;
+            }),
+          ),
+        ),
       ];
 
       return [

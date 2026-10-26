@@ -1,3 +1,4 @@
+import { describePageSource } from "@/shared/describePageSource";
 import { Button } from "@/shared/ui";
 
 import type { ClusterSummaryView } from "../../types";
@@ -79,6 +80,12 @@ function Cluster({
                       <a href={citation.url} target="_blank" rel="noreferrer" className="underline">
                         {citation.pageTitle}
                       </a>
+                      {describePageSource(citation) !== "" && (
+                        <span data-testid="summary-citation-details">
+                          {" "}
+                          ({describePageSource(citation)})
+                        </span>
+                      )}
                       : <q>{citation.quote}</q>{" "}
                       <button
                         type="button"
