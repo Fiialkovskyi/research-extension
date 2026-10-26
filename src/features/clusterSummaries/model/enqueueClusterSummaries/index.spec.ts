@@ -67,7 +67,7 @@ describe("enqueueClusterSummaries", () => {
       type: "summarizeCluster",
       nextAttemptAt: NOW + 60_000,
       payload: { clusterId: "laptops", factSetHash: await getFactSetHash(["a:0:0", "b:0:0"]) },
-      producerVersion: "clusterSummary@1|ollama:qwen3:4b@abc",
+      producerVersion: "clusterSummary@2|ollama:qwen3:4b@abc",
     });
     expect(jobs[0]!.priority).toBeLessThan(-10);
   });

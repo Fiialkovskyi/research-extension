@@ -118,7 +118,7 @@ describe("runClusterSummaryJob", () => {
       inputFactCount: 2,
       omittedFactCount: 0,
       modelRef: "ollama:qwen3:4b@abc",
-      prompt: "clusterSummary@1",
+      prompt: "clusterSummary@2",
       generatedAt: 5_000,
     });
     expect(JSON.stringify(summary)).not.toContain("lighter");

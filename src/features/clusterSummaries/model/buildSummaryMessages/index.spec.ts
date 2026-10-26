@@ -9,8 +9,12 @@ const fact = (id: string, overrides: Partial<SummaryFact> = {}): SummaryFact => 
   id,
   nodeId: "n",
   groupKey: "g",
+  entityName: "Volta E5",
+  entityType: "product",
   subject: "Volta E5",
   attribute: "weight",
+  attributeKey: "weight",
+  isPageData: false,
   value: "23.5",
   unit: "kg",
   quote: "weighs 23.5 kg",
@@ -53,5 +57,20 @@ describe("buildSummaryMessages", () => {
 
     expect(messages[1]?.content.match(/<\/facts>/gu)).toHaveLength(1);
     expect(messages[1]?.content.split("\n")).toHaveLength(3);
+  });
+
+  it("names the product a fact is about, not its raw subject", () => {
+    const { messages } = buildSummaryMessages([
+      fact("x", {
+        entityName: "iPhone 17",
+        subject: "Дисплей",
+        attribute: "тип",
+        value: "OLED",
+        unit: undefined,
+      }),
+    ]);
+
+    expect(messages[1]?.content).toContain('F1 | iPhone 17 | тип | OLED | "weighs 23.5 kg"');
+    expect(messages[1]?.content).not.toContain("Дисплей");
   });
 });

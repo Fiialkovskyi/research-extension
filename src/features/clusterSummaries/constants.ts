@@ -1,5 +1,5 @@
-import clusterSummaryInstructions from "./prompts/clusterSummary@1.md?raw";
-import clusterSummaryJsonSchema from "./prompts/clusterSummary@1.schema.json";
+import clusterSummaryInstructions from "./prompts/clusterSummary@2.md?raw";
+import clusterSummaryJsonSchema from "./prompts/clusterSummary@2.schema.json";
 
 /**
  * The cluster-summary prompt (REQ-SYN-010): its id and version, which every
@@ -8,7 +8,7 @@ import clusterSummaryJsonSchema from "./prompts/clusterSummary@1.schema.json";
  */
 export const CLUSTER_SUMMARY_PROMPT = {
   id: "clusterSummary",
-  version: 1,
+  version: 2,
   instructions: clusterSummaryInstructions,
   jsonSchema: clusterSummaryJsonSchema,
 } as const;
@@ -40,3 +40,35 @@ export const SUMMARIES_PAGE_PATH = "/summaries.html";
 
 /** Below fact extraction: a summary is only as good as the facts it is built from. */
 export const SUMMARIZE_CLUSTER_PRIORITY = -20;
+
+/**
+ * What a shopper compares first, as attribute column keys (`getAttributeKey`):
+ * facts in these are chosen for a summary, and shown on a product card, before
+ * the rest, the earlier the more important.
+ */
+export const KEY_SPEC_ORDER = [
+  "screen size",
+  "display",
+  "battery capacity",
+  "storage",
+  "ram",
+  "main camera",
+  "processor",
+  "charging",
+  "weight",
+  "water resistance",
+] as const;
+
+/** How much less a product's next fact counts than its last: so no product takes every slot. */
+export const FACT_POSITION_PENALTY = 5;
+
+/** What a cluster's cards show: the most products, the fewest facts a product needs, the most key specs. */
+export const MAXIMUM_PRODUCT_CARDS = 6;
+export const MINIMUM_CARD_FACTS = 3;
+export const MAXIMUM_CARD_SPECS = 5;
+
+/** The most sources a card's value names: the pages that state it. */
+export const MAXIMUM_VALUE_SOURCES = 3;
+
+/** Attribute keys a card shows apart from its key specs, or not at all. */
+export const CARD_HEADER_KEYS = ["price", "brand", "availability", "rating"] as const;

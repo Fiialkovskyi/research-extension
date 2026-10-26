@@ -9,9 +9,26 @@ const cluster = (summary: unknown, isPending = false) => ({
   clusterId: "bikes",
   label: "E-bikes",
   factCount: 2,
+  cards: [CARD],
+  omittedProductCount: 0,
   isPending,
   summary,
 });
+
+/** A product the cluster's facts describe: a price from a page, and a key spec. */
+const CARD = {
+  entityId: "pixel",
+  name: "Pixel 10a",
+  factCount: 4,
+  price: {
+    label: "price",
+    value: "24399 UAH",
+    citations: [
+      { factId: "p", pageTitle: "Pixel", url: "https://shop/pixel", quote: "price 24399" },
+    ],
+  },
+  specs: [{ label: "weight", value: "190 g", citations: [] }],
+};
 
 const SUMMARY = {
   statements: [{ text: "Volta is lighter.", citations: [] }],
@@ -267,6 +284,26 @@ describe("SummariesApp", () => {
       expect.objectContaining({ type: "facts.reject", payload: { factIds: ["a"] } }),
     );
     expect(sent.filter((type) => type === "summaries.read").length).toBeGreaterThan(1);
+  });
+
+  it("shows a card for each product, and marks a card's price wrong, then reads again", async () => {
+    const { client, sent } = createClient();
+
+    render(<SummariesApp client={client} />);
+
+    expect(await screen.findByTestId("card-name")).toHaveTextContent("Pixel 10a");
+    expect(screen.getByTestId("card-price")).toHaveTextContent("price: 24399 UAH");
+
+    fireEvent.click(screen.getByTestId("card-reject"));
+
+    await vi.waitFor(() =>
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "facts.reject", payload: { factIds: ["p"] } }),
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(sent.filter((type) => type === "summaries.read").length).toBeGreaterThan(1),
+    );
   });
 
   it("shows suggested questions, searches one, and refreshes stale ones", async () => {

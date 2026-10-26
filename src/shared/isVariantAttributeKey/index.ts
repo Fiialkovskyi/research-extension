@@ -1,4 +1,4 @@
-import { ATTRIBUTE_SYNONYMS } from "../../constants";
+import { ATTRIBUTE_SYNONYMS } from "@/shared/config";
 
 /**
  * Whether a column key names a thing one product comes in several of — a

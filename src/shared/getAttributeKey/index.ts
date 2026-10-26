@@ -1,6 +1,6 @@
 import { normalizeEntityName } from "@/shared/normalizeEntityName";
 
-import { ATTRIBUTE_SYNONYMS } from "../../constants";
+import { ATTRIBUTE_SYNONYMS } from "@/shared/config";
 
 /** Whether `name` holds `phrase` as whole words. */
 const holdsPhrase = (name: string, phrase: string): boolean => ` ${name} `.includes(` ${phrase} `);

@@ -3,8 +3,8 @@ import * as v from "valibot";
 import { MAXIMUM_SUMMARY_STATEMENTS } from "./constants";
 
 /**
- * A `clusterSummary@1` answer, as it must be before anything is stored.
- * Mirrors `prompts/clusterSummary@1.schema.json`; `constants.spec.ts` keeps
+ * A `clusterSummary@2` answer, as it must be before anything is stored.
+ * Mirrors `prompts/clusterSummary@2.schema.json`; `constants.spec.ts` keeps
  * the two in step.
  */
 export const clusterSummaryAnswerSchema = v.object({
@@ -40,11 +40,32 @@ export const summaryCitationSchema = v.object({
   publishedDate: v.optional(v.string()),
 });
 
+/** One spec or price on a card: its value as the pages wrote it, and the pages that state it. */
+export const cardValueSchema = v.object({
+  /** The spec's name as the pages most often write it; `price` for the price. */
+  label: v.string(),
+  value: v.string(),
+  citations: v.array(summaryCitationSchema),
+});
+
+/** What one product looks like at a glance, made from its facts without the model. */
+export const productCardSchema = v.object({
+  entityId: v.string(),
+  name: v.string(),
+  factCount: v.number(),
+  price: v.nullable(cardValueSchema),
+  specs: v.array(cardValueSchema),
+});
+
 /** One cluster as the Summaries page shows it. */
 export const clusterSummaryViewSchema = v.object({
   clusterId: v.string(),
   label: v.string(),
   factCount: v.number(),
+  /** A card for each product the cluster's facts describe, the best supported first. */
+  cards: v.array(productCardSchema),
+  /** How many products were left out of `cards` for the limit. */
+  omittedProductCount: v.number(),
   summary: v.nullable(
     v.object({
       statements: v.array(

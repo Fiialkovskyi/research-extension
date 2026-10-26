@@ -2,6 +2,7 @@ import { describePageSource } from "@/shared/describePageSource";
 import { Button } from "@/shared/ui";
 
 import type { ClusterSummaryView } from "../../types";
+import { ProductCards } from "../productCards";
 
 export interface ClusterSummariesProps {
   title: string;
@@ -55,6 +56,11 @@ function Cluster({
           </Button>
         )}
       </header>
+      <ProductCards
+        cards={cluster.cards}
+        omittedProductCount={cluster.omittedProductCount}
+        onReject={onReject}
+      />
       {cluster.factCount === 0 ? (
         <p data-testid="summary-no-facts" className="mt-1 text-sm">
           No facts were extracted for these pages yet.

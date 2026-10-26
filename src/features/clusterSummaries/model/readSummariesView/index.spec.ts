@@ -6,6 +6,7 @@ import { readSummariesView } from ".";
 import { encryptBytes, getDataKey } from "@/features/dataProtection";
 import {
   CLUSTERING_STORE,
+  ENTITY_STORE,
   FACT_STORE,
   JOB_STORE,
   MODEL_STORE,
@@ -42,6 +43,7 @@ const storeFact = async (id: string, nodeId: string, quote: string) => {
     sessionId: "s",
     keyId: sealed.keyId,
     iv: sealed.iv,
+    provenance: { modelRef: "m", prompt: "p", chunkerVersion: "c", extractedAt: 1 },
     encryptedFact: sealed.ciphertext,
   } as never);
 };
@@ -68,6 +70,42 @@ const storeSummary = async (factSetHash: string, modelRef = MODEL) => {
   });
 };
 
+/** Stores a summary of `statements` for the "bikes" cluster, whose fact is of a product named `product`. */
+const storeStatementsAbout = async (product: string, statements: string[]) => {
+  const database = await openResearchDatabase();
+  const entity = await seal({ name: product, type: "product" });
+  const fact = await database.get(FACT_STORE, "a:0:0");
+
+  await database.put(ENTITY_STORE, {
+    id: "product",
+    sessionId: "s",
+    isSeparated: false,
+    createdAt: 1,
+    keyId: entity.keyId,
+    iv: entity.iv,
+    encryptedEntity: entity.ciphertext,
+  });
+  await database.put(FACT_STORE, { ...(fact as NonNullable<typeof fact>), entityId: "product" });
+
+  const sealed = await seal(statements.map((text) => ({ text, factIds: ["a:0:0"] })));
+
+  await database.put(SUMMARY_STORE, {
+    id: "s:bikes",
+    sessionId: "s",
+    clusterId: "bikes",
+    factSetHash: await getFactSetHash(["a:0:0"]),
+    citedFactIds: ["a:0:0"],
+    inputFactCount: 1,
+    omittedFactCount: 0,
+    modelRef: MODEL,
+    prompt: "clusterSummary@2",
+    generatedAt: 9,
+    keyId: sealed.keyId,
+    iv: sealed.iv,
+    encryptedStatements: sealed.ciphertext,
+  });
+};
+
 beforeEach(async () => {
   const database = await openResearchDatabase();
 
@@ -75,6 +113,7 @@ beforeEach(async () => {
     (
       [
         CLUSTERING_STORE,
+        ENTITY_STORE,
         FACT_STORE,
         JOB_STORE,
         MODEL_STORE,
@@ -124,6 +163,52 @@ beforeEach(async () => {
   await storeFact("a:0:0", "a", "weighs 23.5 kg");
 });
 
+/** Three facts of one product: its price from the page's data, a weight and a battery. */
+const storeProduct = async () => {
+  const database = await openResearchDatabase();
+  const entity = await seal({ name: "Pixel 10a", type: "product" });
+
+  await database.put(ENTITY_STORE, {
+    id: "pixel",
+    sessionId: "s",
+    isSeparated: false,
+    createdAt: 1,
+    keyId: entity.keyId,
+    iv: entity.iv,
+    encryptedEntity: entity.ciphertext,
+  });
+
+  for (const [id, attribute, value, unit, prompt] of [
+    ["a:product:0", "price", "24399", "UAH", "productData@1"],
+    ["a:0:1", "weight", "190", "g", "factExtraction@2"],
+    ["a:0:2", "battery capacity", "5100", "mAh", "factExtraction@2"],
+  ] as const) {
+    const sealed = await seal({
+      subject: "Pixel 10a",
+      attribute,
+      value,
+      unit,
+      quote: `${attribute} ${value}`,
+    });
+
+    await database.put(FACT_STORE, {
+      id,
+      nodeId: "a",
+      sessionId: "s",
+      entityId: "pixel",
+      keyId: sealed.keyId,
+      iv: sealed.iv,
+      provenance: { modelRef: "m", prompt, chunkerVersion: "c", extractedAt: 1 },
+      encryptedFact: sealed.ciphertext,
+    } as never);
+  }
+};
+
+const readTexts = async () =>
+  (
+    await readSummariesView(await openResearchDatabase(), "s")
+  )?.clusters[0]?.summary?.statements.map(({ text }) => text);
+
 describe("readSummariesView", () => {
   it("shows each cluster, its summary and its citations resolved to page and quote", async () => {
     await storeSummary(await getFactSetHash(["a:0:0"]));
@@ -136,6 +221,8 @@ describe("readSummariesView", () => {
           clusterId: "bikes",
           label: "E-bikes",
           factCount: 1,
+          cards: [],
+          omittedProductCount: 0,
           isPending: false,
           summary: {
             statements: [
@@ -157,7 +244,15 @@ describe("readSummariesView", () => {
             modelName: "qwen3:4b",
           },
         },
-        { clusterId: "shops", label: "Shops", factCount: 0, isPending: false, summary: null },
+        {
+          clusterId: "shops",
+          label: "Shops",
+          factCount: 0,
+          cards: [],
+          omittedProductCount: 0,
+          isPending: false,
+          summary: null,
+        },
       ],
     });
   });
@@ -262,5 +357,62 @@ describe("readSummariesView", () => {
     await (await openResearchDatabase()).clear(SESSION_STORE);
 
     expect(await readSummariesView(await openResearchDatabase(), "s")).toBeUndefined();
+  });
+
+  describe("product cards", () => {
+    it("makes a card of a product's facts: name, price from the page's data and key specs, each with its page", async () => {
+      await storeProduct();
+
+      const [bikes] = (await readSummariesView(await openResearchDatabase(), "s"))?.clusters ?? [];
+
+      expect(bikes?.cards).toHaveLength(1);
+      expect(bikes?.cards[0]).toMatchObject({
+        name: "Pixel 10a",
+        price: { value: "24399 UAH", citations: [{ url: "https://example.org/volta" }] },
+        specs: [
+          { label: "battery capacity", value: "5100 mAh" },
+          { label: "weight", value: "190 g" },
+        ],
+      });
+    });
+
+    it("makes no card once a fact is marked wrong that leaves the product with too few", async () => {
+      await storeProduct();
+
+      const database = await openResearchDatabase();
+
+      await rejectFacts(database, ["a:0:1"]);
+
+      expect((await readSummariesView(database, "s"))?.clusters[0]?.cards).toEqual([]);
+    });
+  });
+
+  describe("statements that name a product", () => {
+    it("leaves out a statement that names none of the products when another names one", async () => {
+      await storeStatementsAbout("iPhone 17", [
+        "iPhone 17 costs 45 999 UAH.",
+        "The device supports video playback.",
+      ]);
+
+      expect(await readTexts()).toEqual(["iPhone 17 costs 45 999 UAH."]);
+    });
+
+    it("shows every statement when none names a product", async () => {
+      await storeStatementsAbout("iPhone 17", [
+        "The device supports video playback.",
+        "It is OLED.",
+      ]);
+
+      expect(await readTexts()).toEqual(["The device supports video playback.", "It is OLED."]);
+    });
+
+    it("counts a statement that spells the name differently, and changes nothing stored", async () => {
+      await storeStatementsAbout("iPhone 17", ["IPHONE-17 is OLED.", "Nothing here."]);
+
+      expect(await readTexts()).toEqual(["IPHONE-17 is OLED."]);
+      expect((await (await openResearchDatabase()).get(SUMMARY_STORE, "s:bikes"))?.prompt).toBe(
+        "clusterSummary@2",
+      );
+    });
   });
 });

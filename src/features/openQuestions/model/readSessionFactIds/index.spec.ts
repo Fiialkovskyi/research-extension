@@ -74,6 +74,7 @@ const seedSession = async () => {
       nodeId: "a",
       keyId: sealed.keyId,
       iv: sealed.iv,
+      provenance: { modelRef: "m", prompt: "p", chunkerVersion: "c", extractedAt: 1 },
       encryptedFact: sealed.ciphertext,
     } as never);
   }

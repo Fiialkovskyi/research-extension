@@ -16,7 +16,7 @@ import {
 
 import type { ComparisonTable, TableFact } from "../../types";
 import { buildCell } from "../buildCell";
-import { getAttributeKey } from "../getAttributeKey";
+import { getAttributeKey } from "@/shared/getAttributeKey";
 import { proposeColumns } from "../proposeColumns";
 import { readSavedColumns } from "../readSavedColumns";
 

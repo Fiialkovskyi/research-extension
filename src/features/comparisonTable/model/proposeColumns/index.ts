@@ -1,6 +1,8 @@
 import { normalizeEntityName } from "@/shared/normalizeEntityName";
 
-import { GENERIC_ATTRIBUTES, MAXIMUM_PROPOSED_COLUMNS } from "../../constants";
+import { GENERIC_ATTRIBUTES } from "@/shared/config";
+
+import { MAXIMUM_PROPOSED_COLUMNS } from "../../constants";
 import type { ComparisonColumn, TableFact } from "../../types";
 
 /** A column as the table shows it: its key and label. */

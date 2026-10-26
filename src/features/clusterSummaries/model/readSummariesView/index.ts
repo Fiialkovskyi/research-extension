@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import { decryptBytes, getDataKey } from "@/features/dataProtection";
 import { readSealedFact } from "@/features/factExtraction";
-import { getFactKey, readRejectedKeys } from "@/features/factRejections";
+import { filterRejectedFacts, getFactKey, readRejectedKeys } from "@/features/factRejections";
 import { getActiveModel } from "@/features/modelRegistry";
 import { readPageSourceDetails } from "@/features/pageMetadata";
 import { readClustering } from "@/features/researchClusters";
@@ -23,7 +23,25 @@ import { summarizeClusterPayloadSchema, summaryStatementSchema } from "../../sch
 import type { ClusterSummaryView, SummaryCitation } from "../../types";
 import { getFactSetHash } from "../getFactSetHash";
 import { isSummaryStale } from "../isSummaryStale";
+import { isNamingProduct } from "./utils/isNamingProduct";
 import { readClusterFactIds } from "../readClusterFactIds";
+import { readProductCards } from "../readProductCards";
+import { readSummaryFacts } from "../readSummaryFacts";
+
+/**
+ * Leaves out the statements that name none of the products when at least one
+ * statement names one; all are kept when none does, or there is no product.
+ */
+const keepNamedStatements = <Statement extends { text: string }>(
+  statements: readonly Statement[],
+  productNames: readonly string[],
+): Statement[] => {
+  const named = statements.filter(({ text }) =>
+    productNames.some((name) => isNamingProduct(text, name)),
+  );
+
+  return named.length === 0 ? [...statements] : named;
+};
 
 /** What the Summaries page shows: the live session's clusters and their summaries. */
 export interface SummariesView {
@@ -134,16 +152,54 @@ export const readSummariesView = async (
     (clustering?.clusters ?? []).map(async (cluster): Promise<ClusterSummaryView> => {
       const factIds = await readClusterFactIds(database, cluster, session.id);
       const summary = await database.get(SUMMARY_STORE, `${session.id}:${cluster.id}`);
+      const clusterFacts = await filterRejectedFacts(
+        await readSummaryFacts(database, dataKey, factIds),
+        rejectedKeys,
+      );
+      // The products the cluster's facts describe, which a statement must name to be shown.
+      const productNames = [
+        ...new Set(
+          clusterFacts
+            .filter(({ entityType }) => entityType === "product")
+            .map(({ entityName }) => entityName),
+        ),
+      ];
+      const nodes = new Map(
+        (
+          await Promise.all(
+            [...new Set(clusterFacts.map(({ nodeId }) => nodeId))].map((id) =>
+              database.get(NODE_STORE, id),
+            ),
+          )
+        ).flatMap((node) => (node === undefined ? [] : [[node.id, node] as const])),
+      );
+      const details = await readPageSourceDetails(database, [...nodes.keys()]);
+      const { cards, omittedProductCount } = readProductCards(clusterFacts, (fact) => {
+        const node = nodes.get(fact.nodeId);
+        const source = details.get(fact.nodeId);
+
+        return {
+          factId: fact.id,
+          pageTitle:
+            node === undefined || node.title.trim() === "" ? (node?.url ?? "") : node.title,
+          url: node?.url ?? "",
+          quote: fact.quote,
+          ...(source?.siteName === undefined ? {} : { siteName: source.siteName }),
+          ...(source?.publishedDate === undefined ? {} : { publishedDate: source.publishedDate }),
+        };
+      });
 
       return {
         clusterId: cluster.id,
         label: cluster.label,
         factCount: factIds.length,
+        cards,
+        omittedProductCount,
         summary:
           summary === undefined
             ? null
             : {
-                statements: await readStatements(summary),
+                statements: keepNamedStatements(await readStatements(summary), productNames),
                 isStale: isSummaryStale(summary, await getFactSetHash(factIds), installedRefs),
                 omittedFactCount: summary.omittedFactCount,
                 generatedAt: summary.generatedAt,

@@ -1,6 +1,6 @@
 import type { ComparisonCell, TableFact, ValueGroup } from "../../types";
 import { isSameValue } from "../isSameValue";
-import { isVariantAttributeKey } from "../isVariantAttributeKey";
+import { isVariantAttributeKey } from "@/shared/isVariantAttributeKey";
 
 /** A value as the cell writes it: the number or text, then its unit. */
 const writeValue = ({ value, unit }: Pick<TableFact, "value" | "unit">): string =>

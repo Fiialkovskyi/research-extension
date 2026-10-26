@@ -6,6 +6,15 @@ import { readSummaryFacts } from ".";
 import { encryptBytes, getDataKey } from "@/features/dataProtection";
 import { ENTITY_STORE, FACT_STORE, openResearchDatabase } from "@/shared/storage";
 
+const sealEntity = async (name: string) => {
+  const sealed = await encryptBytes(
+    await getDataKey(await openResearchDatabase()),
+    new TextEncoder().encode(JSON.stringify({ name, type: "product" })),
+  );
+
+  return { keyId: sealed.keyId, iv: sealed.iv, encryptedEntity: sealed.ciphertext };
+};
+
 const storeFact = async (id: string, subject: string, entityId?: string) => {
   const database = await openResearchDatabase();
   const sealed = await encryptBytes(
@@ -22,6 +31,7 @@ const storeFact = async (id: string, subject: string, entityId?: string) => {
     ...(entityId === undefined ? {} : { entityId }),
     keyId: sealed.keyId,
     iv: sealed.iv,
+    provenance: { modelRef: "m", prompt: "p", chunkerVersion: "c", extractedAt: 1 },
     encryptedFact: sealed.ciphertext,
   } as never);
 };
@@ -50,5 +60,31 @@ describe("readSummaryFacts", () => {
       ["a", "root", "kg"],
       ["b", "subject:Air", "kg"],
     ]);
+  });
+
+  it("names each fact by its root entity, and by its subject when the entity cannot be read", async () => {
+    const database = await openResearchDatabase();
+
+    await database.put(ENTITY_STORE, {
+      id: "root",
+      sessionId: "s",
+      isSeparated: false,
+      createdAt: 1,
+      ...(await sealEntity("iPhone 17")),
+    });
+
+    const facts = await readSummaryFacts(database, await getDataKey(database), ["a", "b"]);
+
+    expect(facts.map(({ id, entityName, entityType }) => [id, entityName, entityType])).toEqual([
+      ["a", "iPhone 17", "product"],
+      ["b", "Air", "unknown"],
+    ]);
+  });
+
+  it("falls back to the subject when the root entity's text does not decrypt", async () => {
+    const database = await openResearchDatabase();
+    const facts = await readSummaryFacts(database, await getDataKey(database), ["a"]);
+
+    expect(facts[0]?.entityName).toBe("Neo");
   });
 });

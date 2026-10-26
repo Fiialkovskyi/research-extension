@@ -8,6 +8,8 @@ const SUMMARIZED: ClusterSummaryView = {
   clusterId: "bikes",
   label: "E-bikes",
   factCount: 14,
+  cards: [],
+  omittedProductCount: 0,
   isPending: false,
   summary: {
     statements: [

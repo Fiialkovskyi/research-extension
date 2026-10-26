@@ -1,48 +1,82 @@
+import { FACT_POSITION_PENALTY } from "../../constants";
 import type { SummaryFact } from "../../types";
+import { scoreSummaryFact } from "./utils/scoreSummaryFact";
+
+/** A fact's value with its unit, set apart from spacing and case: what two pages must agree on. */
+const writeValueKey = ({ value, unit }: SummaryFact): string =>
+  `${value} ${unit ?? ""}`.toLowerCase().replaceAll(/\s+/gu, " ").trim();
 
 /**
- * Chooses at most `limit` facts for one summary, spread so that every group —
- * an entity, or a subject without one — and every page is represented before
- * any gets a second fact: groups biggest first, one fact each in turn, a page
- * not yet used within the group preferred.
+ * Orders one group's facts for choosing: first the best fact of each attribute,
+ * then the rest, each time the highest score, a page not yet used before one
+ * already used, then by id.
+ */
+const orderGroup = (members: readonly SummaryFact[]): { fact: SummaryFact; score: number }[] => {
+  const pagesByValue = Map.groupBy(
+    members,
+    (fact) => `${fact.attributeKey}\u0000${writeValueKey(fact)}`,
+  );
+  const left = members.map((fact) => ({
+    fact,
+    score: scoreSummaryFact(
+      fact,
+      new Set(
+        (pagesByValue.get(`${fact.attributeKey}\u0000${writeValueKey(fact)}`) ?? []).map(
+          ({ nodeId }) => nodeId,
+        ),
+      ).size > 1,
+    ),
+  }));
+  const usedKeys = new Set<string>();
+  const usedPages = new Set<string>();
+  const ordered: { fact: SummaryFact; score: number }[] = [];
+
+  while (left.length > 0) {
+    const best = left.toSorted(
+      (a, b) =>
+        Number(usedKeys.has(a.fact.attributeKey)) - Number(usedKeys.has(b.fact.attributeKey)) ||
+        b.score - a.score ||
+        Number(usedPages.has(a.fact.nodeId)) - Number(usedPages.has(b.fact.nodeId)) ||
+        a.fact.id.localeCompare(b.fact.id),
+    )[0]!;
+
+    left.splice(left.indexOf(best), 1);
+    usedKeys.add(best.fact.attributeKey);
+    usedPages.add(best.fact.nodeId);
+    ordered.push(best);
+  }
+
+  return ordered;
+};
+
+/**
+ * Chooses at most `limit` facts for one summary by importance: a fact from the
+ * page's own product data, then a key spec (the earlier in the order the
+ * better), then a fact more than one page states, then the rest. Within a
+ * group — an entity, or a subject without one — each attribute gets a fact
+ * before any gets a second, and each place down a group's list costs
+ * {@link FACT_POSITION_PENALTY}, so no group takes every slot while another
+ * has none.
  *
- * @returns The facts chosen, and how many were left out.
+ * @returns The facts chosen, best first, and how many were left out.
  */
 export const selectSummaryFacts = (
   facts: readonly SummaryFact[],
   limit: number,
 ): { selected: SummaryFact[]; omittedCount: number } => {
-  const groups = [...Map.groupBy(facts, ({ groupKey }) => groupKey).entries()]
-    .toSorted(([nameA, a], [nameB, b]) => b.length - a.length || nameA.localeCompare(nameB))
-    .map(([, members]) => {
-      const usedPages = new Set<string>();
-      const left = members.toSorted((a, b) => a.id.localeCompare(b.id));
-
-      return () => {
-        const index = Math.max(
-          left.findIndex(({ nodeId }) => !usedPages.has(nodeId)),
-          left.length > 0 ? 0 : -1,
-        );
-        const [next] = index === -1 ? [] : left.splice(index, 1);
-
-        if (next !== undefined) {
-          usedPages.add(next.nodeId);
-        }
-
-        return next;
-      };
-    });
-  const selected: SummaryFact[] = [];
-
-  while (selected.length < Math.min(limit, facts.length)) {
-    for (const takeNext of groups) {
-      const next = selected.length < limit ? takeNext() : undefined;
-
-      if (next !== undefined) {
-        selected.push(next);
-      }
-    }
-  }
+  const ranked = [...Map.groupBy(facts, ({ groupKey }) => groupKey).values()]
+    .flatMap((members) =>
+      orderGroup(members).map(({ fact, score }, position) => ({
+        fact,
+        weight: score - position * FACT_POSITION_PENALTY,
+        position,
+      })),
+    )
+    .toSorted(
+      (a, b) =>
+        b.weight - a.weight || a.position - b.position || a.fact.id.localeCompare(b.fact.id),
+    );
+  const selected = ranked.slice(0, limit).map(({ fact }) => fact);
 
   return { selected, omittedCount: facts.length - selected.length };
 };

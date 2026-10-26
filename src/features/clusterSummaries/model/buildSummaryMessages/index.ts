@@ -12,8 +12,9 @@ const escapeField = (text: string): string =>
 
 /**
  * Builds the request for one summary (REQ-SYN-011) — or another prompt over the
- * same facts, given its instructions: the prompt as the system message, and the facts as data — one labelled line each, `F1` upwards,
- * between the facts delimiters.
+ * same facts, given its instructions: the prompt as the system message, and
+ * the facts as data — one labelled line each, `F1` upwards, between the facts
+ * delimiters — naming the product the fact is about, not its raw subject.
  *
  * @returns The messages, and the fact id each label stands for.
  */
@@ -23,8 +24,8 @@ export const buildSummaryMessages = (
 ): { messages: ChatMessage[]; labels: Map<string, string> } => {
   const labels = new Map(facts.map(({ id }, index) => [`F${index + 1}`, id]));
   const lines = facts.map(
-    ({ subject, attribute, value, unit, quote }, index) =>
-      `F${index + 1} | ${escapeField(subject)} | ${escapeField(attribute)} | ${escapeField(
+    ({ entityName, attribute, value, unit, quote }, index) =>
+      `F${index + 1} | ${escapeField(entityName)} | ${escapeField(attribute)} | ${escapeField(
         unit === undefined ? value : `${value} ${unit}`,
       )} | "${escapeField(quote)}"`,
   );
