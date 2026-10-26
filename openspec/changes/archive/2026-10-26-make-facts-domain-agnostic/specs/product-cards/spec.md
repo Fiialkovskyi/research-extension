@@ -18,7 +18,7 @@ For each cluster, the Summaries page SHALL show a card for each root entity that
 - **WHEN** the page is read
 - **THEN** it has no card
 
-#### Scenario: Not the kind the cluster is about
+#### Scenario: Not a product
 
 - **GIVEN** two products with 4 facts each, an entity of type `company` with 10 facts, and one of type `unknown` with 10 facts
 - **WHEN** the page is read
@@ -64,7 +64,7 @@ A card SHALL show the product's name, its price with currency when a fact states
 - **WHEN** its card is read
 - **THEN** the card's price is `24399 UAH`, with its page's site and day
 
-#### Scenario: Key specs by how comparable they are
+#### Scenario: Key specs in order
 
 - **GIVEN** three mats where all state `pile height`, two state `colour` and one states `care label`
 - **WHEN** a mat's card is read
@@ -82,7 +82,7 @@ A card SHALL show the product's name, its price with currency when a fact states
 - **WHEN** the card is read
 - **THEN** the battery shows `5100 mAh`
 
-#### Scenario: Options together
+#### Scenario: Variants together
 
 - **GIVEN** one page states storage `128 GB`, `256 GB` and `512 GB`
 - **WHEN** the card is read

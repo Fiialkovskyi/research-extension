@@ -8,7 +8,7 @@ Defines what the fact extractor is told about the page it reads, which facts it 
 
 ### Requirement: The extractor is told what the page is
 
-Each request to extract facts SHALL say, as data and not as instruction, which page the passage comes from: its title, its site and, when known, its product, each cut to a fixed length. The instructions SHALL say that facts about the page's main product, when the passage does not name it, belong to that product; that a value, a number with a unit or a feature name is never a subject; and that figures of a table comparing several models belong to the model whose column states them or are left out. The context SHALL be delimited so that the page cannot end it, and the prompt's version SHALL be recorded on every fact.
+Each request to extract facts SHALL say, as data and not as instruction, which page the passage comes from: its title, its site and, when known, its product, each cut to a fixed length. The instructions SHALL say that facts about the page's main product, when the passage does not name it, belong to that product; that a value, a number with a unit or a feature name is never a subject; that figures of a table comparing several models belong to the model whose column states them or are left out; and that each fact gives its attribute's concept as a short English noun phrase whatever language the page is in. The context SHALL be delimited so that the page cannot end it, and the prompt's version SHALL be recorded on every fact.
 
 #### Scenario: A passage with the page's context
 
@@ -25,11 +25,11 @@ Each request to extract facts SHALL say, as data and not as instruction, which p
 #### Scenario: The prompt's version
 
 - **WHEN** facts are kept from a request made with this prompt
-- **THEN** each fact records `factExtraction@2`
+- **THEN** each fact records `factExtraction@3`
 
 ### Requirement: Implausible subjects are dropped
 
-A fact whose subject is empty, only digits and punctuation, equal to the fact's own value, or a number followed by a unit of measure SHALL NOT be kept, and SHALL be counted as dropped. A subject that merely begins with a number, such as a brand name, SHALL be kept.
+A fact whose subject is empty, has no letter, is equal to the fact's own value, or begins with a number followed by a unit of measure the extension's value normaliser knows SHALL NOT be kept, and SHALL be counted as dropped. A subject that merely begins with a number, such as a brand name, SHALL be kept. No list of units of its own SHALL be kept for this.
 
 #### Scenario: A screen size as a subject
 
@@ -57,11 +57,11 @@ A fact whose subject is empty, only digits and punctuation, equal to the fact's 
 
 ### Requirement: Spellings of one attribute share a column
 
-The comparison table SHALL give attributes that name the same thing in Ukrainian, Russian or English — such as `діафрагма` and `aperture` — one column, labelled by its most frequent spelling. An attribute not in the bundled table SHALL keep its own column.
+The comparison table SHALL give facts whose attributes name the same thing in any language one column, by their concepts: equal concepts always, and, when an embedding model is active, similar ones (see the requirement that concepts that mean the same share a column), labelled by the column's most frequent spelling of the attribute. A concept nobody else shares SHALL keep its own column. No bundled table of attributes SHALL be used.
 
 #### Scenario: Two languages, one column
 
-- **GIVEN** one fact with attribute `діафрагма` and another with attribute `aperture`
+- **GIVEN** one fact with attribute `діафрагма` and concept `aperture`, and another with attribute `aperture` and concept `aperture`
 - **WHEN** the table is read
 - **THEN** it has one column for both
 
@@ -73,7 +73,7 @@ The comparison table SHALL give attributes that name the same thing in Ukrainian
 
 ### Requirement: A conflict needs two pages
 
-A cell of the comparison table SHALL be a conflict only when at least two different pages give different values. Different values from a single page, and values of a variant attribute such as storage or colour, SHALL be shown together as options, not as a conflict, with every value keeping its sources.
+A cell of the comparison table SHALL be a conflict only when at least two different pages that each state a single value state different ones. Different values from a single page SHALL be shown together as options, not as a conflict, with every value keeping its sources. No list of variant attributes SHALL decide this.
 
 #### Scenario: One page lists several models
 
@@ -83,7 +83,7 @@ A cell of the comparison table SHALL be a conflict only when at least two differ
 
 #### Scenario: Variants of storage
 
-- **GIVEN** two pages state storage `128GB`, `256GB` and `512GB`
+- **GIVEN** two pages each state storage `128GB`, `256GB` and `512GB`
 - **WHEN** the table is read
 - **THEN** the cell is not a conflict and shows the values as options
 
@@ -95,11 +95,11 @@ A cell of the comparison table SHALL be a conflict only when at least two differ
 
 ### Requirement: Columns that say nothing are not proposed
 
-The proposed columns SHALL leave out generic attributes (such as description, design and type) and, when the table has more than one row, attributes that only one row has; they stay among the other columns the user can add. Columns the user saved SHALL be shown as saved.
+The proposed columns SHALL leave out concepts whose commonest value is prose and concepts that every entity stating them states with the same value, as the requirement on prose and sameness defines, and, when the table has more than one row, concepts that only one row has; they stay among the other columns the user can add. Columns the user saved SHALL be shown as saved. No list of generic attributes SHALL be used.
 
 #### Scenario: A generic attribute
 
-- **GIVEN** facts with the attribute `description`
+- **GIVEN** facts with the attribute `description` whose values are more than 8 words
 - **WHEN** the columns are proposed
 - **THEN** `description` is among the other columns, not the proposed ones
 
