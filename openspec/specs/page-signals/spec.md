@@ -9,7 +9,7 @@ copy events — how they reach the page's node, and how a node's engagement stat
 
 ### Requirement: Active reading time is measured
 
-The extension SHALL add to a session node's active dwell the time during which its tab is the selected tab of the focused browser window and the user is not idle, idle meaning 60 s without input. Time while another window or application has focus, while the user is idle, or after the tab moved on SHALL NOT count. A single uninterrupted stretch SHALL count at most 10 minutes. Time SHALL NOT be lost when the background is unloaded.
+The extension SHALL add to a session node's active dwell the time during which its tab is the selected tab of the focused browser window and the user is not idle, idle meaning 60 s without input. Time while another window or application has focus, while the user is idle, or after the tab moved on SHALL NOT count. A single uninterrupted stretch SHALL count at most 10 minutes. Time SHALL NOT be lost when the background is unloaded. While an observed page is visible, the extension SHALL bring its reading time up to date at least every 10 s, without waiting for the user to scroll, copy, change tab or go idle, and SHALL judge the page deep read as soon as the time brought up to date reaches the rule's threshold.
 
 #### Scenario: Reading, then switching tabs
 
@@ -38,6 +38,30 @@ The extension SHALL add to a session node's active dwell the time during which i
 
 - **WHEN** the user reads a page in a tab outside the session's group
 - **THEN** no active dwell is recorded for any node
+
+#### Scenario: Reading in stillness
+
+- **GIVEN** a page in a session tab was scrolled to 50% within 5 s and is then read, with no further scroll, for 60 s
+- **WHEN** 60 s have passed
+- **THEN** the page's node has about 50 s of active dwell, and its text has been asked for
+
+#### Scenario: A page that is hidden
+
+- **GIVEN** an observed page whose tab is not the selected tab
+- **WHEN** time passes
+- **THEN** the page sends nothing and its node gains no dwell
+
+#### Scenario: A window behind another application
+
+- **GIVEN** an observed page that is visible but whose window is not focused
+- **WHEN** time passes
+- **THEN** its node gains no dwell
+
+#### Scenario: A page the tab has left
+
+- **GIVEN** a tick arrives from a page whose tab now shows another node
+- **WHEN** the background handles it
+- **THEN** nothing is added to either node
 
 ### Requirement: Revisits are counted
 
@@ -136,7 +160,7 @@ A batch SHALL be added to the node of the page that produced it, through the sam
 
 ### Requirement: Engagement is derived from signals
 
-A node's engagement state SHALL be derived from its signals by a named, versioned rule set, `engagement_rules@2`, and SHALL NOT be stored. `unread`: never focused. `deep_read`: active dwell of at least 45 s and scroll depth of at least 40%, or any copy event, or at least 2 revisits of 20 s or more. `dead_end`: not deep read, and either a quick return, or active dwell under 8 s with scroll depth under 15% once the node is no longer focused. `skimmed`: otherwise.
+A node's engagement state SHALL be derived from its signals by a named, versioned rule set, `engagement_rules@3`, and SHALL NOT be stored. `unread`: never focused. `deep_read`: active dwell of at least 30 s and scroll depth of at least 40%, or any copy event, or at least 2 revisits of 20 s or more. `dead_end`: not deep read, and either a quick return, or active dwell under 8 s with scroll depth under 15% once the node is no longer focused. `skimmed`: otherwise.
 
 #### Scenario: A copy makes a page deep read
 
@@ -151,8 +175,13 @@ A node's engagement state SHALL be derived from its signals by a named, versione
 
 #### Scenario: Read closely
 
-- **WHEN** the user reads a session page for 50 s and scrolls through half of it
+- **WHEN** the user reads a session page for 35 s and scrolls through half of it
 - **THEN** its node's engagement is `deep_read`
+
+#### Scenario: Not yet read closely
+
+- **WHEN** the user reads a session page for 25 s and scrolls through half of it
+- **THEN** its node's engagement is `skimmed`
 
 #### Scenario: Abandoned at a glance
 

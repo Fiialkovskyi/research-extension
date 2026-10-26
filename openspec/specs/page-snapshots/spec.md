@@ -27,7 +27,7 @@ WHEN a session node first becomes `deep_read` while its page is still open and o
 #### Scenario: Read long enough
 
 - **GIVEN** a session page, observed, scrolled through half of it
-- **WHEN** the user's active dwell on it reaches 45 s and the user then selects another tab
+- **WHEN** the user's active dwell on it reaches 30 s and the user then selects another tab
 - **THEN** a snapshot of its text is stored for its node
 
 #### Scenario: A page that is not deep read
