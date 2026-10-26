@@ -8,7 +8,8 @@ export interface FactPlace {
   sessionId: string;
   nodeId: string;
   snapshotId: string;
-  chunkIndex: number;
+  /** The chunk's index, or `product` for a fact made from the page's product data. */
+  chunkIndex: number | "product";
   /** The fact's position in its chunk's answer. */
   position: number;
 }

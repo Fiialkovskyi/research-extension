@@ -27,6 +27,12 @@ export const comparisonCellSchema = v.object({
   value: v.string(),
   alternativeCount: v.number(),
   isConflict: v.boolean(),
+  /**
+   * Set when the values are not a disagreement but several values of one thing:
+   * a variant such as storage or colour, or a page that lists several. The cell
+   * shows them together; the chosen value is still the commonest.
+   */
+  isOptions: v.optional(v.boolean()),
   groups: v.array(valueGroupSchema),
 });
 

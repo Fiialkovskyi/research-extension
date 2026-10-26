@@ -16,6 +16,12 @@ const fact = (id: string, value: string, unit?: string, nodeId = `page-${id}`): 
   url: `https://example.org/${id}`,
 });
 
+/** A fact of the storage column, a variant attribute. */
+const variant = (id: string, value: string): TableFact => ({
+  ...fact(id, value, "GB"),
+  attributeKey: "storage",
+});
+
 /** A fact whose page was published on `date`, from a site when given. */
 const dated = (id: string, value: string, date: string, siteName?: string): TableFact => ({
   ...fact(id, value),
@@ -67,6 +73,63 @@ describe("buildCell", () => {
     ]);
 
     expect(cell.groups.map(({ value }) => value)).toEqual(["100 kg", "108 kg"]);
+  });
+
+  describe("options, which are not a conflict", () => {
+    it("shows several values from one page as options, each with its source", () => {
+      const cell = buildCell([
+        fact("a", "5", "inch", "page-x"),
+        fact("b", "6.5", "inch", "page-x"),
+        fact("c", "8", "inch", "page-x"),
+      ]);
+
+      expect(cell).toMatchObject({ alternativeCount: 0, isConflict: false, isOptions: true });
+      expect(cell.groups.map(({ value }) => value)).toEqual(["5 inch", "6.5 inch", "8 inch"]);
+    });
+
+    it("still disagrees when two pages that state one value each state different ones", () => {
+      const cell = buildCell([
+        fact("a", "5", "inch", "page-x"),
+        fact("b", "6.5", "inch", "page-x"),
+        fact("c", "8", "inch", "page-y"),
+        fact("d", "5", "inch", "page-z"),
+      ]);
+
+      expect(cell).toMatchObject({ isConflict: true, alternativeCount: 2 });
+      expect(cell.isOptions).toBeUndefined();
+    });
+
+    it("treats a page that lists several values and a page that states one as options", () => {
+      const cell = buildCell([
+        fact("a", "5", "inch", "page-x"),
+        fact("b", "6.5", "inch", "page-x"),
+        fact("c", "6.5", "inch", "page-y"),
+      ]);
+
+      expect(cell).toMatchObject({ isConflict: false, isOptions: true });
+    });
+
+    it("shows the variants of storage as options even from separate pages", () => {
+      const cell = buildCell([variant("a", "128"), variant("b", "256"), variant("c", "512")]);
+
+      expect(cell).toMatchObject({ isConflict: false, isOptions: true, alternativeCount: 0 });
+      expect(cell.groups).toHaveLength(3);
+    });
+
+    it("marks no newest source on options", () => {
+      const cell = buildCell([
+        { ...dated("a", "5", "2024-01-01"), nodeId: "page-x" },
+        { ...dated("b", "6.5", "2026-05-01"), nodeId: "page-x" },
+      ]);
+
+      expect(cell.groups.some(({ isNewest }) => isNewest === true)).toBe(false);
+    });
+
+    it("leaves one value alone, and two shops that disagree about a weight in conflict", () => {
+      expect(buildCell([fact("a", "5")]).isOptions).toBeUndefined();
+      expect(buildCell([fact("a", "23.5", "kg"), fact("b", "24", "kg")]).isConflict).toBe(false);
+      expect(buildCell([fact("a", "23.5", "kg"), fact("b", "30", "kg")]).isConflict).toBe(true);
+    });
   });
 
   describe("the newest source of a conflict", () => {

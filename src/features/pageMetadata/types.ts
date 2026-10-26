@@ -1,6 +1,9 @@
 import type * as v from "valibot";
 
-import type { pageMetadataSchema } from "./schemas";
+import type { pageMetadataSchema, pageProductSchema } from "./schemas";
+
+/** The main product a page describes in its markup; every field is optional. */
+export type PageProduct = v.InferOutput<typeof pageProductSchema>;
 
 /** What a page says about itself in its head; every field is optional. */
 export type PageMetadata = v.InferOutput<typeof pageMetadataSchema>;

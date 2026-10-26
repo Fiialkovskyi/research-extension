@@ -84,6 +84,14 @@ export const readResearchDatabase = (): Promise<ResearchSnapshot> =>
                         title: record.title ?? null,
                         siteName: record.siteName ?? null,
                         canonicalUrl: record.canonicalUrl ?? null,
+                        product:
+                          record.product === undefined
+                            ? null
+                            : {
+                                name: record.product.name,
+                                price: record.product.price,
+                                currency: record.product.currency,
+                              },
                         hasSealedDescription: record.encryptedDescription !== undefined,
                         hasPlaintextDescription: "description" in record,
                       })),

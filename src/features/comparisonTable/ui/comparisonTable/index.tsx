@@ -49,13 +49,14 @@ function Cell({
     <td
       data-testid="table-cell"
       data-conflict={cell.isConflict}
+      data-options={cell.isOptions === true}
       className={`border border-neutral-200 p-1 align-top dark:border-neutral-800 ${
         cell.isConflict ? "bg-amber-50 dark:bg-amber-950" : ""
       }`}
     >
       <details>
         <summary className="cursor-pointer">
-          {cell.value}
+          {cell.isOptions === true ? cell.groups.map(({ value }) => value).join(" / ") : cell.value}
           {cell.isConflict && (
             <span
               data-testid="table-conflict"

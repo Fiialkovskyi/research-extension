@@ -108,6 +108,39 @@ describe("ComparisonTable", () => {
     expect(within(price!).getAllByRole("link")[1]).toHaveAttribute("href", "https://b");
   });
 
+  it("shows options together, without the conflict tag, each value with its source", () => {
+    const [volta] = TABLE.rows;
+
+    renderTable({
+      ...TABLE,
+      rows: [
+        {
+          ...(volta as NonNullable<typeof volta>),
+          cells: {
+            weight: {
+              value: "128 GB",
+              alternativeCount: 0,
+              isConflict: false,
+              isOptions: true,
+              groups: [
+                { value: "128 GB", sources: [source("a", "https://a")] },
+                { value: "256 GB", sources: [source("b", "https://a")] },
+              ],
+            },
+          },
+        },
+      ],
+    });
+
+    const [weight] = within(screen.getAllByTestId("table-row")[0]!).getAllByTestId("table-cell");
+
+    expect(weight).toHaveAttribute("data-options", "true");
+    expect(weight).toHaveAttribute("data-conflict", "false");
+    expect(within(weight!).queryByTestId("table-conflict")).toBeNull();
+    expect(within(weight!).getAllByTestId("table-value")).toHaveLength(2);
+    expect(weight?.querySelector("summary")).toHaveTextContent("128 GB / 256 GB");
+  });
+
   it("names a source's site and day, and tags the newest source of a conflict", () => {
     renderTable();
 

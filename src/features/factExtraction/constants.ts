@@ -1,5 +1,5 @@
-import factExtractionInstructions from "./prompts/factExtraction@1.md?raw";
-import factExtractionJsonSchema from "./prompts/factExtraction@1.schema.json";
+import factExtractionInstructions from "./prompts/factExtraction@2.md?raw";
+import factExtractionJsonSchema from "./prompts/factExtraction@2.schema.json";
 
 /**
  * The fact-extraction prompt (REQ-SYN-010): its id and version, which every
@@ -8,7 +8,7 @@ import factExtractionJsonSchema from "./prompts/factExtraction@1.schema.json";
  */
 export const FACT_EXTRACTION_PROMPT = {
   id: "factExtraction",
-  version: 1,
+  version: 2,
   instructions: factExtractionInstructions,
   jsonSchema: factExtractionJsonSchema,
 } as const;
@@ -36,5 +36,20 @@ export const FACT_CONTEXT_TOKENS = 4_096;
 export const PAGE_TEXT_OPEN = "<page_text>";
 export const PAGE_TEXT_CLOSE = "</page_text>";
 
+/** The delimiters the page's own description travels between: data too, and cut short. */
+export const PAGE_CONTEXT_OPEN = "<page_context>";
+export const PAGE_CONTEXT_CLOSE = "</page_context>";
+export const PAGE_CONTEXT_FIELD_LIMIT = 200;
+
 /** The type of a subject the answer did not list, and of facts stored before types were kept. */
 export const UNKNOWN_ENTITY_TYPE = "unknown";
+
+/** What produced a fact the page's own data gave, as its provenance records it; no model read it. */
+export const PRODUCT_DATA_PROMPT = "productData@1";
+export const PRODUCT_DATA_MODEL = "page data";
+
+/** The type of the subject of a fact made from a page's product data. */
+export const PRODUCT_ENTITY_TYPE = "product";
+
+/** Where a fact made from a page's product data says it came from. */
+export const PRODUCT_DATA_QUOTE_PREFIX = "From the page's data: ";

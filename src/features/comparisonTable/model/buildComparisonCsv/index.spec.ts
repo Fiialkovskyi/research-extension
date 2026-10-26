@@ -113,4 +113,29 @@ describe("buildComparisonCsv", () => {
       expect(csv).toContain(`'${trigger}SUM(A1)`);
     },
   );
+
+  it("joins options with a slash and notes no conflict", () => {
+    const options = {
+      value: "128 GB",
+      alternativeCount: 0,
+      isConflict: false,
+      isOptions: true,
+      groups: [
+        {
+          value: "128 GB",
+          sources: [{ factId: "a", pageTitle: "p", url: "https://a", quote: "q" }],
+        },
+        {
+          value: "256 GB",
+          sources: [{ factId: "b", pageTitle: "p", url: "https://a", quote: "q" }],
+        },
+      ],
+    };
+    const csv = buildComparisonCsv({
+      columns: [{ key: "storage", label: "storage" }],
+      rows: [{ entityId: "v", name: "Volta", cells: { storage: options } }],
+    });
+
+    expect(lines(csv)[1]).toBe("Volta,128 GB / 256 GB,https://a");
+  });
 });

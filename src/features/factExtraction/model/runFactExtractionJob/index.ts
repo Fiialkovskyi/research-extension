@@ -10,6 +10,8 @@ import {
   CHUNK_STORE,
   EXTRACTION_STORE,
   FACT_STORE,
+  NODE_STORE,
+  PAGE_METADATA_STORE,
   recordInferenceRun,
   type ResearchDatabaseSchema,
   SNAPSHOT_STORE,
@@ -23,6 +25,9 @@ import {
   FACT_ANSWER_MAX_TOKENS,
   FACT_CONTEXT_TOKENS,
   FACT_EXTRACTION_PROMPT,
+  PRODUCT_DATA_MODEL,
+  PRODUCT_DATA_PROMPT,
+  PRODUCT_ENTITY_TYPE,
   UNKNOWN_ENTITY_TYPE,
 } from "../../constants";
 import { extractFactsCheckpointSchema, extractFactsPayloadSchema } from "../../schemas";
@@ -30,6 +35,8 @@ import { buildFactExtractionMessages } from "../buildFactExtractionMessages";
 import { isQuoteGrounded } from "../isQuoteGrounded";
 import { readFactAnswer } from "../readFactAnswer";
 import { buildExtractionRecord } from "./utils/buildExtractionRecord";
+import { buildProductFacts } from "./utils/buildProductFacts";
+import { isImplausibleSubject } from "./utils/isImplausibleSubject";
 import { sealFact } from "./utils/sealFact";
 
 export interface RunFactExtractionJobOptions {
@@ -114,6 +121,49 @@ export const runFactExtractionJob = async ({
           invalidChunkCount: 0,
         };
   const dataKey = await getDataKey(database);
+  const pageRecord = await database.get(PAGE_METADATA_STORE, snapshot.nodeId);
+  const node = await database.get(NODE_STORE, snapshot.nodeId);
+  // What the page says it is, for every request: the title the metadata gave, else the node's.
+  const context = {
+    title: pageRecord?.title ?? node?.title,
+    siteName: pageRecord?.siteName,
+    productName: pageRecord?.product?.name,
+  };
+  const productFacts = buildProductFacts(pageRecord?.product);
+  const productProvenance = {
+    modelRef: PRODUCT_DATA_MODEL,
+    prompt: PRODUCT_DATA_PROMPT,
+    chunkerVersion: CHUNKER_VERSION,
+    extractedAt: now(),
+  };
+  const sealedProductFacts = await Promise.all(
+    productFacts.map((fact, position) =>
+      sealFact(
+        dataKey,
+        fact,
+        PRODUCT_ENTITY_TYPE,
+        {
+          sessionId: snapshot.sessionId,
+          nodeId: snapshot.nodeId,
+          snapshotId,
+          chunkIndex: "product",
+          position,
+        },
+        productProvenance,
+      ),
+    ),
+  );
+  const productWrite = database.transaction(FACT_STORE, "readwrite");
+
+  // The page's own data, before any chunk: the model's answer cannot change it, and a
+  // redone job replaces it rather than adding to it.
+  await Promise.all([
+    productWrite.store.delete(
+      IDBKeyRange.bound(`${snapshotId}:product:`, `${snapshotId}:product:￿`),
+    ),
+    ...sealedProductFacts.map((fact) => productWrite.store.put(fact)),
+    productWrite.done,
+  ]);
 
   if (chunks.length === 0) {
     // Nothing to read: recorded as done, with nothing found.
@@ -130,7 +180,7 @@ export const runFactExtractionJob = async ({
     const passage = text.slice(chunk.start, chunk.end);
     const startedAt = now();
     const result = await generate({
-      messages: buildFactExtractionMessages(passage),
+      messages: buildFactExtractionMessages(passage, context),
       maxTokens: FACT_ANSWER_MAX_TOKENS,
       temperature: 0,
       responseSchema: FACT_EXTRACTION_PROMPT.jsonSchema,
@@ -156,7 +206,11 @@ export const runFactExtractionJob = async ({
         type,
       ]),
     );
-    const grounded = facts.filter(({ quote }) => isQuoteGrounded(quote, passage));
+    // Kept only when the passage says it and its subject can be a thing a page is about; the
+    // rest count as dropped.
+    const grounded = facts.filter(
+      (fact) => isQuoteGrounded(fact.quote, passage) && !isImplausibleSubject(fact),
+    );
     const provenance = { modelRef, prompt, chunkerVersion: CHUNKER_VERSION, extractedAt: now() };
     const sealed = await Promise.all(
       grounded.map((fact, position) =>

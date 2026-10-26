@@ -16,6 +16,7 @@ import {
 
 import type { ComparisonTable, TableFact } from "../../types";
 import { buildCell } from "../buildCell";
+import { getAttributeKey } from "../getAttributeKey";
 import { proposeColumns } from "../proposeColumns";
 import { readSavedColumns } from "../readSavedColumns";
 
@@ -103,7 +104,7 @@ export const readComparisonTable = async (
         rowId,
         nodeId: fact.nodeId,
         attribute,
-        attributeKey: normalizeEntityName(attribute),
+        attributeKey: getAttributeKey(attribute),
         value,
         ...(unit === undefined ? {} : { unit }),
         quote,

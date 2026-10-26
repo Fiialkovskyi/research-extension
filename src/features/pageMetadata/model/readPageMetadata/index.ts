@@ -10,11 +10,13 @@ import type { PageMetadata } from "../../types";
 import { cleanText } from "./utils/cleanText";
 import { readCanonicalUrl } from "./utils/readCanonicalUrl";
 import { readMetaContent } from "./utils/readMetaContent";
+import { readPageProduct } from "./utils/readPageProduct";
 
 /**
  * Reads what a page says about itself in its head: its title, description,
  * site name, type, author, publication time and canonical address, each
- * cleaned and cut to its limit. `og:` tags come before the plain ones, and no
+ * cleaned and cut to its limit, and the main product it describes (name, brand,
+ * price, availability, rating). `og:` tags come before the plain ones, and no
  * other tag is read — `og:image` least of all.
  *
  * Runs in the page and changes nothing in it.
@@ -49,11 +51,16 @@ export const readPageMetadata = (document: Document): PageMetadata | undefined =
     ),
     canonicalUrl: readCanonicalUrl(document),
   };
+  const product = readPageProduct(document);
 
   for (const [key, value] of Object.entries(fields)) {
     if (value !== undefined) {
       metadata[key as keyof PageMetadata] = value;
     }
+  }
+
+  if (product !== undefined) {
+    metadata.product = product;
   }
 
   return Object.keys(metadata).length === 0 ? undefined : metadata;

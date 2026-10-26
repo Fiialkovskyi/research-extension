@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { pageProductSchema } from "@/features/pageMetadata";
+
 /** One page as the "What was recorded" view shows it. Never its text. */
 export const recordedPageSchema = v.object({
   id: v.string(),
@@ -32,6 +34,7 @@ export const recordedPageSchema = v.object({
       author: v.optional(v.string()),
       publishedAt: v.optional(v.string()),
       canonicalUrl: v.optional(v.string()),
+      product: v.optional(pageProductSchema),
       hasDescription: v.boolean(),
     }),
   ),

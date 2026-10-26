@@ -198,4 +198,25 @@ describe("RecordedPage", () => {
     fireEvent.click(screen.getByTestId("recorded-delete-session-confirm"));
     expect(onDeleteSession).toHaveBeenCalledWith("session-1");
   });
+
+  it("names a page's product, its price with currency and its availability on the details line", () => {
+    const [page] = SESSION.pages;
+
+    renderPage(new Map(), {
+      ...SESSION,
+      pages: [
+        {
+          ...(page as NonNullable<typeof page>),
+          metadata: {
+            hasDescription: false,
+            product: { name: "Pixel 10a", price: 24399, currency: "UAH", availability: "InStock" },
+          },
+        },
+      ],
+    });
+
+    expect(screen.getByTestId("recorded-metadata")).toHaveTextContent(
+      "Pixel 10a · 24399 UAH · availability InStock",
+    );
+  });
 });

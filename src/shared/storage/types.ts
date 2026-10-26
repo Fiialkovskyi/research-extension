@@ -469,6 +469,18 @@ export interface StoredPageMetadata {
   /** As the page wrote it: not parsed, since pages write dates every way. */
   publishedAt?: string;
   canonicalUrl?: string;
+  /** The main product the page describes in its markup, as the page gave it. */
+  product?: {
+    name?: string;
+    brand?: string;
+    price?: number;
+    /** An ISO 4217 code such as `UAH`. */
+    currency?: string;
+    /** The last part of the availability, such as `InStock`. */
+    availability?: string;
+    ratingValue?: number;
+    ratingCount?: number;
+  };
   /** The data key that sealed the description; present with the rest of the seal. */
   keyId?: string;
   cipher?: "aes-gcm-256";

@@ -76,6 +76,7 @@ export const readRecordedSession = async (
                 ...(metadata.canonicalUrl === undefined
                   ? {}
                   : { canonicalUrl: metadata.canonicalUrl }),
+                ...(metadata.product === undefined ? {} : { product: metadata.product }),
                 hasDescription: metadata.encryptedDescription !== undefined,
               },
         vectorCount,

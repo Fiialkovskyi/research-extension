@@ -44,6 +44,7 @@ const snapshot = {
       title: "Mid-drive motors",
       siteName: null,
       canonicalUrl: "https://example.org/motors",
+      product: null,
       hasSealedDescription: true,
       hasPlaintextDescription: false,
     },

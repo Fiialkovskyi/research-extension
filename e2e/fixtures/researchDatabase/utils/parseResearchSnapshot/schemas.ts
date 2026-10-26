@@ -57,6 +57,14 @@ export const researchSnapshotSchema = v.object({
       title: v.nullable(v.string()),
       siteName: v.nullable(v.string()),
       canonicalUrl: v.nullable(v.string()),
+      /** The page's product as stored: name, price and currency; null when none. */
+      product: v.nullable(
+        v.object({
+          name: v.optional(v.string()),
+          price: v.optional(v.number()),
+          currency: v.optional(v.string()),
+        }),
+      ),
       /** Whether the description is stored encrypted. */
       hasSealedDescription: v.boolean(),
       /** Whether the record holds a description in the clear, which it must never. */

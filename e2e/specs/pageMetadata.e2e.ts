@@ -89,6 +89,7 @@ describe("a page's metadata", () => {
         title: "Hub motors briefing",
         siteName: "Bike Lab",
         canonicalUrl: "https://example.org/briefing",
+        product: null,
         hasSealedDescription: true,
         hasPlaintextDescription: false,
       },
@@ -97,13 +98,28 @@ describe("a page's metadata", () => {
     expect(graph.snapshots).toEqual([]);
   });
 
+  it("keeps the product a shop page describes in its markup", async () => {
+    await loadUrlInSelectedTab(`${readOrigin()}/product.html`);
+
+    const graph = await waitForGraph(
+      (snapshot) => snapshot.metadata.some(({ product }) => product !== null),
+      "the product of the shop page",
+    );
+
+    expect(graph.metadata.find(({ product }) => product !== null)?.product).toEqual({
+      name: "Pixel 10a 8/256GB",
+      price: 24399,
+      currency: "UAH",
+    });
+  });
+
   it("stores none for a page outside the session's group", async () => {
     await openTabOutsideGroups(`${readOrigin()}/briefing.html?outside`);
     await browser.pause(1_500);
 
     const graph = await readResearchDatabase();
 
-    expect(graph.metadata).toHaveLength(1);
+    expect(graph.metadata).toHaveLength(2);
     expect(graph.nodes.some((node) => node.url.includes("?outside"))).toBe(false);
   });
 });

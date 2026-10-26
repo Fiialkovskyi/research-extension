@@ -137,6 +137,17 @@ describe("readRecordedSession", () => {
     expect(recorded?.pages[0]?.metadata).toBeNull();
   });
 
+  it("carries a page's product to the view", async () => {
+    const product = { name: "Pixel 10a", price: 24399, currency: "UAH" };
+
+    await recordPageMetadata(database, { nodeId: "a", metadata: { product }, capturedAt: 9 });
+
+    expect((await readRecordedSession(database, "session-1"))?.pages[1]?.metadata).toEqual({
+      product,
+      hasDescription: false,
+    });
+  });
+
   it("counts a page's facts kept and dropped, and none for a page not extracted", async () => {
     const snapshotId = (await database.get(NODE_STORE, "a"))?.snapshotId ?? "";
 

@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import type { IDBPDatabase } from "idb";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { readStoredPageMetadata } from "../readStoredPageMetadata";
 import { recordPageMetadata } from ".";
 import {
   KEY_STORE,
@@ -156,5 +157,32 @@ describe("recordPageMetadata", () => {
       undefined,
     );
     expect(await database.count(PAGE_METADATA_STORE)).toBe(0);
+  });
+
+  it("keeps the page's product in the clear and reads it back", async () => {
+    const product = { name: "Pixel 10a", brand: "Google", price: 24399, currency: "UAH" };
+
+    await recordPageMetadata(database, {
+      nodeId: "a",
+      metadata: { description: "How they work.", product },
+      capturedAt: 500,
+    });
+
+    expect(await database.get(PAGE_METADATA_STORE, "a")).toMatchObject({ product });
+    expect(await readStoredPageMetadata(database, "a")).toMatchObject({ product });
+  });
+
+  it("stores a page whose only metadata is its product, and a record without one is valid", async () => {
+    const stored = await recordPageMetadata(database, {
+      nodeId: "a",
+      metadata: { product: { price: 10 } },
+      capturedAt: 500,
+    });
+
+    expect(stored).toMatchObject({ product: { price: 10 } });
+
+    await recordPageMetadata(database, { nodeId: "a", metadata: { title: "T" }, capturedAt: 600 });
+
+    expect((await readStoredPageMetadata(database, "a"))?.product).toBeUndefined();
   });
 });

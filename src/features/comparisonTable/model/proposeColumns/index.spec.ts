@@ -28,12 +28,39 @@ describe("proposeColumns", () => {
     expect(proposeColumns(FACTS).columns).toEqual([
       { key: "weight", label: "weight" },
       { key: "price", label: "Price" },
-      { key: "colour", label: "colour" },
     ]);
   });
 
+  it("leaves a generic attribute among the other columns", () => {
+    const facts = ["a", "b"].flatMap((row) => [fact(row, "description"), fact(row, "weight")]);
+    const { columns, otherColumns } = proposeColumns(facts);
+
+    expect(columns.map(({ key }) => key)).toEqual(["weight"]);
+    expect(otherColumns.map(({ key }) => key)).toEqual(["description"]);
+  });
+
+  it("leaves an attribute only one row has among the other columns, in a table of several rows", () => {
+    const { columns, otherColumns } = proposeColumns(FACTS);
+
+    expect(columns.map(({ key }) => key)).not.toContain("colour");
+    expect(otherColumns.map(({ key }) => key)).toEqual(["colour"]);
+  });
+
+  it("proposes by rank everything a single row has, but a generic attribute", () => {
+    const { columns, otherColumns } = proposeColumns([
+      fact("a", "weight"),
+      fact("a", "colour"),
+      fact("a", "type"),
+    ]);
+
+    expect(columns.map(({ key }) => key)).toEqual(["colour", "weight"]);
+    expect(otherColumns.map(({ key }) => key)).toEqual(["type"]);
+  });
+
   it("proposes at most 8 and offers the rest", () => {
-    const many = Array.from({ length: 10 }, (_, index) => fact("a", `attribute ${index}`));
+    const many = ["a", "b"].flatMap((row) =>
+      Array.from({ length: 10 }, (_, index) => fact(row, `attribute ${index}`)),
+    );
     const { columns, otherColumns } = proposeColumns(many);
 
     expect(columns).toHaveLength(8);

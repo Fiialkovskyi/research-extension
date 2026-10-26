@@ -116,6 +116,7 @@ beforeEach(async () => {
   await storeFact("volta", "review", "price", "1749", "USD");
   await storeFact("volta-shop", "shop", "price", "1999", "USD");
   await storeFact("corsa", "review", "weight", "19.8", "kg");
+  await storeFact("corsa", "review", "price", "1500", "USD");
   await storeFact("acme", "review", "founded", "1999");
   await storeFact(undefined, "review", "weight", "99", "kg");
 });
@@ -130,7 +131,7 @@ describe("readComparisonTable", () => {
       { type: "company", rowCount: 1 },
     ]);
     expect(view?.table.entityType).toBe("product");
-    expect(view?.table.columns.map(({ key }) => key)).toEqual(["weight", "price"]);
+    expect(view?.table.columns.map(({ key }) => key)).toEqual(["price", "weight"]);
     expect(view?.table.rows.map(({ name }) => name)).toEqual(["Volta E5", "Corsa"]);
 
     const [volta] = view?.table.rows ?? [];
@@ -266,5 +267,16 @@ describe("readComparisonTable", () => {
     await database.clear(SESSION_STORE);
 
     expect(await readComparisonTable(database, "s")).toBeUndefined();
+  });
+
+  it("gives attributes that name one thing in two languages one column", async () => {
+    await storeFact("volta", "review", "діафрагма", "f/1.8");
+    await storeFact("corsa", "shop", "aperture", "f/2.0");
+
+    const view = await readComparisonTable(await openResearchDatabase(), "s");
+    const apertures = view?.table.columns.filter(({ key }) => key === "aperture") ?? [];
+
+    expect(apertures).toHaveLength(1);
+    expect(view?.table.rows.every(({ cells }) => cells["aperture"] !== undefined)).toBe(true);
   });
 });

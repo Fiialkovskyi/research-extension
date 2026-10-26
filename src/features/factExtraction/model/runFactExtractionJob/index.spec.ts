@@ -17,6 +17,7 @@ import {
   JOB_STORE,
   NODE_STORE,
   openResearchDatabase,
+  PAGE_METADATA_STORE,
   type StoredJob,
 } from "@/shared/storage";
 
@@ -63,9 +64,16 @@ beforeEach(async () => {
   const database = await openResearchDatabase();
 
   await Promise.all(
-    ([FACT_STORE, EXTRACTION_STORE, CHUNK_STORE, JOB_STORE, INFERENCE_RUN_STORE] as const).map(
-      (store) => database.clear(store),
-    ),
+    (
+      [
+        FACT_STORE,
+        EXTRACTION_STORE,
+        CHUNK_STORE,
+        JOB_STORE,
+        INFERENCE_RUN_STORE,
+        PAGE_METADATA_STORE,
+      ] as const
+    ).map((store) => database.clear(store)),
   );
 
   // A fresh node each time: a node with a snapshot takes no second one.
@@ -135,6 +143,29 @@ const run = async (overrides: Partial<Parameters<typeof runFactExtractionJob>[0]
 
 const CHUNK_COUNT = chunkText(TEXT).length;
 
+const putProduct = async (): Promise<void> => {
+  const database = await openResearchDatabase();
+
+  await database.put(PAGE_METADATA_STORE, {
+    nodeId: "node-a",
+    sessionId: "session-1",
+    capturedAt: 1,
+    product: { name: "Pixel 10a", brand: "Google", price: 24399, currency: "UAH" },
+  });
+};
+const readProductFacts = async () => {
+  const database = await openResearchDatabase();
+  const dataKey = await getDataKey(database);
+  const stored = (await database.getAll(FACT_STORE)).filter(({ id }) =>
+    id.startsWith(`${snapshotId}:product:`),
+  );
+
+  return {
+    stored,
+    facts: await Promise.all(stored.map((fact) => readSealedFact(dataKey, fact))),
+  };
+};
+
 describe("runFactExtractionJob", () => {
   it("stores the grounded fact of every chunk, encrypted, and counts the invented one", async () => {
     expect(CHUNK_COUNT).toBeGreaterThan(2);
@@ -149,7 +180,7 @@ describe("runFactExtractionJob", () => {
       nodeId: "node-a",
       provenance: {
         modelRef: "ollama:qwen3:4b@abc",
-        prompt: "factExtraction@1",
+        prompt: "factExtraction@2",
         chunkerVersion: "chunker@1",
       },
     });
@@ -292,5 +323,118 @@ describe("runFactExtractionJob", () => {
     job = { ...job, payload: { snapshotId: "missing" } };
 
     await expect(run()).rejects.toThrow("no longer exists");
+  });
+
+  it("tells the model what the page is: its metadata title, site and product, else the node's title", async () => {
+    const database = await openResearchDatabase();
+    const generate = vi.fn(honestAndInventive);
+
+    await run({ generate });
+    expect(generate.mock.calls[0]?.[0].messages[1]?.content).toMatch(
+      /^<page_context>\ntitle: A\n<\/page_context>\n\n<page_text>/u,
+    );
+
+    await database.put(PAGE_METADATA_STORE, {
+      nodeId: "node-a",
+      sessionId: "session-1",
+      capturedAt: 1,
+      title: "Pixel 10a — buy",
+      siteName: "Shop",
+      product: { name: "Pixel 10a" },
+    });
+    generate.mockClear();
+    await run({ generate });
+
+    expect(generate.mock.calls[0]?.[0].messages[1]?.content).toMatch(
+      /^<page_context>\ntitle: Pixel 10a — buy\nsite: Shop\nproduct: Pixel 10a\n<\/page_context>\n\n<page_text>/u,
+    );
+  });
+
+  it("drops, and counts as dropped, a fact whose subject is a value", async () => {
+    await run({
+      generate: (request) => {
+        const firstSentence = readPassage(request).split(". ")[0] ?? "";
+
+        return answerWith(
+          JSON.stringify({
+            entities: [],
+            facts: [
+              { subject: "Model", attribute: "weight", value: "1", quote: firstSentence },
+              {
+                subject: "6,3″ Super Retina XDR",
+                attribute: "type",
+                value: "OLED",
+                quote: firstSentence,
+              },
+            ],
+          }),
+        );
+      },
+    });
+
+    const database = await openResearchDatabase();
+    const dataKey = await getDataKey(database);
+    const subjects = await Promise.all(
+      (await database.getAll(FACT_STORE)).map(
+        async (fact) => (await readSealedFact(dataKey, fact)).subject,
+      ),
+    );
+
+    expect(new Set(subjects)).toEqual(new Set(["Model"]));
+    expect(await database.get(EXTRACTION_STORE, snapshotId)).toMatchObject({
+      keptCount: CHUNK_COUNT,
+      droppedCount: CHUNK_COUNT,
+    });
+  });
+
+  describe("with product data from the page", () => {
+    it("keeps facts of the product, marked as from the page's data, though the model answers nothing usable", async () => {
+      await putProduct();
+      await run({ generate: () => answerWith("not json") });
+
+      const { stored, facts } = await readProductFacts();
+
+      expect(stored.map(({ provenance }) => provenance.prompt)).toEqual([
+        "productData@1",
+        "productData@1",
+      ]);
+      expect(facts).toEqual([
+        expect.objectContaining({
+          subject: "Pixel 10a",
+          entityType: "product",
+          attribute: "price",
+          value: "24399",
+          unit: "UAH",
+          quote: "From the page's data: price 24399 UAH",
+        }),
+        expect.objectContaining({ attribute: "brand", value: "Google" }),
+      ]);
+    });
+
+    it("has one price after the job is run twice, and does not count them as the model's", async () => {
+      await putProduct();
+      await run();
+      await run();
+
+      const { facts } = await readProductFacts();
+      const database = await openResearchDatabase();
+
+      expect(facts.filter(({ attribute }) => attribute === "price")).toHaveLength(1);
+      expect(await database.get(EXTRACTION_STORE, snapshotId)).toMatchObject({
+        keptCount: CHUNK_COUNT,
+      });
+    });
+  });
+
+  it("makes no fact from the page's data for a page without product data", async () => {
+    await run();
+
+    const database = await openResearchDatabase();
+
+    expect(
+      (await database.getAll(FACT_STORE)).some(
+        ({ provenance }) => provenance.prompt === "productData@1",
+      ),
+    ).toBe(false);
   });
 });

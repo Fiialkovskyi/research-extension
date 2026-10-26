@@ -44,7 +44,11 @@ export const buildComparisonCsv = (table: Pick<ComparisonTable, "columns" | "row
       ];
 
       return [
-        cell.isConflict ? `${cell.value} (conflict: ${cell.groups.length} values)` : cell.value,
+        cell.isConflict
+          ? `${cell.value} (conflict: ${cell.groups.length} values)`
+          : cell.isOptions === true
+            ? cell.groups.map(({ value }) => value).join(" / ")
+            : cell.value,
         urls.join(" "),
       ];
     }),

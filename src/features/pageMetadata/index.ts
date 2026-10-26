@@ -4,8 +4,8 @@
 // the page, and the background, which imports feature barrels, has no use for
 // it. The content script imports it by path.
 
-export { pageMetadataSchema } from "./schemas";
-export type { PageMetadata, PageSourceDetails } from "./types";
+export { pageMetadataSchema, pageProductSchema } from "./schemas";
+export type { PageMetadata, PageProduct, PageSourceDetails } from "./types";
 export { recordPageMetadata, type RecordedMetadata } from "./model/recordPageMetadata";
 export { readStoredPageMetadata, type ReadPageMetadata } from "./model/readStoredPageMetadata";
 export { readPageSourceDetails } from "./model/readPageSourceDetails";

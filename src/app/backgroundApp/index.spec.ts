@@ -2997,8 +2997,11 @@ const answerChat = (init: RequestInit | undefined, isChatBroken: boolean) => {
 
     // A fact-extraction request: one fact quoting the passage's first words,
     // and one the passage does not say.
-    if (passage?.startsWith("<page_text>\n") === true && !isChatBroken) {
-      const text = passage.slice("<page_text>\n".length, -"\n</page_text>".length);
+    // The request may open with the page's context block; the passage is what follows.
+    const passageStart = passage?.indexOf("<page_text>\n") ?? -1;
+
+    if (passage !== undefined && passageStart !== -1 && !isChatBroken) {
+      const text = passage.slice(passageStart + "<page_text>\n".length, -"\n</page_text>".length);
 
       return Promise.resolve(
         new Response(

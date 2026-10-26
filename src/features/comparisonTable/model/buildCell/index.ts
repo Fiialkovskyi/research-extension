@@ -1,5 +1,6 @@
 import type { ComparisonCell, TableFact, ValueGroup } from "../../types";
 import { isSameValue } from "../isSameValue";
+import { isVariantAttributeKey } from "../isVariantAttributeKey";
 
 /** A value as the cell writes it: the number or text, then its unit. */
 const writeValue = ({ value, unit }: Pick<TableFact, "value" | "unit">): string =>
@@ -30,13 +31,36 @@ const findNewestGroup = (
 };
 
 /**
+ * Whether the groups disagree: at least two pages that each state a single
+ * value state different ones. A page that states several values, and the
+ * values of a variant attribute, are options and never a disagreement.
+ */
+const isDisagreement = (groups: readonly (readonly TableFact[])[]): boolean => {
+  const valuesByPage = new Map<string, Set<number>>();
+
+  for (const [index, group] of groups.entries()) {
+    for (const { nodeId } of group) {
+      valuesByPage.set(nodeId, (valuesByPage.get(nodeId) ?? new Set<number>()).add(index));
+    }
+  }
+
+  const singleValued = [...valuesByPage.values()]
+    .filter((indexes) => indexes.size === 1)
+    .map(([index]) => index);
+
+  return new Set(singleValued).size > 1;
+};
+
+/**
  * Builds one cell from a row's facts for one column (REQ-SYN-006).
  *
  * Facts are grouped greedily, in id order: each joins the first group whose
  * first value it agrees with — the first, not the last, so a chain of values
  * each within tolerance of the next cannot drift. The group with the most
- * facts is chosen, then the one from more pages, then the earlier. More than
- * one group is a conflict.
+ * facts is chosen, then the one from more pages, then the earlier. It is a
+ * conflict when at least two pages that each state one value state different
+ * ones; several values from one page, or of a variant attribute, are options
+ * and the cell says so instead.
  */
 export const buildCell = (facts: readonly TableFact[]): ComparisonCell => {
   const groups: TableFact[][] = [];
@@ -60,7 +84,11 @@ export const buildCell = (facts: readonly TableFact[]): ComparisonCell => {
         a.order - b.order,
     )
     .map(({ group }) => group);
-  const newest = findNewestGroup(ranked);
+  const isVariant = facts.every(({ attributeKey }) => isVariantAttributeKey(attributeKey));
+  const isConflict = ranked.length > 1 && !isVariant && isDisagreement(ranked);
+  const isOptions = ranked.length > 1 && !isConflict;
+
+  const newest = isConflict ? findNewestGroup(ranked) : undefined;
   const asValueGroup = (group: readonly TableFact[]): ValueGroup => ({
     value: writeValue(group[0]!),
     sources: group.map(({ id, pageTitle, url, quote, siteName, publishedDate }) => ({
@@ -76,8 +104,9 @@ export const buildCell = (facts: readonly TableFact[]): ComparisonCell => {
 
   return {
     value: ranked[0] === undefined ? "" : writeValue(ranked[0][0]!),
-    alternativeCount: Math.max(0, ranked.length - 1),
-    isConflict: ranked.length > 1,
+    alternativeCount: isConflict ? ranked.length - 1 : 0,
+    isConflict,
+    ...(isOptions ? { isOptions } : {}),
     groups: ranked.map(asValueGroup),
   };
 };

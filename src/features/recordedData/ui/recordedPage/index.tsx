@@ -39,6 +39,26 @@ const describeFacts = (facts: RecordedPageEntry["facts"], isExtracting: boolean)
   return `${facts.kept} kept, ${facts.dropped} dropped${facts.isFinished ? "" : ", extracting…"}`;
 };
 
+/** Says what a page's product is, what it costs and whether it is in stock, each when known. */
+const describeProduct = (
+  product: NonNullable<RecordedPageEntry["metadata"]>["product"],
+): string[] => {
+  if (product === undefined) {
+    return [];
+  }
+
+  const price =
+    product.price === undefined
+      ? undefined
+      : [product.price, product.currency].filter((part) => part !== undefined).join(" ");
+
+  return [
+    product.name,
+    price,
+    product.availability === undefined ? undefined : `availability ${product.availability}`,
+  ].filter((part): part is string => part !== undefined);
+};
+
 /** Lists what a page said about itself that was kept; the description only as kept, not its words. */
 const describeMetadata = (metadata: RecordedPageEntry["metadata"]): string => {
   if (metadata === null) {
@@ -52,6 +72,7 @@ const describeMetadata = (metadata: RecordedPageEntry["metadata"]): string => {
     metadata.author,
     metadata.publishedAt,
     metadata.canonicalUrl,
+    ...describeProduct(metadata.product),
     metadata.hasDescription ? "description kept" : undefined,
   ].filter((part): part is string => part !== undefined);
 
