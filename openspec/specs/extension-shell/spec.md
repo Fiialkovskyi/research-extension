@@ -87,31 +87,6 @@ The package SHALL contain every script, stylesheet and WebAssembly binary it exe
 - **THEN** its downloaded files are consumed as data by code that shipped in the package
 - **AND** no downloaded file is executed as a script
 
-### Requirement: Package declares only the browser permissions its surfaces use
-
-The manifest SHALL declare the `tabGroups` permission, which starting a session as a tab group needs; the `sessions` permission, which keeping a session's id on its tabs across closing and restoring needs; the `tabs` and `webNavigation` permissions, which capturing the session's pages needs: `tabs` to read a tab's URL and title, `webNavigation` to read how a page was reached; the `scripting` permission, which observing a session page needs; the `idle` permission, which measuring active reading time needs; the `alarms` permission, which waking the background for queued jobs needs; and the `notifications` permission, which telling the user once after install that AI needs setting up needs. Where the extension rewrites the origin of its own requests to the local inference server, it SHALL also declare the one permission that rewrite needs. It SHALL declare no other API permission. Access to page contents (`<all_urls>`) SHALL be declared as an optional host permission, requested only when a session starts or from the popup, and never granted at install. The local inference server's loopback origin SHALL be the only required host permission. Adding a permission SHALL NOT add any outbound connection beyond those the content security policy already allows.
-
-#### Scenario: Built manifest declares the tab groups permission
-
-- **WHEN** the built manifest is inspected
-- **THEN** its `permissions` are exactly `tabGroups`, `sessions`, `tabs`, `webNavigation`, `scripting`, `idle`, `alarms` and `notifications`, plus the origin-rewrite permission where one is used
-
-#### Scenario: Page access is optional
-
-- **WHEN** the built manifest is inspected
-- **THEN** its optional host permissions are exactly `<all_urls>`
-- **AND** `<all_urls>` is not among its required host permissions
-
-#### Scenario: Only loopback is a required host
-
-- **WHEN** the built manifest is inspected
-- **THEN** its required host permissions are exactly `http://127.0.0.1:11434/*`
-
-#### Scenario: Starting a session makes no network request
-
-- **WHEN** the user starts a session from the popup
-- **THEN** the extension has issued no outbound network request
-
 ### Requirement: The background answers every message
 
 The background SHALL answer every message a surface sends with exactly one final response. A message it cannot trust SHALL be answered with a refusal that names which check it failed. A trusted request whose handling fails in a way its own feature does not answer for SHALL be answered with a failure that names the request. Neither answer SHALL be presented as the failure of any particular feature.
@@ -272,3 +247,29 @@ The end-to-end suite SHALL record every HTTP request whose triggering or loading
 
 - **WHEN** the suite starts a session, allows page access, reads pages, opens the Synthesis page, runs a gap's search and opens the options page
 - **THEN** the add-on made no request, apart from the search tab it opened
+
+### Requirement: Package declares exactly the browser permissions its surfaces use
+
+The manifest SHALL declare the `tabGroups` permission, which starting a session as a tab group needs; the `sessions` permission, which keeping a session's id on its tabs across closing and restoring needs; the `tabs` and `webNavigation` permissions, which capturing the session's pages needs: `tabs` to read a tab's URL and title, `webNavigation` to read how a page was reached; the `scripting` permission, which observing a session page needs; the `idle` permission, which measuring active reading time needs; the `alarms` permission, which waking the background for queued jobs needs; and the `notifications` permission, which telling the user once after install that AI needs setting up needs. Where the extension rewrites the origin of its own requests to the local inference server, it SHALL also declare the one permission that rewrite needs. It SHALL declare no other API permission. Access to page contents (`<all_urls>`) SHALL be declared as a required host permission, so that it is granted with the install, and SHALL be used only to observe the tabs of a session. The local inference server's loopback origin SHALL be the only other required host permission. Adding a permission SHALL NOT add any outbound connection beyond those the content security policy already allows.
+
+#### Scenario: Built manifest declares the tab groups permission
+
+- **WHEN** the built manifest is inspected
+- **THEN** its `permissions` are exactly `tabGroups`, `sessions`, `tabs`, `webNavigation`, `scripting`, `idle`, `alarms` and `notifications`, plus the origin-rewrite permission where one is used
+
+#### Scenario: Page access is required
+
+- **WHEN** the built manifest is inspected
+- **THEN** its required host permissions are exactly `<all_urls>` and `http://127.0.0.1:11434/*`
+- **AND** it declares no optional host permission
+
+#### Scenario: Starting a session makes no network request
+
+- **WHEN** the user starts a session from the popup
+- **THEN** the extension has issued no outbound network request
+
+#### Scenario: Tabs outside a session are not observed
+
+- **GIVEN** page access is granted and a session is active
+- **WHEN** a page is read in a tab that is not in the session's group
+- **THEN** no page observer runs in that tab
