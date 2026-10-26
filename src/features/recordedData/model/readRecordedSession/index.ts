@@ -1,13 +1,13 @@
 import type { IDBPDatabase } from "idb";
 
 import { getActiveModel } from "@/features/modelRegistry";
-import { getLiveSession } from "@/features/researchSession";
 import {
   EXTRACTION_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
   SNAPSHOT_STORE,
   VECTOR_STORE,
+  SESSION_STORE,
 } from "@/shared/storage";
 
 import type { RecordedSession } from "../../types";
@@ -24,8 +24,9 @@ import { readRecordedEntities } from "./utils/readRecordedEntities";
  */
 export const readRecordedSession = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
 ): Promise<RecordedSession | undefined> => {
-  const session = await getLiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
   if (session === undefined) {
     return undefined;

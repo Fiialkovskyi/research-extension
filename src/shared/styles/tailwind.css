@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+@theme {
+  /* A bar that moves without filling: work whose share done is not known. */
+  --animate-indeterminate: indeterminate 1.4s ease-in-out infinite;
+
+  @keyframes indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+}

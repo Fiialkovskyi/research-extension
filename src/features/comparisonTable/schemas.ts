@@ -39,9 +39,13 @@ export const comparisonTableSchema = v.object({
 
 export const comparisonTableRequestSchemas = {
   /** The active session's table, of a type, or of the default type. */
-  "table.read": v.object({ entityType: v.optional(v.string()) }),
+  "table.read": v.object({ entityType: v.optional(v.string()), sessionId: v.optional(v.string()) }),
   /** Replace a type's columns; an empty list returns to the proposed ones. */
-  "table.setColumns": v.object({ entityType: v.string(), columns: v.array(v.string()) }),
+  "table.setColumns": v.object({
+    entityType: v.string(),
+    columns: v.array(v.string()),
+    sessionId: v.optional(v.string()),
+  }),
 } as const;
 
 export const comparisonTableResponseSchemas = {

@@ -18,6 +18,7 @@ import {
 } from "@/shared/storage";
 
 const GROUP_ID = 42;
+const OTHER_GROUP_ID = 43;
 const MINUTE = 60_000;
 
 let database: IDBPDatabase<ResearchDatabaseSchema>;
@@ -282,5 +283,33 @@ describe("trackActiveDwell", () => {
     await track(8, 2_000);
 
     expect((await database.get(SESSION_STORE, "session-1"))?.lastPosition).toBeUndefined();
+  });
+
+  it("keeps a visit per session, pausing one while the other is read", async () => {
+    await database.put(SESSION_STORE, {
+      id: "session-2",
+      title: "Batteries",
+      groupId: OTHER_GROUP_ID,
+      formerGroupIds: [],
+      status: "active",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await followTabMembership({
+      database,
+      tab: { ...sessionTab(9, "https://example.org/c"), groupId: OTHER_GROUP_ID },
+    });
+
+    await track(7, 1_000);
+    await track(9, 1_000 + MINUTE);
+
+    const first = await database.get(SESSION_STORE, "session-1");
+    const second = await database.get(SESSION_STORE, "session-2");
+
+    expect(first?.focus).toMatchObject({ since: null, visitDwellMs: MINUTE });
+    expect(second?.focus).toMatchObject({ since: 1_000 + MINUTE });
+    expect(await readDwell("https://example.org/a")).toBe(MINUTE);
+    expect(first?.recentSwitches ?? []).toEqual([]);
+    expect(second?.recentSwitches ?? []).toEqual([]);
   });
 });

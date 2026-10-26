@@ -1,6 +1,6 @@
 /**
  * Builds the script, evaluated inside the popup document, that types a session
- * title and submits the form.
+ * title and submits the form, opening it first when it is behind the button.
  *
  * The value is set through the native setter and announced with an `input`
  * event, which is what React listens to; assigning `value` alone would leave
@@ -10,6 +10,11 @@
  */
 export const buildGroupTitleSubmitScript = (title: string): string => {
   return `
+    // With saved sessions the form sits behind the new-session button; the
+    // click re-renders synchronously, so the form is there on the next line.
+    if (!document.querySelector('[data-testid="group-form"]')) {
+      document.querySelector('[data-testid="session-new"]')?.click();
+    }
     const input = document.querySelector('[data-testid="group-title"]');
     const form = document.querySelector('[data-testid="group-form"]');
     if (!input || !form) { return JSON.stringify({ submitted: false }); }

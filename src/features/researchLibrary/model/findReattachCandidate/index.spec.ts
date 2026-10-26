@@ -62,6 +62,14 @@ describe("findReattachCandidate", () => {
     });
   });
 
+  it("offers a closed session too, whose group is gone", async () => {
+    await withRoot("motors", "closed", "e-bike motors");
+
+    expect(await findReattachCandidate({ database, sessionId: "new" })).toMatchObject({
+      sessionId: "motors",
+    });
+  });
+
   it("offers nothing for an unrelated search", async () => {
     await withRoot("bread", "saved", "sourdough starter");
 
@@ -90,8 +98,8 @@ describe("findReattachCandidate", () => {
     });
   });
 
-  it("ignores sessions that are not saved, and a session without a search", async () => {
-    await withRoot("live", "closed", "e-bike motors");
+  it("ignores sessions that are still recording, and a session without a search", async () => {
+    await withRoot("live", "active", "e-bike motors");
 
     expect(await findReattachCandidate({ database, sessionId: "new" })).toBeUndefined();
 

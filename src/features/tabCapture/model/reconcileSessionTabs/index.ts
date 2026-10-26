@@ -2,8 +2,8 @@ import type { IDBPDatabase } from "idb";
 
 import { readBlockedSites } from "@/features/siteDenylist";
 import { closeNode, recordNode } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
-import { NODE_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
+import { listLiveSessions } from "@/features/researchSession";
+import { NODE_STORE, type ResearchDatabaseSchema, type StoredSession } from "@/shared/storage";
 
 import { RESTORED_TRANSITION } from "../../constants";
 import type { TabCaptureApi } from "../../types";
@@ -17,25 +17,10 @@ export interface ReconcileSessionTabsOptions {
   api: TabCaptureApi;
 }
 
-/**
- * Brings the graph in line with the session's tabs after a restart.
- *
- * Tab ids are not stable across a restart, so an open node is kept only when a
- * tab of the group has both its tab id and its URL. Every other open node is
- * closed: its tab did not come back. A capturable tab of the group left without
- * a node is recorded as restored, with no parent, since its history before the
- * restart cannot be told apart from another tab's.
- */
-export const reconcileSessionTabs = async ({
-  database,
-  api,
-}: ReconcileSessionTabsOptions): Promise<void> => {
-  const session = await getActiveSession(database);
-
-  if (session === undefined) {
-    return;
-  }
-
+const reconcileOneSession = async (
+  { database, api }: ReconcileSessionTabsOptions,
+  session: StoredSession,
+): Promise<void> => {
   const tabs = (await api.queryGroupTabs(session.groupId)).filter((tab) => !tab.incognito);
   const openNodes = (await database.getAllFromIndex(NODE_STORE, "sessionId", session.id)).filter(
     (node) => node.tabState === "open",
@@ -69,5 +54,24 @@ export const reconcileSessionTabs = async ({
 
       await linkRefinement(database, node);
     }
+  }
+};
+
+/**
+ * Brings each active session's graph in line with its tabs after a restart.
+ *
+ * Tab ids are not stable across a restart, so an open node is kept only when a
+ * tab of the group has both its tab id and its URL. Every other open node is
+ * closed: its tab did not come back. A capturable tab of the group left without
+ * a node is recorded as restored, with no parent, since its history before the
+ * restart cannot be told apart from another tab's.
+ */
+export const reconcileSessionTabs = async (options: ReconcileSessionTabsOptions): Promise<void> => {
+  const sessions = (await listLiveSessions(options.database)).filter(
+    ({ status }) => status === "active",
+  );
+
+  for (const session of sessions) {
+    await reconcileOneSession(options, session);
   }
 };

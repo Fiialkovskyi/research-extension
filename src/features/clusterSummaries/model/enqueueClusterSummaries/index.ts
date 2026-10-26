@@ -3,8 +3,12 @@ import type { IDBPDatabase } from "idb";
 import { enqueueJob } from "@/features/jobQueue";
 import { getActiveModel } from "@/features/modelRegistry";
 import { readClustering } from "@/features/researchClusters";
-import { getActiveSession } from "@/features/researchSession";
-import { type ResearchDatabaseSchema, type StoredJob, SUMMARY_STORE } from "@/shared/storage";
+import {
+  type ResearchDatabaseSchema,
+  type StoredJob,
+  SUMMARY_STORE,
+  SESSION_STORE,
+} from "@/shared/storage";
 
 import {
   CLUSTER_SUMMARY_PROMPT,
@@ -27,14 +31,15 @@ import { readClusterFactIds } from "../readClusterFactIds";
  */
 export const enqueueClusterSummaries = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   now: number = Date.now(),
 ): Promise<StoredJob[]> => {
   const [session, model] = await Promise.all([
-    getActiveSession(database),
+    database.get(SESSION_STORE, sessionId),
     getActiveModel(database, "text-generation"),
   ]);
 
-  if (session === undefined || model === undefined) {
+  if (session?.status !== "active" || model === undefined) {
     return [];
   }
 

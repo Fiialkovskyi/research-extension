@@ -1,13 +1,13 @@
 import type { IDBPDatabase } from "idb";
 
 import { readSessionGraph } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
 import type { ResearchDatabaseSchema, StoredClustering } from "@/shared/storage";
 
 import { clusterSession } from "../clusterSession";
 import { readPageVectors } from "../readPageVectors";
 import { readClustering } from "../readClustering";
 import { storeClustering } from "../storeClustering";
+import { SESSION_STORE } from "@/shared/storage";
 
 /**
  * Clusters the active session's graph again and stores the result, keeping
@@ -18,11 +18,12 @@ import { storeClustering } from "../storeClustering";
  */
 export const reclusterActiveSession = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   now: number = Date.now(),
 ): Promise<StoredClustering | undefined> => {
-  const session = await getActiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
-  if (session === undefined) {
+  if (session?.status !== "active") {
     return undefined;
   }
 

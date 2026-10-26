@@ -27,6 +27,14 @@ export { enqueueJob } from "./model/enqueueJob";
 export { failJob } from "./model/failJob";
 export { getNextWakeTime } from "./model/getNextWakeTime";
 export { holdBackgroundAlive, type ReleaseHold } from "./model/holdBackgroundAlive";
+export { readJobActivity } from "./model/readJobActivity";
+export type {
+  JobActivity,
+  JobBatch,
+  QueuedWork,
+  ReadJobActivityOptions,
+  RunningWork,
+} from "./model/readJobActivity/types";
 export { readPendingJobs } from "./model/readPendingJobs";
 export { requeueRunningJobs } from "./model/requeueRunningJobs";
 export { type JobRunner, runNextJob, type RunNextJobOptions } from "./model/runNextJob";

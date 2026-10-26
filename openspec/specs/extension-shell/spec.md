@@ -38,33 +38,33 @@ The extension SHALL expose a toolbar action whose primary interaction opens a po
 - **THEN** the toolbar action declares a popup document
 - **AND** that document is present in the package at the declared path
 
-### Requirement: Popup renders a greeting
+### Requirement: Popup renders its panel
 
-The popup SHALL render the text `Hello World` as visible content whenever it is opened, without requiring network access, stored state, or any prior user action.
+The popup SHALL render its panel as visible content whenever it is opened, without requiring network access or any prior user action. The panel SHALL carry no placeholder text.
 
-#### Scenario: Popup shows the greeting on first open
+#### Scenario: Popup shows its panel on first open
 
 - **WHEN** the popup document is loaded in the extension's own context
-- **THEN** the text `Hello World` is visible in the popup
+- **THEN** the panel is visible in the popup and the text `Hello World` is not shown
 
 #### Scenario: Popup renders offline
 
 - **WHEN** the popup is opened while the machine has no network connectivity
-- **THEN** the text `Hello World` is still visible
+- **THEN** the panel is still visible
 
 ### Requirement: Popup follows the system colour scheme
 
-The popup SHALL present a light appearance when the operating system reports a light colour-scheme preference and a dark appearance when it reports a dark one. The greeting SHALL stay legible in both.
+The popup SHALL present a light appearance when the operating system reports a light colour-scheme preference and a dark appearance when it reports a dark one. The panel's text SHALL stay legible in both.
 
 #### Scenario: System is set to dark
 
 - **WHEN** the operating system colour-scheme preference is dark and the popup is opened
-- **THEN** the popup renders its dark appearance with legible contrast between the greeting and its background
+- **THEN** the popup renders its dark appearance with legible contrast between the panel's text and its background
 
 #### Scenario: System is set to light
 
 - **WHEN** the operating system colour-scheme preference is light and the popup is opened
-- **THEN** the popup renders its light appearance with legible contrast between the greeting and its background
+- **THEN** the popup renders its light appearance with legible contrast between the panel's text and its background
 
 ### Requirement: Package carries all of its own code
 

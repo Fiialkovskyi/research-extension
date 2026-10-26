@@ -55,57 +55,38 @@ describe("startSession", () => {
     expect(await database.get(SESSION_STORE, session.id)).toEqual(session);
   });
 
-  it("refuses without opening a tab while a live session is active", async () => {
+  it("starts beside an active session without touching it", async () => {
     await database.put(SESSION_STORE, recorded());
-    const api = createApi({
-      getGroup: vi.fn().mockResolvedValue({ color: "blue", title: "E-bike motors" }),
-    });
-
-    await expect(startSession({ database, title: "Batteries", api })).rejects.toThrow(
-      'A session is already active: "E-bike motors".',
-    );
-    expect(api.createTab).not.toHaveBeenCalled();
-  });
-
-  it("refuses while a closed session's group is back, reopening that session", async () => {
-    await database.put(SESSION_STORE, recorded({ status: "closed" }));
-    const api = createApi({
-      getGroup: vi.fn().mockResolvedValue({ color: "blue", title: "E-bike motors" }),
-    });
-
-    await expect(startSession({ database, title: "Batteries", api })).rejects.toThrow(
-      'A session is already active: "E-bike motors".',
-    );
-    expect(await database.get(SESSION_STORE, "earlier")).toMatchObject({ status: "active" });
-    expect(api.createTab).not.toHaveBeenCalled();
-  });
-
-  it("ends a session whose group has gone, then starts", async () => {
-    await database.put(SESSION_STORE, recorded());
-    const getGroup = vi
-      .fn<TabGroupApi["getGroup"]>()
-      .mockRejectedValueOnce(new Error("No group with id: 9"))
-      .mockResolvedValue({ color: "blue" });
-    const api = createApi({ getGroup });
+    const api = createApi();
 
     const { session } = await startSession({ database, title: "Batteries", api });
 
-    expect(await database.get(SESSION_STORE, "earlier")).toMatchObject({ status: "saved" });
     expect(session).toMatchObject({ title: "Batteries", status: "active" });
+    expect(await database.get(SESSION_STORE, "earlier")).toMatchObject({ status: "active" });
+    expect(await database.countFromIndex(SESSION_STORE, "status", "active")).toBe(2);
+  });
+
+  it("starts beside a closed session, which stays closed", async () => {
+    await database.put(SESSION_STORE, recorded({ status: "closed" }));
+    const api = createApi();
+
+    await startSession({ database, title: "Batteries", api });
+
+    expect(await database.get(SESSION_STORE, "earlier")).toMatchObject({ status: "closed" });
   });
 
   it("closes the group's tab when the session cannot be recorded", async () => {
     const api = createApi({
-      // A session appears between the early check and the write, as a second
+      // A session for the same group appears before the write, as a second
       // start racing this one would leave it.
       createTab: vi.fn(async () => {
-        await database.put(SESSION_STORE, recorded({ title: "Raced" }));
+        await database.put(SESSION_STORE, recorded({ title: "Raced", groupId: GROUP_ID }));
         return { id: TAB_ID };
       }),
     });
 
     await expect(startSession({ database, title: "Batteries", api })).rejects.toThrow(
-      'A session is already active: "Raced".',
+      "That tab group already belongs to a session.",
     );
     expect(api.removeTab).toHaveBeenCalledWith(TAB_ID);
   });

@@ -4,7 +4,7 @@ import type { ResearchDatabaseSchema } from "@/shared/storage";
 
 import { NO_TAB_GROUP, SESSION_TAB_VALUE_KEY } from "../../constants";
 import type { SessionTab, SessionTabApi } from "../../types";
-import { getLiveSession } from "../getLiveSession";
+import { listLiveSessions } from "../listLiveSessions";
 import { rekeySession } from "../rekeySession";
 import { reopenSessionForGroup } from "../reopenSessionForGroup";
 import { isGroupPresent } from "./utils/isGroupPresent";
@@ -28,7 +28,7 @@ export interface RestoreSessionTabOptions {
  *   the current one is gone, so the session follows that group again;
  * - `regrouped`: it came back with no group left to join, so it got a new
  *   group with the session's title, and the session follows that group;
- * - `ignored`: it is not the live session's.
+ * - `ignored`: it is no live session's.
  */
 export type RestoredTabOutcome =
   | "member"
@@ -39,7 +39,7 @@ export type RestoredTabOutcome =
   | "ignored";
 
 /**
- * Brings a newly created tab into the live session when it belongs there.
+ * Brings a newly created tab into the live session it belongs to, if any.
  *
  * Firefox restores a closed session tab in different ways depending on how its
  * group went (see the `add-session-restore` Findings): back into the group when
@@ -56,15 +56,23 @@ export const restoreSessionTab = async ({
   api,
   tab,
 }: RestoreSessionTabOptions): Promise<RestoredTabOutcome> => {
-  const live = await getLiveSession(database);
+  const sessions = await listLiveSessions(database);
+
+  if (sessions.length === 0) {
+    return "ignored";
+  }
+
+  const markedId = await api.getTabValue(tab.id, SESSION_TAB_VALUE_KEY);
+  const inGroup = sessions.find(({ groupId }) => groupId === tab.groupId);
+  const live = inGroup ?? sessions.find(({ id }) => id === markedId);
 
   if (live === undefined) {
     return "ignored";
   }
 
-  const isMarked = (await api.getTabValue(tab.id, SESSION_TAB_VALUE_KEY)) === live.id;
+  const isMarked = markedId === live.id;
 
-  if (tab.groupId === live.groupId) {
+  if (inGroup !== undefined) {
     if (!isMarked) {
       await api.setTabValue(tab.id, SESSION_TAB_VALUE_KEY, live.id);
     }

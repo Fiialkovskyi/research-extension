@@ -30,7 +30,12 @@ const api = () => ({
 describe("openGapSearch", () => {
   it("opens the results page in a new tab of the session's group", async () => {
     const browser = api();
-    const url = await openGapSearch(await openResearchDatabase(), browser, "MacBook Neo 13 price");
+    const url = await openGapSearch(
+      await openResearchDatabase(),
+      "s",
+      browser,
+      "MacBook Neo 13 price",
+    );
 
     expect(url).toBe("https://duckduckgo.com/?q=MacBook%20Neo%2013%20price");
     expect(browser.createTab).toHaveBeenCalledWith({ url, active: true });
@@ -47,7 +52,9 @@ describe("openGapSearch", () => {
       url: "https://www.google.com/search?q=laptops",
     } as never);
 
-    expect(await openGapSearch(database, api(), "x")).toBe("https://www.google.com/search?q=x");
+    expect(await openGapSearch(database, "s", api(), "x")).toBe(
+      "https://www.google.com/search?q=x",
+    );
   });
 
   it("refuses without an active session", async () => {
@@ -55,6 +62,6 @@ describe("openGapSearch", () => {
 
     await database.clear(SESSION_STORE);
 
-    await expect(openGapSearch(database, api(), "x")).rejects.toThrow("session");
+    await expect(openGapSearch(database, "s", api(), "x")).rejects.toThrow("session");
   });
 });

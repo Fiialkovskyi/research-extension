@@ -19,23 +19,21 @@ const { readPopup } = await import("./index");
 
 const SNAPSHOT = JSON.stringify({
   uri: "moz-extension://uuid/popup.html",
-  greeting: "Hello World",
-  greetingVisible: true,
+  panelVisible: true,
   panelWidth: 320,
   backgroundColor: "rgb(255, 255, 255)",
   textColor: "rgb(15, 23, 42)",
   activeSession: null,
-  closedSession: null,
+  sessionOptions: [],
   hasSessionForm: true,
   hasOpenMap: false,
   pageCount: null,
-  treeRows: [],
-  unreadCount: null,
-  unreadPages: [],
   savedSessions: [],
   leftOff: null,
   reattachOffer: null,
   setupBanner: null,
+  activityState: null,
+  activityStrip: null,
 });
 
 describe("readPopup", () => {
@@ -47,7 +45,7 @@ describe("readPopup", () => {
   it("returns the snapshot once the popup has rendered", async () => {
     executeAsyncScript.mockResolvedValue(SNAPSHOT);
 
-    expect((await readPopup()).greeting).toBe("Hello World");
+    expect((await readPopup()).panelVisible).toBe(true);
   });
 
   it("keeps waiting while the popup has not loaded", async () => {

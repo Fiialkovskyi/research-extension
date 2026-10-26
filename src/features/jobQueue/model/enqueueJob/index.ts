@@ -20,6 +20,7 @@ const buildQueuedJob = (
     attempts: 0,
     nextAttemptAt: Math.max(now, notBefore ?? now),
     createdAt: now,
+    queuedAt: now,
     updatedAt: now,
   };
 };
@@ -35,6 +36,7 @@ const requeue = (
     status: "queued",
     attempts: 0,
     nextAttemptAt: Math.max(now, notBefore),
+    queuedAt: now,
     updatedAt: now,
   };
 };

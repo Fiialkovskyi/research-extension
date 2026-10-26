@@ -35,19 +35,17 @@ describe("popup appearance", () => {
     await leaveBrowserChrome();
   });
 
-  it("follows the system colour scheme and keeps the greeting legible", async () => {
+  it("follows the system colour scheme and keeps its text legible", async () => {
     const light = await openPopupUnder("light");
     const dark = await openPopupUnder("dark");
 
     // Palette-independent: the two appearances must differ, and in each the
-    // greeting must not be painted onto its own background colour.
+    // text must not be painted onto its own background colour.
     expect(light.backgroundColor).not.toBe(dark.backgroundColor);
     expect(light.textColor).not.toBe(light.backgroundColor);
     expect(dark.textColor).not.toBe(dark.backgroundColor);
 
-    expect(light.greeting).toBe("Hello World");
-    expect(dark.greeting).toBe("Hello World");
-    expect(light.greetingVisible).toBe(true);
-    expect(dark.greetingVisible).toBe(true);
+    expect(light.panelVisible).toBe(true);
+    expect(dark.panelVisible).toBe(true);
   });
 });

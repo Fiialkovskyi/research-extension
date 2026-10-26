@@ -4,13 +4,13 @@ import { getDataKey } from "@/features/dataProtection";
 import { readSealedEntity } from "@/features/entityResolution";
 import { readSealedFact } from "@/features/factExtraction";
 import { filterRejectedFacts, readRejectedKeys } from "@/features/factRejections";
-import { getLiveSession } from "@/features/researchSession";
 import { normalizeEntityName } from "@/shared/normalizeEntityName";
 import {
   ENTITY_STORE,
   FACT_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
+  SESSION_STORE,
 } from "@/shared/storage";
 
 import type { ComparisonTable, TableFact } from "../../types";
@@ -35,9 +35,10 @@ export interface ComparisonTableView {
  */
 export const readComparisonTable = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   entityType?: string,
 ): Promise<ComparisonTableView | undefined> => {
-  const session = await getLiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
   if (session === undefined) {
     return undefined;

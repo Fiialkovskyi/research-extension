@@ -129,6 +129,12 @@ export interface StoredSession {
    * taken from its first vectors. Absent until then.
    */
   activeEmbeddingSpaceId?: string;
+  /**
+   * When the user last chose, started or resumed this session as the one the
+   * popup refers to. The active session with the latest value is the viewed
+   * one; absent until it was ever chosen.
+   */
+  viewedAt?: number;
   /** The session's tabs, in order, as they were when it was saved; what resuming reopens. */
   savedTabs?: StoredSavedTab[];
   /**
@@ -514,6 +520,13 @@ export interface StoredJob {
   /** What the job works on, beyond its identity; its type validates it. */
   payload?: unknown;
   createdAt: number;
+  /**
+   * When the work last entered the queue from outside it: first queued, or
+   * asked for again after failing for good. Retries and claims leave it, so a
+   * surface can tell which jobs arrived together. Absent on jobs written
+   * before it was recorded, where `createdAt` stands in.
+   */
+  queuedAt?: number;
   updatedAt: number;
 }
 
@@ -670,7 +683,7 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [JOB_STORE]: {
     key: string;
     value: StoredJob;
-    indexes: { statusPriority: [JobStatus, number]; sessionId: string };
+    indexes: { statusPriority: [JobStatus, number]; sessionId: string; updatedAt: number };
   };
   [SNAPSHOT_STORE]: {
     key: string;

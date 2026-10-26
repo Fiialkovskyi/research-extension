@@ -11,17 +11,19 @@ import { parseReaderResult } from "../parseReaderResult";
  * Reaches the popup the same way `readPopup` does, through Firefox's
  * Marionette actor, because the popup's document is out of reach otherwise.
  *
- * @throws If the popup never loads, or it has no session form to submit.
+ * @throws If the popup never loads, or never shows a session form to submit.
  */
 export const submitPopupGroupTitle = async (title: string): Promise<void> => {
   const script = buildPopupReaderScript(buildGroupTitleSubmitScript(title));
 
-  const raw = await browser.waitUntil(
-    async () => parseReaderResult(await browser.executeAsyncScript(script, [])),
-    { timeout: UI_TIMEOUT_MS, timeoutMsg: "The toolbar popup never rendered its document." },
-  );
+  // The script submits only when the form is there, so a popup still reading
+  // its sessions is asked again rather than reported as having no form.
+  await browser.waitUntil(
+    async () => {
+      const raw = parseReaderResult(await browser.executeAsyncScript(script, []));
 
-  if (!(JSON.parse(raw) as { submitted: boolean }).submitted) {
-    throw new Error("The popup has no session form to submit.");
-  }
+      return raw !== undefined && (JSON.parse(raw) as { submitted: boolean }).submitted;
+    },
+    { timeout: UI_TIMEOUT_MS, timeoutMsg: "The popup never showed a session form to submit." },
+  );
 };

@@ -16,9 +16,12 @@ export const researchGapsSchema = v.object({
 
 export const researchGapRequestSchemas = {
   /** The live session's gaps, against the table of a type. */
-  "gaps.read": v.object({ entityType: v.optional(v.string()) }),
+  "gaps.read": v.object({ entityType: v.optional(v.string()), sessionId: v.optional(v.string()) }),
   /** Run a gap's query as a search in a new tab of the session's group. */
-  "gaps.search": v.object({ query: v.pipe(v.string(), v.minLength(1), v.maxLength(200)) }),
+  "gaps.search": v.object({
+    query: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+    sessionId: v.optional(v.string()),
+  }),
 } as const;
 
 export const researchGapResponseSchemas = {

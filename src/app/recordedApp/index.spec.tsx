@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RecordedApp, type RecordedClient } from ".";
 import type { DataTopic } from "@/features/liveData";
@@ -203,5 +203,35 @@ describe("RecordedApp", () => {
     fireEvent.click(screen.getByTestId("recorded-delete-session-confirm"));
 
     expect(await screen.findByTestId("recorded-empty")).toBeInTheDocument();
+  });
+
+  describe("a page pinned to a session", () => {
+    afterEach(() => {
+      window.history.replaceState(null, "", "/");
+    });
+
+    it("reads the session in its address, and names it in the tab", async () => {
+      window.history.replaceState(null, "", "/?session=session-2");
+      const { client } = createClient();
+
+      render(<RecordedApp client={client} />);
+      await screen.findByTestId("recorded-title");
+
+      expect(client.request).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "recorded.read", payload: { sessionId: "session-2" } }),
+      );
+      expect(document.title).toContain("What was recorded:");
+    });
+
+    it("says the session is gone once it is deleted", async () => {
+      window.history.replaceState(null, "", "/?session=session-1");
+      const { client } = createClient();
+
+      render(<RecordedApp client={client} />);
+      fireEvent.click(await screen.findByTestId("recorded-delete-session"));
+      fireEvent.click(screen.getByTestId("recorded-delete-session-confirm"));
+
+      expect(await screen.findByTestId("recorded-empty")).toHaveTextContent("This session is gone");
+    });
   });
 });

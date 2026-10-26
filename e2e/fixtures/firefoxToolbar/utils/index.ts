@@ -42,6 +42,7 @@ export { scrollInTabShowing } from "./scrollInTabShowing";
 export { selectTabShowing } from "./selectTabShowing";
 export { type SystemColorScheme, setSystemColorScheme } from "./setSystemColorScheme";
 export { getToolbarWidgetId } from "./getToolbarWidgetId";
+export { selectPopupSession } from "./selectPopupSession";
 export { submitPopupGroupTitle } from "./submitPopupGroupTitle";
 export { ungroupTab } from "./ungroupTab";
 export { waitForPopupPanel } from "./waitForPopupPanel";

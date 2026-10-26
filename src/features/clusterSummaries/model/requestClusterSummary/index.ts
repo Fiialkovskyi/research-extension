@@ -3,8 +3,7 @@ import type { IDBPDatabase } from "idb";
 import { enqueueJob } from "@/features/jobQueue";
 import { getActiveModel } from "@/features/modelRegistry";
 import { readClustering } from "@/features/researchClusters";
-import { getActiveSession } from "@/features/researchSession";
-import { JOB_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
+import { JOB_STORE, type ResearchDatabaseSchema, SESSION_STORE } from "@/shared/storage";
 
 import {
   CLUSTER_SUMMARY_PROMPT,
@@ -26,19 +25,20 @@ import { readClusterFactIds } from "../readClusterFactIds";
  */
 export const requestClusterSummary = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   clusterId: string,
   now: number = Date.now(),
 ): Promise<boolean> => {
   const [session, model] = await Promise.all([
-    getActiveSession(database),
+    database.get(SESSION_STORE, sessionId),
     getActiveModel(database, "text-generation"),
   ]);
   const cluster =
-    session === undefined
+    session?.status !== "active"
       ? undefined
       : (await readClustering(database, session.id))?.clusters.find(({ id }) => id === clusterId);
 
-  if (session === undefined || model === undefined || cluster === undefined) {
+  if (session?.status !== "active" || model === undefined || cluster === undefined) {
     return false;
   }
 

@@ -2,7 +2,7 @@ import type { IDBPDatabase } from "idb";
 
 import { readBlockedSites } from "@/features/siteDenylist";
 import { closeNode, readTabNode, recordEdge, recordNode } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
+import { getSessionForTab, listLiveSessions, NO_TAB_GROUP } from "@/features/researchSession";
 import type { ResearchDatabaseSchema, StoredNode } from "@/shared/storage";
 
 import { CAPTURE_EDGE_WEIGHTS } from "../../constants";
@@ -24,7 +24,7 @@ export interface RecordNavigationOptions {
 /**
  * Records a page committed in a session tab as a node of the graph.
  *
- * Only top-frame navigations to web pages in a non-private tab of the session's
+ * Only top-frame navigations to web pages in a non-private tab of a session's
  * group count, and a reload is not a new page (CAP-002). The new node follows
  * the tab's previous one, which is closed: a tab shows one page at a time, so
  * it has at most one open node. A tab's first node is linked to the page of the
@@ -47,15 +47,20 @@ export const recordNavigation = async ({
     return undefined;
   }
 
-  const session = await getActiveSession(database);
-
-  if (session === undefined) {
+  // Nothing to record into: do not ask the browser about the tab.
+  if ((await listLiveSessions(database)).every(({ status }) => status !== "active")) {
     return undefined;
   }
 
   const tab = await api.getTab(tabId);
 
-  if (tab.incognito || tab.groupId !== session.groupId) {
+  if (tab.incognito) {
+    return undefined;
+  }
+
+  const session = await getSessionForTab(database, { tabId, groupId: tab.groupId ?? NO_TAB_GROUP });
+
+  if (session === undefined) {
     return undefined;
   }
 

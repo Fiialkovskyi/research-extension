@@ -50,7 +50,7 @@ beforeEach(async () => {
 
 describe("enqueueEntityResolutions", () => {
   it("queues a page once its extraction has finished, naming no embedding model", async () => {
-    const jobs = await enqueueEntityResolutions(await openResearchDatabase());
+    const jobs = await enqueueEntityResolutions(await openResearchDatabase(), "session-1");
 
     expect(jobs.map(({ payload }) => payload)).toEqual([{ snapshotId: "done" }]);
     expect(jobs[0]).toMatchObject({
@@ -70,7 +70,7 @@ describe("enqueueEntityResolutions", () => {
       installedAt: 1,
     } as never);
 
-    const [job] = await enqueueEntityResolutions(database);
+    const [job] = await enqueueEntityResolutions(database, "session-1");
 
     expect(job?.producerVersion).toBe("entityName@1|ollama:nomic@1");
   });
@@ -78,13 +78,13 @@ describe("enqueueEntityResolutions", () => {
   it("queues nothing without an active session, and nothing twice", async () => {
     const database = await openResearchDatabase();
 
-    await enqueueEntityResolutions(database);
-    await enqueueEntityResolutions(database);
+    await enqueueEntityResolutions(database, "session-1");
+    await enqueueEntityResolutions(database, "session-1");
 
     expect(await database.count(JOB_STORE)).toBe(1);
 
     await database.clear(SESSION_STORE);
 
-    expect(await enqueueEntityResolutions(database)).toEqual([]);
+    expect(await enqueueEntityResolutions(database, "session-1")).toEqual([]);
   });
 });

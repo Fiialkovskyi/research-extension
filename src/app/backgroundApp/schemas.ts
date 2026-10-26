@@ -1,3 +1,4 @@
+import { aiActivityRequestSchemas } from "@/features/aiActivity";
 import { aiSetupRequestSchemas } from "@/features/aiSetup";
 import { clusterSummaryRequestSchemas } from "@/features/clusterSummaries";
 import { comparisonTableRequestSchemas } from "@/features/comparisonTable";
@@ -26,6 +27,7 @@ import { tabGroupRequestSchemas } from "@/features/tabGroups";
 
 /** Every message a surface may send, contributed by the features that own them. */
 export const requestSchemas = {
+  ...aiActivityRequestSchemas,
   ...aiSetupRequestSchemas,
   ...benchmarkRequestSchemas,
   ...clusterSummaryRequestSchemas,

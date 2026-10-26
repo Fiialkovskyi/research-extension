@@ -18,6 +18,8 @@ export type JobRunner = (job: StoredJob) => Promise<void | "deferred">;
 export interface RunNextJobOptions {
   /** Whether a queued job may be claimed now; every job may by default. */
   isPermitted?: (job: StoredJob) => boolean;
+  /** Told about a job once it is claimed, before it runs, so a surface can show it running. */
+  onClaimed?: (job: StoredJob) => void;
 }
 
 /**
@@ -30,13 +32,15 @@ export interface RunNextJobOptions {
 export const runNextJob = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
   runners: Readonly<Record<string, JobRunner>>,
-  { isPermitted }: RunNextJobOptions = {},
+  { isPermitted, onClaimed }: RunNextJobOptions = {},
 ): Promise<boolean> => {
   const job = await claimNextJob(database, Date.now(), isPermitted);
 
   if (job === undefined) {
     return false;
   }
+
+  onClaimed?.(job);
 
   try {
     const run = runners[job.type];

@@ -4,7 +4,7 @@ export const factRejectionRequestSchemas = {
   /** Mark facts wrong: every fact stating the same thing is hidden. */
   "facts.reject": v.object({ factIds: v.pipe(v.array(v.string()), v.minLength(1)) }),
   /** Undo every rejection of the active session. */
-  "facts.restoreRejections": v.object({}),
+  "facts.restoreRejections": v.object({ sessionId: v.optional(v.string()) }),
 } as const;
 
 export const factRejectionResponseSchemas = {

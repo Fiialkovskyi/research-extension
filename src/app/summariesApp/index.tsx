@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { clusterSummaryResponseSchemas, type SummariesView } from "@/features/clusterSummaries";
 import { ClusterSummaries } from "@/features/clusterSummaries/ui/clusterSummaries";
@@ -15,6 +15,7 @@ import { SuggestedQuestions } from "@/features/openQuestions/ui/suggestedQuestio
 import { type ResearchGaps as Gaps, researchGapResponseSchemas } from "@/features/researchGaps";
 import { ResearchGaps } from "@/features/researchGaps/ui/researchGaps";
 import { getErrorMessage } from "@/shared/getErrorMessage";
+import { readPinnedSessionId } from "@/shared/readPinnedSessionId";
 import {
   buildRpcMessage,
   parseRpcMessage,
@@ -30,7 +31,15 @@ export interface SummariesClient {
 }
 
 /** The kinds of data this page shows, so it reads again only when one of them changes. */
-const WATCHED_TOPICS = ["pages", "facts", "clusters", "summaries", "questions", "models"] as const;
+const WATCHED_TOPICS = [
+  "pages",
+  "facts",
+  "clusters",
+  "summaries",
+  "questions",
+  "models",
+  "viewed",
+] as const;
 
 export interface SummariesAppProps {
   client: SummariesClient;
@@ -68,6 +77,12 @@ type SummariesState =
 
 /** Composition root of the Summaries page. */
 export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppProps) {
+  /** The session the page was opened for; a page opened without one follows the viewed session. */
+  const [pinnedId] = useState(() => readPinnedSessionId(window.location.search));
+  const sessionField = useMemo(
+    () => (pinnedId === undefined ? {} : { sessionId: pinnedId }),
+    [pinnedId],
+  );
   const [state, setState] = useState<SummariesState>({ status: "loading" });
   const [table, setTable] = useState<Table>();
   const [entityType, setEntityType] = useState<string>();
@@ -96,17 +111,17 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
   );
 
   const loadQuestions = useCallback(async () => {
-    const answer = await ask(buildRpcMessage("questions.read", {}));
+    const answer = await ask(buildRpcMessage("questions.read", sessionField));
 
     if (answer?.type === "questions.view") {
       setQuestions(answer.payload.view ?? undefined);
     }
-  }, [ask]);
+  }, [ask, sessionField]);
 
   const load = useCallback(async () => {
     await loadQuestions();
 
-    const answer = await ask(buildRpcMessage("summaries.read", {}));
+    const answer = await ask(buildRpcMessage("summaries.read", sessionField));
 
     if (answer?.type === "summaries.view") {
       setState(
@@ -115,12 +130,12 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
           : { status: "ready", view: answer.payload.session },
       );
     }
-  }, [ask, loadQuestions]);
+  }, [ask, loadQuestions, sessionField]);
 
   useEffect(() => {
     let isCurrent = true;
 
-    client.request(buildRpcMessage("questions.read", {})).then(
+    client.request(buildRpcMessage("questions.read", sessionField)).then(
       (answer) => {
         try {
           const response = parseRpcMessage(answer, responseSchemas);
@@ -140,7 +155,7 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
         }
       },
     );
-    client.request(buildRpcMessage("summaries.read", {})).then(
+    client.request(buildRpcMessage("summaries.read", sessionField)).then(
       (answer) => {
         if (!isCurrent) {
           return;
@@ -172,12 +187,15 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
     return () => {
       isCurrent = false;
     };
-  }, [client]);
+  }, [client, sessionField]);
 
   const loadTable = useCallback(
     async (type?: string) => {
       const answer = await ask(
-        buildRpcMessage("table.read", type === undefined ? {} : { entityType: type }),
+        buildRpcMessage(
+          "table.read",
+          type === undefined ? sessionField : { entityType: type, ...sessionField },
+        ),
       );
 
       if (answer?.type === "table.view") {
@@ -186,20 +204,23 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
 
       // Gaps follow the table the page shows: its type and its columns.
       const gapsAnswer = await ask(
-        buildRpcMessage("gaps.read", type === undefined ? {} : { entityType: type }),
+        buildRpcMessage(
+          "gaps.read",
+          type === undefined ? sessionField : { entityType: type, ...sessionField },
+        ),
       );
 
       if (gapsAnswer?.type === "gaps.view") {
         setGaps(gapsAnswer.payload.gaps ?? undefined);
       }
     },
-    [ask],
+    [ask, sessionField],
   );
 
   useEffect(() => {
     let isCurrent = true;
 
-    client.request(buildRpcMessage("gaps.read", {})).then(
+    client.request(buildRpcMessage("gaps.read", sessionField)).then(
       (answer) => {
         try {
           const response = parseRpcMessage(answer, responseSchemas);
@@ -219,7 +240,7 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
         }
       },
     );
-    client.request(buildRpcMessage("table.read", {})).then(
+    client.request(buildRpcMessage("table.read", sessionField)).then(
       (answer) => {
         try {
           const response = parseRpcMessage(answer, responseSchemas);
@@ -243,7 +264,7 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
     return () => {
       isCurrent = false;
     };
-  }, [client]);
+  }, [client, sessionField]);
 
   const chooseType = useCallback(
     async (type: string) => {
@@ -255,10 +276,12 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
 
   const setColumns = useCallback(
     async (type: string, columns: string[]) => {
-      await ask(buildRpcMessage("table.setColumns", { entityType: type, columns }));
+      await ask(
+        buildRpcMessage("table.setColumns", { entityType: type, columns, ...sessionField }),
+      );
       await loadTable(entityType ?? type);
     },
-    [ask, entityType, loadTable],
+    [ask, entityType, loadTable, sessionField],
   );
 
   const exportTable = useCallback(() => {
@@ -286,29 +309,33 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
   );
 
   const restore = useCallback(async () => {
-    await ask(buildRpcMessage("facts.restoreRejections", {}));
+    await ask(buildRpcMessage("facts.restoreRejections", sessionField));
     await reloadAll();
-  }, [ask, reloadAll]);
+  }, [ask, reloadAll, sessionField]);
 
   const suggestQuestions = useCallback(async () => {
-    await ask(buildRpcMessage("questions.refresh", {}));
+    await ask(buildRpcMessage("questions.refresh", sessionField));
     await loadQuestions();
-  }, [ask, loadQuestions]);
+  }, [ask, loadQuestions, sessionField]);
 
   const searchGap = useCallback(
     async (query: string) => {
-      await ask(buildRpcMessage("gaps.search", { query }));
+      await ask(buildRpcMessage("gaps.search", { query, ...sessionField }));
     },
-    [ask],
+    [ask, sessionField],
   );
 
   const summarize = useCallback(
     async (clusterId: string) => {
-      await ask(buildRpcMessage("summaries.refresh", { clusterId }));
+      await ask(buildRpcMessage("summaries.refresh", { clusterId, ...sessionField }));
       await load();
     },
-    [ask, load],
+    [ask, load, sessionField],
   );
+
+  useEffect(() => {
+    document.title = state.status === "ready" ? `Summaries: ${state.view.title}` : "Summaries";
+  }, [state]);
 
   return (
     <main className="min-h-screen bg-white p-4 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
@@ -324,7 +351,9 @@ export function SummariesApp({ client, saveFile = downloadCsv }: SummariesAppPro
       {state.status === "loading" && <p className="text-sm">Loading…</p>}
       {state.status === "empty" && (
         <p data-testid="summaries-empty" className="text-sm">
-          No research session is recorded.
+          {pinnedId === undefined
+            ? "No research session is recorded."
+            : "This session is gone: it was deleted."}
         </p>
       )}
       {state.status === "ready" && (

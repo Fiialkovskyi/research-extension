@@ -80,7 +80,7 @@ const buildSession = () => {
 
 /** The queued job for the snapshot, claimed as the runner would. */
 const claim = async (): Promise<StoredJob> => {
-  await enqueueSnapshotEmbeddings(database);
+  await enqueueSnapshotEmbeddings(database, "session-1");
 
   const job = await claimNextJob(database);
 

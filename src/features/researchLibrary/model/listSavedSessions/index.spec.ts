@@ -35,14 +35,15 @@ beforeEach(async () => {
   );
   await database.put(SESSION_STORE, session("ended", { updatedAt: 50 }));
   await database.put(SESSION_STORE, session("live", { status: "active" }));
-  await database.put(SESSION_STORE, session("away", { status: "closed" }));
+  await database.put(SESSION_STORE, session("away", { status: "closed", savedAt: 300 }));
   await database.put(NODE_STORE, { id: "n1", sessionId: "motors" } as never);
   await database.put(NODE_STORE, { id: "n2", sessionId: "motors" } as never);
 });
 
 describe("listSavedSessions", () => {
-  it("lists saved sessions newest first, with page counts and where they were left off", async () => {
+  it("lists saved and closed sessions newest first, with page counts and where they were left off", async () => {
     expect(await listSavedSessions(await openResearchDatabase())).toEqual([
+      { id: "away", title: "away", savedAt: 300, pageCount: 0, lastPosition: null },
       {
         id: "motors",
         title: "motors",

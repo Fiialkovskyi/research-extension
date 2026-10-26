@@ -54,9 +54,9 @@ beforeEach(async () => {
 describe("requestClusterSummary", () => {
   it("marks the debounced job as asked for and due now", async () => {
     const database = await openResearchDatabase();
-    const [debounced] = await enqueueClusterSummaries(database, Date.now());
+    const [debounced] = await enqueueClusterSummaries(database, "s", Date.now());
 
-    expect(await requestClusterSummary(database, "bikes", 123)).toBe(true);
+    expect(await requestClusterSummary(database, "s", "bikes", 123)).toBe(true);
     expect(await database.get(JOB_STORE, debounced!.id)).toMatchObject({
       nextAttemptAt: 123,
       payload: { clusterId: "bikes", requestedAt: 123 },
@@ -66,10 +66,10 @@ describe("requestClusterSummary", () => {
 
   it("queues a done job again, to regenerate on request", async () => {
     const database = await openResearchDatabase();
-    const [job] = await enqueueClusterSummaries(database, Date.now());
+    const [job] = await enqueueClusterSummaries(database, "s", Date.now());
 
     await database.put(JOB_STORE, { ...job!, status: "done" });
-    await requestClusterSummary(database, "bikes", 5);
+    await requestClusterSummary(database, "s", "bikes", 5);
 
     expect((await database.get(JOB_STORE, job!.id))?.status).toBe("queued");
   });
@@ -79,7 +79,7 @@ describe("requestClusterSummary", () => {
 
     await database.clear(FACT_STORE);
 
-    expect(await requestClusterSummary(database, "bikes")).toBe(false);
-    expect(await requestClusterSummary(database, "missing")).toBe(false);
+    expect(await requestClusterSummary(database, "s", "bikes")).toBe(false);
+    expect(await requestClusterSummary(database, "s", "missing")).toBe(false);
   });
 });

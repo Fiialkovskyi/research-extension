@@ -1,12 +1,21 @@
 import type { IDBPDatabase } from "idb";
 
-import { reconcileActiveSession } from "@/features/researchSession";
 import {
   NODE_STORE,
   type ResearchDatabaseSchema,
   SESSION_STORE,
   type StoredSession,
 } from "@/shared/storage";
+
+const isGroupAlive = async (api: ResumeApi, groupId: number): Promise<boolean> => {
+  try {
+    await api.getGroup(groupId);
+    return true;
+  } catch {
+    // Firefox rejects a lookup for a group that does not exist.
+    return false;
+  }
+};
 
 /** The browser calls resuming a session uses. */
 export interface ResumeApi {
@@ -40,11 +49,13 @@ export interface ResumeSessionOptions {
  * left off at, which is loaded and selected — and the session's pages are
  * reopened on those tabs rather than recorded again.
  *
- * Refused while another session is active; a closed session is ended, as
- * starting a session does. If opening the tabs fails, those already opened
- * are closed again.
+ * Other sessions, active or closed, are left as they are: several sessions
+ * record at once. A closed session can be resumed unless its group is still
+ * open, which would duplicate its tabs. If opening the tabs fails, those
+ * already opened are closed again.
  *
- * @throws When a session is active, the session is not saved, or the browser refuses.
+ * @throws When the session is not saved or closed, its group is still open, or
+ * the browser refuses.
  */
 export const resumeSession = async ({
   database,
@@ -52,16 +63,15 @@ export const resumeSession = async ({
   api,
   now,
 }: ResumeSessionOptions): Promise<StoredSession> => {
-  const live = await reconcileActiveSession({ database, getGroup: api.getGroup });
-
-  if (live !== undefined) {
-    throw new Error(`A session is already active: "${live.title}".`);
-  }
-
   const session = await database.get(SESSION_STORE, sessionId);
 
-  if (session?.status !== "saved") {
+  if (session?.status !== "saved" && session?.status !== "closed") {
     throw new Error("Only a saved session can be resumed.");
+  }
+
+  if (session.status === "closed" && (await isGroupAlive(api, session.groupId))) {
+    // Resuming would open its tabs a second time beside the ones still there.
+    throw new Error(`"${session.title}" is still open in its tab group.`);
   }
 
   const savedTabs = session.savedTabs ?? [];
@@ -109,16 +119,16 @@ export const resumeSession = async ({
     const transaction = database.transaction([SESSION_STORE, NODE_STORE], "readwrite");
     const sessions = transaction.objectStore(SESSION_STORE);
     const nodes = transaction.objectStore(NODE_STORE);
-    const statuses = sessions.index("status");
+    const current = await sessions.get(session.id);
 
-    if ((await statuses.get("active")) !== undefined) {
-      throw new Error("A session became active while this one was being resumed.");
+    if (current?.status !== "saved" && current?.status !== "closed") {
+      throw new Error("The session changed while it was being resumed.");
     }
 
-    const closed = await statuses.get("closed");
     const resumed: StoredSession = {
       ...session,
       status: "active",
+      viewedAt: now,
       groupId,
       formerGroupIds: [...session.formerGroupIds, session.groupId],
       updatedAt: now,
@@ -132,13 +142,17 @@ export const resumeSession = async ({
           : { ...node, tabId: opened[index] ?? node.tabId, tabState: "open" as const };
       }),
     );
+    // A window that closed with the session's group left its pages open, on
+    // tabs that are gone; only the pages reopened here are open now.
+    const reopenedIds = new Set(savedTabs.map(({ nodeId }) => nodeId));
+    const stale = (await nodes.index("sessionId").getAll(session.id)).filter(
+      ({ id, tabState }) => tabState === "open" && !reopenedIds.has(id),
+    );
 
     await Promise.all([
-      ...(closed === undefined
-        ? []
-        : [sessions.put({ ...closed, status: "saved", updatedAt: now })]),
       sessions.put(resumed),
       ...reopened.flatMap((node) => (node === undefined ? [] : [nodes.put(node)])),
+      ...stale.map((node) => nodes.put({ ...node, tabState: "closed" })),
       transaction.done,
     ]);
 

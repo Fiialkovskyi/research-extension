@@ -59,11 +59,11 @@ export const clusterSummaryViewSchema = v.object({
 
 export const clusterSummaryRequestSchemas = {
   /** The active session's clusters and their summaries. */
-  "summaries.read": v.object({}),
+  "summaries.read": v.object({ sessionId: v.optional(v.string()) }),
   /** Summarise a cluster now, while the user is active ("Summarize now", "Refresh"). */
-  "summaries.refresh": v.object({ clusterId: v.string() }),
+  "summaries.refresh": v.object({ clusterId: v.string(), sessionId: v.optional(v.string()) }),
   /** Select the Summaries tab, opening one if none is open. */
-  "summaries.open": v.object({}),
+  "summaries.open": v.object({ sessionId: v.optional(v.string()) }),
 } as const;
 
 export const clusterSummaryResponseSchemas = {

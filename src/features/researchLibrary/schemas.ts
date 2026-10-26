@@ -10,8 +10,6 @@ export const savedSessionSummarySchema = v.object({
 });
 
 export const researchLibraryRequestSchemas = {
-  /** Save the active session: keep its record and tabs, close its tabs. */
-  "session.save": v.object({}),
   /** The saved sessions, newest first. */
   "library.list": v.object({}),
   /** Reopen a saved session's tabs and make it active again. */
@@ -23,8 +21,6 @@ export const researchLibraryRequestSchemas = {
 } as const;
 
 export const researchLibraryResponseSchemas = {
-  "session.saved": v.object({ sessionId: v.string(), title: v.string() }),
-  "session.saveFailed": v.object({ reason: v.string() }),
   "library.listed": v.object({ sessions: v.array(savedSessionSummarySchema) }),
   "session.resumed": v.object({ sessionId: v.string(), title: v.string() }),
   "session.resumeFailed": v.object({ reason: v.string() }),

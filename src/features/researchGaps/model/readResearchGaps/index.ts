@@ -1,8 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { readComparisonTable } from "@/features/comparisonTable";
-import { getLiveSession } from "@/features/researchSession";
-import { NODE_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
+import { NODE_STORE, type ResearchDatabaseSchema, SESSION_STORE } from "@/shared/storage";
 
 import type { ResearchGaps } from "../../types";
 import { buildGapQuery } from "../buildGapQuery";
@@ -19,16 +18,17 @@ import { findCellGaps } from "../findCellGaps";
  */
 export const readResearchGaps = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   entityType?: string,
 ): Promise<ResearchGaps | undefined> => {
-  const session = await getLiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
   if (session === undefined) {
     return undefined;
   }
 
   const [view, nodes] = await Promise.all([
-    readComparisonTable(database, entityType),
+    readComparisonTable(database, sessionId, entityType),
     database.getAllFromIndex(NODE_STORE, "sessionId", session.id),
   ]);
   const table = view?.table;

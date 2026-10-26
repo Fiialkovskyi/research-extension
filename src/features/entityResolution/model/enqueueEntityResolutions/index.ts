@@ -2,8 +2,12 @@ import type { IDBPDatabase } from "idb";
 
 import { enqueueJob } from "@/features/jobQueue";
 import { getActiveModel } from "@/features/modelRegistry";
-import { getActiveSession } from "@/features/researchSession";
-import { EXTRACTION_STORE, type ResearchDatabaseSchema, type StoredJob } from "@/shared/storage";
+import {
+  EXTRACTION_STORE,
+  type ResearchDatabaseSchema,
+  type StoredJob,
+  SESSION_STORE,
+} from "@/shared/storage";
 
 import { RESOLVE_ENTITIES_JOB } from "../../constants";
 import type { ResolveEntitiesPayload } from "../../types";
@@ -18,10 +22,11 @@ import { getEntityResolverVersion } from "../getEntityResolverVersion";
  */
 export const enqueueEntityResolutions = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
 ): Promise<StoredJob[]> => {
-  const session = await getActiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
-  if (session === undefined) {
+  if (session?.status !== "active") {
     return [];
   }
 

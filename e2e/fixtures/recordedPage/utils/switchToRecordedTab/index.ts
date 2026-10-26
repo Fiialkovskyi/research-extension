@@ -19,7 +19,7 @@ export const switchToRecordedTab = async (): Promise<void> => {
         await browser.switchToWindow(handle);
 
         if (
-          (await browser.getUrl()) === pageUrl &&
+          (await browser.getUrl()).split(/[?#]/)[0] === pageUrl &&
           (await browser.execute(() => document.readyState)) === "complete"
         ) {
           return true;

@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { readTabNode } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
+import { getSessionForTab, NO_TAB_GROUP } from "@/features/researchSession";
 import { NODE_STORE, type ResearchDatabaseSchema, type StoredNode } from "@/shared/storage";
 
 import type { PageSender } from "../../types";
@@ -28,7 +28,10 @@ export const readSignalTarget = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
   sender: PageSender,
 ): Promise<SignalTarget> => {
-  const session = await getActiveSession(database);
+  const session = await getSessionForTab(database, {
+    tabId: sender.tabId,
+    groupId: NO_TAB_GROUP,
+  });
   const current =
     session === undefined ? undefined : await readTabNode(database, session.id, sender.tabId);
 

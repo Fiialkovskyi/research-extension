@@ -2,7 +2,7 @@
  * The research session: which tab group is being researched, kept in the
  * database so it outlives the background event page and a browser restart.
  *
- * Until after the MVP at most one session is active or closed. It follows its
+ * Several sessions may be active or closed at once, each following its own
  * group: a rename renames it, the group's removal closes it, and the group
  * coming back reopens it. Its tabs carry its id as a per-tab session value, so
  * a tab the user restores after the group is gone is brought back into the
@@ -25,10 +25,13 @@ export { switchSessionSpace } from "./model/switchSessionSpace";
 export { closeSessionForGroup } from "./model/closeSessionForGroup";
 export { createSession } from "./model/createSession";
 export type { CreateSessionOptions } from "./model/createSession";
-export { getActiveSession } from "./model/getActiveSession";
-export { getLiveSession } from "./model/getLiveSession";
-export { reconcileActiveSession } from "./model/reconcileActiveSession";
-export type { ReconcileActiveSessionOptions } from "./model/reconcileActiveSession";
+export { getViewedSession } from "./model/getViewedSession";
+export { getSessionForGroup } from "./model/getSessionForGroup";
+export { getSessionForTab } from "./model/getSessionForTab";
+export type { SessionTabReference } from "./model/getSessionForTab";
+export { listLiveSessions } from "./model/listLiveSessions";
+export { reconcileSessions } from "./model/reconcileSessions";
+export type { ReconcileSessionsOptions } from "./model/reconcileSessions";
 export { rekeySession } from "./model/rekeySession";
 export { renameSessionForGroup } from "./model/renameSessionForGroup";
 export { reopenSessionForGroup } from "./model/reopenSessionForGroup";
@@ -38,5 +41,6 @@ export { setSessionFocus } from "./model/setSessionFocus";
 export type { SessionFocus } from "./model/setSessionFocus";
 export { startSession } from "./model/startSession";
 export type { StartedSession, StartSessionOptions } from "./model/startSession";
+export { viewSession } from "./model/viewSession";
 export { trackSessionTabMembership } from "./model/trackSessionTabMembership";
 export type { TrackSessionTabMembershipOptions } from "./model/trackSessionTabMembership";

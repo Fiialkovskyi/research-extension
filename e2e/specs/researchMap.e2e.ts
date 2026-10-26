@@ -316,18 +316,31 @@ describe("the research map", () => {
     expect((await readTabs()).filter(isMapTab)).toHaveLength(1);
   });
 
-  it("says no session is active once the session's group is closed", async () => {
+  it("keeps showing a session whose group is closed, which is saved rather than gone", async () => {
+    const before = await readResearchMap();
+
     await closeTabGroup(title);
 
-    const map = await waitForMap((snapshot) => snapshot.empty, "the empty state");
+    // The map is pinned to its session, which a closed group only saves.
+    const map = await waitForMap(
+      (snapshot) => snapshot.nodes.length === before.nodes.length,
+      "the saved session's pages",
+    );
 
-    expect(map.nodes).toHaveLength(0);
+    expect(map.empty).toBe(false);
     expect(map.documentId).toBe(documentId);
-    expect((await readPopupOnce()).hasOpenMap).toBe(false);
+    // The popup follows once the browser has told the background the group is gone.
+    await browser.waitUntil(async () => !(await readPopupOnce()).hasOpenMap, {
+      timeout: UI_TIMEOUT_MS,
+      timeoutMsg: "The popup still offered the map for a session with no group.",
+    });
   });
 
   it("says no session is active when opened without one", async () => {
-    await selectTabShowing(MAP_PAGE_PATH);
+    // The map is pinned to its session, so its address ends in the session's id.
+    const pinned = (await readTabs()).find((tab) => isMapTab(tab))?.url;
+
+    await selectTabShowing(pinned ?? MAP_PAGE_PATH);
     await loadUrlInSelectedTab(getExtensionUrl(MAP_PAGE_PATH));
 
     const map = await waitForMap(

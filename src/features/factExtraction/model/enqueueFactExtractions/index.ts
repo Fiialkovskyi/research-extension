@@ -3,12 +3,12 @@ import type { IDBPDatabase } from "idb";
 import { enqueueJob } from "@/features/jobQueue";
 import { getActiveModel } from "@/features/modelRegistry";
 import { readSessionGraph } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
 import {
   EXTRACTION_STORE,
   type ResearchDatabaseSchema,
   SNAPSHOT_STORE,
   type StoredJob,
+  SESSION_STORE,
 } from "@/shared/storage";
 
 import { EXTRACT_FACTS_JOB, EXTRACT_FACTS_PRIORITY } from "../../constants";
@@ -29,13 +29,14 @@ import { getFactProducerVersion } from "../getFactProducerVersion";
  */
 export const enqueueFactExtractions = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
 ): Promise<StoredJob[]> => {
   const [session, model] = await Promise.all([
-    getActiveSession(database),
+    database.get(SESSION_STORE, sessionId),
     getActiveModel(database, "text-generation"),
   ]);
 
-  if (session === undefined || model?.manifest.contract.family !== "text-generation") {
+  if (session?.status !== "active" || model?.manifest.contract.family !== "text-generation") {
     return [];
   }
 

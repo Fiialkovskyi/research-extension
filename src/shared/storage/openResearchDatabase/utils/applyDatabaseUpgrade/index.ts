@@ -245,6 +245,11 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
 
     void record();
   },
+  23: (_database, transaction) => {
+    // The popup asks which jobs settled since a batch began; done jobs are
+    // never deleted, so without an index that question scans every one.
+    transaction.objectStore(JOB_STORE).createIndex("updatedAt", "updatedAt");
+  },
 };
 
 /**

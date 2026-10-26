@@ -2,10 +2,20 @@ import * as v from "valibot";
 
 /** What the suite reads out of the extension's database and tab group API. */
 export const researchSnapshotSchema = v.object({
-  sessions: v.array(v.object({ title: v.string(), groupId: v.number(), status: v.string() })),
+  sessions: v.array(
+    v.object({
+      id: v.string(),
+      title: v.string(),
+      groupId: v.number(),
+      status: v.string(),
+      savedTabCount: v.number(),
+    }),
+  ),
   nodes: v.array(
     v.object({
       id: v.string(),
+      /** The session the node was recorded in. */
+      sessionId: v.string(),
       url: v.string(),
       kind: v.string(),
       /** The search query, on SERP nodes only. */

@@ -2,9 +2,14 @@ import type { IDBPDatabase } from "idb";
 
 import { recordFocusInterval } from "@/features/activityLog";
 import { addNodeSignals, readTabNode } from "@/features/researchGraph";
-import { getActiveSession, setSessionFocus } from "@/features/researchSession";
+import { listLiveSessions, setSessionFocus } from "@/features/researchSession";
 import { ENGAGEMENT_RULES } from "@/shared/config";
-import type { ResearchDatabaseSchema, StoredFocusSwitch, StoredFocusVisit } from "@/shared/storage";
+import type {
+  ResearchDatabaseSchema,
+  StoredFocusSwitch,
+  StoredFocusVisit,
+  StoredSession,
+} from "@/shared/storage";
 
 import { countQuickReturn } from "./utils/countQuickReturn";
 import { linkCoAttention } from "./utils/linkCoAttention";
@@ -35,34 +40,18 @@ export interface TrackedDwell {
 const getIntervalMs = (since: number, now: number): number =>
   Math.min(Math.max(now - since, 0), ENGAGEMENT_RULES.maximumIntervalMs);
 
-/**
- * Brings the session's active reading time up to `now`, then follows focus to
- * the tab the user is reading (target spec §4, "Focus and active time").
- *
- * Called after every event that may have moved focus, rather than kept running
- * in memory: the background can be unloaded at any time, and the open visit
- * on the session record is what it picks up from.
- *
- * A visit pauses while the window is unfocused or the user idle, and resumes
- * when the same node is read again; it ends when another node gets focus. A
- * visit to a node that already had dwell is a revisit, counted once it reaches
- * the revisit threshold.
- *
- * Focus moving from one node to another is also what co-attention and quick
- * returns are counted from, so both are decided here, on the same move.
- */
-export const trackActiveDwell = async ({
+interface TrackSessionDwellOptions extends TrackActiveDwellOptions {
+  session: StoredSession;
+}
+
+/** Tracks one session's visit; returns the node that gained dwell, if any. */
+const trackSessionDwell = async ({
   database,
+  session,
   focusedTabId,
   now,
   discardOpen = false,
-}: TrackActiveDwellOptions): Promise<TrackedDwell> => {
-  const session = await getActiveSession(database);
-
-  if (session === undefined) {
-    return { dwelledNodeId: undefined };
-  }
-
+}: TrackSessionDwellOptions): Promise<string | undefined> => {
   let visit: StoredFocusVisit | undefined = session.focus;
   let dwelledNodeId: string | undefined;
 
@@ -144,6 +133,44 @@ export const trackActiveDwell = async ({
         target !== undefined &&
         target.id !== session.lastPosition.nodeId,
     });
+  }
+
+  return dwelledNodeId;
+};
+
+/**
+ * Brings every active session's reading time up to `now`, then follows focus
+ * to the tab the user is reading (target spec §4, "Focus and active time").
+ *
+ * Each session keeps its own visit, so the user moving from a tab of one
+ * session to a tab of another pauses the first session's visit and starts the
+ * second's; the focused tab belongs to at most one of them.
+ *
+ * Called after every event that may have moved focus, rather than kept running
+ * in memory: the background can be unloaded at any time, and the open visit
+ * on the session record is what it picks up from.
+ *
+ * A visit pauses while the window is unfocused or the user idle, and resumes
+ * when the same node is read again; it ends when another node gets focus. A
+ * visit to a node that already had dwell is a revisit, counted once it reaches
+ * the revisit threshold.
+ *
+ * Focus moving from one node to another is also what co-attention and quick
+ * returns are counted from, so both are decided here, on the same move.
+ */
+export const trackActiveDwell = async ({
+  database,
+  focusedTabId,
+  now,
+  discardOpen = false,
+}: TrackActiveDwellOptions): Promise<TrackedDwell> => {
+  const sessions = (await listLiveSessions(database)).filter(({ status }) => status === "active");
+  let dwelledNodeId: string | undefined;
+
+  for (const session of sessions) {
+    const tracked = await trackSessionDwell({ database, session, focusedTabId, now, discardOpen });
+
+    dwelledNodeId ??= tracked;
   }
 
   return { dwelledNodeId };

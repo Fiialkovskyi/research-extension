@@ -1,7 +1,6 @@
 import type { IDBPDatabase } from "idb";
 
-import { getActiveSession } from "@/features/researchSession";
-import { NODE_STORE, type ResearchDatabaseSchema } from "@/shared/storage";
+import { NODE_STORE, type ResearchDatabaseSchema, SESSION_STORE } from "@/shared/storage";
 
 import { buildSearchUrl } from "../buildSearchUrl";
 import { chooseSearchEngine } from "../chooseSearchEngine";
@@ -23,12 +22,13 @@ export interface GapSearchApi {
  */
 export const openGapSearch = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   api: GapSearchApi,
   query: string,
 ): Promise<string> => {
-  const session = await getActiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
-  if (session === undefined) {
+  if (session?.status !== "active") {
     throw new Error("Start or reopen a session to search from its gaps.");
   }
 

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SummariesApp, type SummariesClient } from ".";
 import type { DataTopic } from "@/features/liveData";
@@ -292,5 +292,39 @@ describe("SummariesApp", () => {
     render(<SummariesApp client={client} />);
 
     expect(await screen.findByTestId("summaries-empty")).toBeInTheDocument();
+  });
+
+  describe("a page pinned to a session", () => {
+    afterEach(() => {
+      window.history.replaceState(null, "", "/");
+    });
+
+    it("asks for the session in its address on every read, and names it in the tab", async () => {
+      window.history.replaceState(null, "", "/?session=session-2");
+      const { client } = createClient();
+
+      render(<SummariesApp client={client} />);
+      await vi.waitFor(() => expect(document.title).toMatch(/^Summaries: /));
+
+      for (const type of ["summaries.read", "questions.read", "table.read", "gaps.read"]) {
+        expect(client.request).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type,
+            payload: expect.objectContaining({ sessionId: "session-2" }),
+          }),
+        );
+      }
+    });
+
+    it("says the session is gone when it has none to show", async () => {
+      window.history.replaceState(null, "", "/?session=session-2");
+      const { client } = createClient(false);
+
+      render(<SummariesApp client={client} />);
+
+      expect(await screen.findByTestId("summaries-empty")).toHaveTextContent(
+        "This session is gone",
+      );
+    });
   });
 });

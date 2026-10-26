@@ -4,12 +4,12 @@ import * as v from "valibot";
 import { getFactSetHash } from "@/features/clusterSummaries";
 import { decryptBytes, getDataKey } from "@/features/dataProtection";
 import { getActiveModel } from "@/features/modelRegistry";
-import { getLiveSession } from "@/features/researchSession";
 import {
   JOB_STORE,
   MODEL_STORE,
   QUESTION_STORE,
   type ResearchDatabaseSchema,
+  SESSION_STORE,
 } from "@/shared/storage";
 
 import { SUGGEST_QUESTIONS_JOB } from "../../constants";
@@ -27,8 +27,9 @@ import { readSessionFactIds } from "../readSessionFactIds";
  */
 export const readOpenQuestions = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
 ): Promise<OpenQuestionsView | undefined> => {
-  const session = await getLiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
   if (session === undefined) {
     return undefined;

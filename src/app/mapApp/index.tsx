@@ -19,6 +19,7 @@ import {
   RpcMessageError,
   rpcResponseSchemas,
 } from "@/shared/rpc";
+import { readPinnedSessionId } from "@/shared/readPinnedSessionId";
 
 /**
  * The map's end of its connection to the background.
@@ -56,11 +57,13 @@ const isTypingTarget = (target: EventTarget | null): boolean =>
 /**
  * Composition root of the research map page.
  *
- * The page draws the active session four ways — a plain history, the tree,
+ * The page draws one session four ways — a plain history, the tree,
  * its anchors, and a telemetry timeline — picked by the switcher or the keys
  * 1–4. The view is kept in the address (`#telemetry`), so a reload keeps it.
  */
 export function MapApp({ client }: MapAppProps) {
+  /** The session the map was opened for; a map opened without one follows the viewed session. */
+  const [pinnedId] = useState(() => readPinnedSessionId(window.location.search));
   const [state, setState] = useState<MapState>({ status: "loading" });
   /** Why the last activated page could not be shown, until one can. */
   const [failure, setFailure] = useState<string | undefined>();
@@ -116,10 +119,19 @@ export function MapApp({ client }: MapAppProps) {
     });
 
     // Sent after listening, so the first snapshot cannot arrive unheard.
-    client.send(buildRpcMessage("graph.subscribe", {}));
+    client.send(
+      buildRpcMessage("graph.subscribe", pinnedId === undefined ? {} : { sessionId: pinnedId }),
+    );
 
     return unsubscribe;
-  }, [client]);
+  }, [client, pinnedId]);
+
+  useEffect(() => {
+    document.title =
+      state.status === "ready" && state.snapshot.session !== null
+        ? `Research map: ${state.snapshot.session.title}`
+        : "Research map";
+  }, [state]);
 
   const focusTab = useCallback(
     (tabId: number) => {
@@ -132,10 +144,15 @@ export function MapApp({ client }: MapAppProps) {
     (nodeId: string) => {
       if (!askedExcerpts.current.has(nodeId)) {
         askedExcerpts.current.add(nodeId);
-        client.send(buildRpcMessage("map.readExcerpt", { nodeId }));
+        client.send(
+          buildRpcMessage(
+            "map.readExcerpt",
+            pinnedId === undefined ? { nodeId } : { nodeId, sessionId: pinnedId },
+          ),
+        );
       }
     },
-    [client],
+    [client, pinnedId],
   );
 
   const changeView = useCallback((next: MapView) => {
@@ -144,7 +161,10 @@ export function MapApp({ client }: MapAppProps) {
     window.history.replaceState(
       null,
       "",
-      next === DEFAULT_MAP_VIEW ? window.location.pathname : `#${next}`,
+      // The query stays: it is what pins the page to its session.
+      next === DEFAULT_MAP_VIEW
+        ? `${window.location.pathname}${window.location.search}`
+        : `#${next}`,
     );
   }, []);
 
@@ -196,7 +216,9 @@ export function MapApp({ client }: MapAppProps) {
         )}
         {state.status === "empty" && (
           <p data-testid="map-empty" className="p-4 text-sm">
-            No active research session.
+            {pinnedId === undefined
+              ? "No active research session."
+              : "This session is gone: it was deleted."}
           </p>
         )}
         {state.status === "ready" && view === "history" && (

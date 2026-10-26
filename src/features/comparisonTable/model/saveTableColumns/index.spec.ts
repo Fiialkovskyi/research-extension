@@ -27,7 +27,9 @@ describe("saveTableColumns", () => {
   it("keeps the columns encrypted, under the session and normalised type", async () => {
     const database = await openResearchDatabase();
 
-    expect(await saveTableColumns(database, "Product", ["battery capacity", "weight"])).toBe(true);
+    expect(await saveTableColumns(database, "s", "Product", ["battery capacity", "weight"])).toBe(
+      true,
+    );
 
     const [stored] = await database.getAll(TABLE_COLUMNS_STORE);
 
@@ -42,8 +44,8 @@ describe("saveTableColumns", () => {
   it("forgets the choice for an empty list", async () => {
     const database = await openResearchDatabase();
 
-    await saveTableColumns(database, "product", ["weight"]);
-    await saveTableColumns(database, "product", []);
+    await saveTableColumns(database, "s", "product", ["weight"]);
+    await saveTableColumns(database, "s", "product", []);
 
     expect(
       await readSavedColumns(database, await getDataKey(database), "s", "product"),
@@ -55,6 +57,6 @@ describe("saveTableColumns", () => {
 
     await database.clear(SESSION_STORE);
 
-    expect(await saveTableColumns(database, "product", ["weight"])).toBe(false);
+    expect(await saveTableColumns(database, "s", "product", ["weight"])).toBe(false);
   });
 });

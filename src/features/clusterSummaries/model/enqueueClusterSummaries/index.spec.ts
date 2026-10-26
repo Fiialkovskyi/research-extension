@@ -60,7 +60,7 @@ beforeEach(async () => {
 
 describe("enqueueClusterSummaries", () => {
   it("queues a summary a minute ahead for each cluster with facts, below extraction", async () => {
-    const jobs = await enqueueClusterSummaries(await openResearchDatabase(), NOW);
+    const jobs = await enqueueClusterSummaries(await openResearchDatabase(), "s", NOW);
 
     expect(jobs).toHaveLength(1);
     expect(jobs[0]).toMatchObject({
@@ -81,7 +81,7 @@ describe("enqueueClusterSummaries", () => {
       modelRef: "ollama:qwen3:4b@abc",
     } as never);
 
-    expect(await enqueueClusterSummaries(database, NOW)).toEqual([]);
+    expect(await enqueueClusterSummaries(database, "s", NOW)).toEqual([]);
   });
 
   it("queues nothing for a current summary written by another model (REQ-LIN-005)", async () => {
@@ -93,15 +93,15 @@ describe("enqueueClusterSummaries", () => {
       modelRef: "ollama:qwen3:8b@old",
     } as never);
 
-    expect(await enqueueClusterSummaries(database, NOW)).toEqual([]);
+    expect(await enqueueClusterSummaries(database, "s", NOW)).toEqual([]);
   });
 
   it("queues another job once the fact set changes", async () => {
     const database = await openResearchDatabase();
 
-    await enqueueClusterSummaries(database, NOW);
+    await enqueueClusterSummaries(database, "s", NOW);
     await database.put(FACT_STORE, { id: "b:0:1", nodeId: "b", sessionId: "s" } as never);
-    await enqueueClusterSummaries(database, NOW + 10_000);
+    await enqueueClusterSummaries(database, "s", NOW + 10_000);
 
     expect(await database.count(JOB_STORE)).toBe(2);
   });
@@ -111,6 +111,6 @@ describe("enqueueClusterSummaries", () => {
 
     await database.clear(MODEL_STORE);
 
-    expect(await enqueueClusterSummaries(database, NOW)).toEqual([]);
+    expect(await enqueueClusterSummaries(database, "s", NOW)).toEqual([]);
   });
 });

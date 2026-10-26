@@ -111,7 +111,7 @@ describe("readOpenQuestions", () => {
   it("shows the session's questions, fresh", async () => {
     await storeQuestions(await getFactSetHash(["a:0:0", "a:0:1"]));
 
-    expect(await readOpenQuestions(await openResearchDatabase())).toEqual({
+    expect(await readOpenQuestions(await openResearchDatabase(), "s")).toEqual({
       questions: [{ question: "Warranty?", query: "volta warranty" }],
       hasQuestions: true,
       isStale: false,
@@ -124,10 +124,10 @@ describe("readOpenQuestions", () => {
 
   it("says they are stale once the facts or the model changed", async () => {
     await storeQuestions("old");
-    expect((await readOpenQuestions(await openResearchDatabase()))?.isStale).toBe(true);
+    expect((await readOpenQuestions(await openResearchDatabase(), "s"))?.isStale).toBe(true);
 
     await storeQuestions(await getFactSetHash(["a:0:0", "a:0:1"]), "removed@1");
-    expect((await readOpenQuestions(await openResearchDatabase()))?.isStale).toBe(true);
+    expect((await readOpenQuestions(await openResearchDatabase(), "s"))?.isStale).toBe(true);
   });
 
   it("shows a requested set as pending, and none yet", async () => {
@@ -141,7 +141,7 @@ describe("readOpenQuestions", () => {
       payload: { factSetHash: "h", requestedAt: 1 },
     } as never);
 
-    expect(await readOpenQuestions(await openResearchDatabase())).toMatchObject({
+    expect(await readOpenQuestions(await openResearchDatabase(), "s")).toMatchObject({
       questions: [],
       hasQuestions: false,
       isPending: true,

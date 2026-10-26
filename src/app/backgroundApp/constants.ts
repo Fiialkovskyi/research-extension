@@ -23,7 +23,7 @@ export const DATA_CHANGING_REQUESTS: ReadonlySet<string> = new Set([
   "session.keepSeparate",
   "session.reattach",
   "session.resume",
-  "session.save",
+  "session.view",
   "spaces.remove",
   "summaries.refresh",
   "tabGroup.create",

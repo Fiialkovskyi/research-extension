@@ -1,6 +1,7 @@
 import type { IDBPDatabase } from "idb";
 import * as v from "valibot";
 
+import { getActivityState } from "@/features/aiActivity";
 import {
   buildTurnOnPlan,
   collapseSetupBanner,
@@ -67,12 +68,12 @@ import {
   declineReattach,
   findReattachCandidate,
   reattachSession,
-  suggestReattach,
-  closeTabsKeepingWindow,
-  listSavedSessions,
   resumeSession,
-  SAVE_FLUSH_TIMEOUT_MS,
-  saveActiveSession,
+  suggestReattach,
+  listSavedSessions,
+  recordSessionTabs,
+  TAB_RECORD_DELAY_MS,
+  TAB_RECORD_MAX_WAIT_MS,
 } from "@/features/researchLibrary";
 import {
   buildEmbeddingSpace,
@@ -90,6 +91,7 @@ import {
   JOB_WAKE_ALARM,
   JOB_WAKE_DELAY_MS,
   type JobRunner,
+  readJobActivity,
   readPendingJobs,
   requeueRunningJobs,
   runNextJob,
@@ -145,9 +147,11 @@ import {
 import {
   buildSessionSummary,
   closeSessionForGroup,
-  getActiveSession,
-  getLiveSession,
-  reconcileActiveSession,
+  getSessionForTab,
+  getViewedSession,
+  listLiveSessions,
+  NO_TAB_GROUP,
+  reconcileSessions,
   renameSessionForGroup,
   reopenSessionForGroup,
   restoreSessionTab,
@@ -155,6 +159,7 @@ import {
   startSession,
   trackSessionTabMembership,
   switchSessionSpace,
+  viewSession,
 } from "@/features/researchSession";
 import {
   closeTabNode,
@@ -189,8 +194,10 @@ import {
   MODEL_STORE,
   NODE_STORE,
   type ResearchDatabaseSchema,
+  SESSION_STORE,
   type StoredJob,
   type StoredModel,
+  type StoredSession,
 } from "@/shared/storage";
 import type { ProbeResult } from "@/features/modelConformance";
 import { DATA_TOPICS, type DataTopic } from "@/features/liveData";
@@ -254,11 +261,19 @@ const listInstalledOllamaModels = async (
     (model) => model.manifest.reference.hub === "ollama",
   );
 
-/** The active session's graph as the map draws it. */
+/** The active sessions, each recorded from its own tab group. */
+const listActiveSessions = async (
+  openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+): Promise<StoredSession[]> =>
+  (await listLiveSessions(openedDatabase)).filter(({ status }) => status === "active");
+
+/** A session's graph as the map draws it; empty when there is no such session. */
 const readGraphSnapshot = async (
   openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string | undefined,
 ): Promise<GraphSnapshot> => {
-  const session = await getActiveSession(openedDatabase);
+  const session =
+    sessionId === undefined ? undefined : await openedDatabase.get(SESSION_STORE, sessionId);
 
   if (session === undefined) {
     return buildGraphSnapshot(undefined, { nodes: [], edges: [] });
@@ -365,9 +380,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
   /**
    * Where the map pages listen. Each is the `emit` of one port, removed when
-   * that port disconnects or can no longer be posted to.
+   * that port disconnects or can no longer be posted to, with the session its
+   * page is pinned to; `undefined` for a page that follows the viewed session.
    */
-  const graphSubscribers = new Set<Emit>();
+  const graphSubscribers = new Map<Emit, string | undefined>();
   /** Where every open page hears that data changed: one `emit` per port, like the graph's. */
   const dataSubscribers = new Set<Emit>();
   /** The kinds of data that changed since the last notification went out. */
@@ -462,6 +478,33 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   };
 
   /**
+   * The session the popup refers to: the one chosen last, else the session of
+   * the selected tab's group, else the one recorded to most recently.
+   */
+  const readViewedSession = async (
+    openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+  ): Promise<StoredSession | undefined> => {
+    let selectedGroupId: number | undefined;
+
+    try {
+      const tabId = await dependencies.readFocusedTab();
+
+      selectedGroupId =
+        tabId === undefined ? undefined : (await dependencies.tabCapture.getTab(tabId)).groupId;
+    } catch {
+      // No selected tab to ask about: the rest of the order decides.
+    }
+
+    return getViewedSession(openedDatabase, selectedGroupId);
+  };
+
+  /** The session a request names, or else the viewed one; `undefined` when there is none. */
+  const resolveSessionId = async (
+    openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+    requestedId: string | undefined,
+  ): Promise<string | undefined> => requestedId ?? (await readViewedSession(openedDatabase))?.id;
+
+  /**
    * Runs capture work on the queue. A failure is reported rather than
    * returned: nobody waits on a capture event.
    */
@@ -491,11 +534,21 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         return;
       }
 
-      const message = buildRpcMessage("graph.snapshot", await readGraphSnapshot(openedDatabase));
+      const viewedId = (await readViewedSession(openedDatabase))?.id;
+      const messages = new Map<string | undefined, RpcMessage<string, unknown>>();
 
-      for (const emit of graphSubscribers) {
+      for (const [emit, requestedId] of graphSubscribers) {
+        const sessionId = requestedId ?? viewedId;
+
         try {
-          emit(message);
+          if (!messages.has(sessionId)) {
+            messages.set(
+              sessionId,
+              buildRpcMessage("graph.snapshot", await readGraphSnapshot(openedDatabase, sessionId)),
+            );
+          }
+
+          emit(messages.get(sessionId) as RpcMessage<string, unknown>);
         } catch {
           // A port whose page has gone throws rather than delivering.
           graphSubscribers.delete(emit);
@@ -527,18 +580,56 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     });
   let reclusterTimer: unknown;
 
-  /** Clusters the active session again, then pushes the graph with its clusters. */
+  /** Clusters every active session again, then pushes the graph with its clusters. */
   const recluster = async (): Promise<void> => {
     await enqueueCapture(async (openedDatabase) => {
-      await reclusterActiveSession(openedDatabase, getNow());
-      // Clusters may have gained or lost pages, and with them facts.
-      await enqueueClusterSummaries(openedDatabase, getNow());
-      await enqueueOpenQuestions(openedDatabase, getNow());
+      for (const { id } of await listActiveSessions(openedDatabase)) {
+        await reclusterActiveSession(openedDatabase, id, getNow());
+        // Clusters may have gained or lost pages, and with them facts.
+        await enqueueClusterSummaries(openedDatabase, id, getNow());
+        await enqueueOpenQuestions(openedDatabase, id, getNow());
+      }
     });
     pushGraphSnapshot();
     notifyDataChanged(["clusters", "summaries", "questions"]);
     // A summary just queued must not wait for the next wake-up to be claimed.
     void runJobs();
+  };
+
+  let tabRecordTimer: unknown;
+  let tabRecordDueBy: number | undefined;
+
+  /**
+   * (Re)arms the record of the session's tabs, so it is saved without the user
+   * asking and resumable once its group is gone (REQ-STO-003). It waits for
+   * capture to be quiet, as closing a group removes its tabs one by one and a
+   * record taken between two removals would keep only some of them; but never
+   * longer than the maximum, so steady browsing is recorded all the same.
+   * Kept in memory: if the event page unloads first, the next capture event
+   * arms it again.
+   */
+  const scheduleTabRecord = (): void => {
+    const now = getNow();
+
+    tabRecordDueBy ??= now + TAB_RECORD_MAX_WAIT_MS;
+
+    if (tabRecordTimer !== undefined) {
+      clearTimer(tabRecordTimer);
+    }
+
+    tabRecordTimer = setTimer(
+      () => {
+        tabRecordTimer = undefined;
+        tabRecordDueBy = undefined;
+        enqueueCapture((openedDatabase) =>
+          recordSessionTabs({
+            database: openedDatabase,
+            queryGroupTabs: dependencies.tabCapture.queryGroupTabs,
+          }),
+        ).catch(dependencies.reportError);
+      },
+      Math.max(0, Math.min(TAB_RECORD_DELAY_MS, tabRecordDueBy - now)),
+    );
   };
 
   /**
@@ -569,6 +660,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     pushGraphSnapshot();
     notifyDataChanged(["pages", "snapshots"]);
     scheduleRecluster();
+    scheduleTabRecord();
 
     return captured;
   };
@@ -588,7 +680,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
     tabId: number,
   ): Promise<void> => {
-    const session = await getActiveSession(openedDatabase);
+    const session = await getSessionForTab(openedDatabase, { tabId, groupId: NO_TAB_GROUP });
 
     if (session !== undefined && (await readTabNode(openedDatabase, session.id, tabId))) {
       observeTab(tabId);
@@ -738,6 +830,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     (await dependencies.readIdleState()) !== "active";
 
   /**
+   * Which queued jobs may be claimed now: text generation waits while the user
+   * is active unless they asked for it. Asked once and kept for a pass.
+   */
+  const readJobPermission = async (): Promise<(job: StoredJob) => boolean> => {
+    const isAway = await isUserAway();
+
+    return (job) => !GENERATION_JOBS.has(job.type) || isAway || isRequested(job);
+  };
+
+  /**
    * Whether a fact-extraction job may take its next chunk now: the user is
    * away, or asked for it. Read afresh from the queue, so a request made while
    * it runs counts at once.
@@ -790,8 +892,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       });
 
       // The page's facts are all in: its entities can be resolved next.
-      if (outcome !== "deferred") {
-        await enqueueEntityResolutions(openedDatabase);
+      if (outcome !== "deferred" && job.sessionId !== undefined) {
+        await enqueueEntityResolutions(openedDatabase, job.sessionId);
       }
 
       return outcome;
@@ -812,8 +914,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       });
       // The page's facts are settled: its cluster's summary is due in a while,
       // and the session's open questions.
-      await enqueueClusterSummaries(openedDatabase, getNow());
-      await enqueueOpenQuestions(openedDatabase, getNow());
+      if (job.sessionId !== undefined) {
+        await enqueueClusterSummaries(openedDatabase, job.sessionId, getNow());
+        await enqueueOpenQuestions(openedDatabase, job.sessionId, getNow());
+      }
     }),
     [SUMMARIZE_CLUSTER_JOB]: runHeld(async (job) => {
       const openedDatabase = await getDatabase();
@@ -900,22 +1004,19 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
   };
 
   /**
-   * Moves the active session to the active embedding model's space once that
+   * Moves each active session to the active embedding model's space once that
    * space covers every chunk (REQ-LIN-003); until then the session keeps the
    * space it has. A session with no space claims one through its first job.
    */
   const maybeSwitchSpace = async (): Promise<void> => {
     try {
       await enqueueCapture(async (openedDatabase) => {
-        const [session, model] = await Promise.all([
-          getActiveSession(openedDatabase),
+        const [sessions, model] = await Promise.all([
+          listActiveSessions(openedDatabase),
           getActiveModel(openedDatabase, "embedding"),
         ]);
 
-        if (
-          session?.activeEmbeddingSpaceId === undefined ||
-          model?.manifest.contract.family !== "embedding"
-        ) {
+        if (model?.manifest.contract.family !== "embedding") {
           return;
         }
 
@@ -929,14 +1030,19 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           now: getNow(),
         });
 
-        if (space.id === session.activeEmbeddingSpaceId) {
-          return;
-        }
+        for (const session of sessions) {
+          if (
+            session.activeEmbeddingSpaceId === undefined ||
+            space.id === session.activeEmbeddingSpaceId
+          ) {
+            continue;
+          }
 
-        const { covered, total } = await readSpaceCoverage(openedDatabase, session.id, space.id);
+          const { covered, total } = await readSpaceCoverage(openedDatabase, session.id, space.id);
 
-        if (total > 0 && covered === total) {
-          await switchSessionSpace(openedDatabase, session.id, space.id, getNow());
+          if (total > 0 && covered === total) {
+            await switchSessionSpace(openedDatabase, session.id, space.id, getNow());
+          }
         }
       });
     } catch (error) {
@@ -982,20 +1088,22 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
         await scheduleJobWake(getNow() + JOB_WAKE_DELAY_MS);
 
+        // A pass starts when work was enqueued or woke the page: the strip
+        // that shows the queue reads it again.
+        notifyDataChanged(["jobs"]);
+
         // Asked once per pass: text generation waits while the user is active.
         while (
           await runNextJob(openedDatabase, jobRunners, {
-            isPermitted: await (async () => {
-              const isAway = await isUserAway();
-
-              return (job: StoredJob) =>
-                !GENERATION_JOBS.has(job.type) || isAway || isRequested(job);
-            })(),
+            isPermitted: await readJobPermission(),
+            onClaimed: () => {
+              notifyDataChanged(["jobs"]);
+            },
           })
         ) {
           // Each pass claims, runs and settles one job.
           hasRunAny = true;
-          notifyDataChanged(["snapshots", "facts", "clusters", "summaries", "questions"]);
+          notifyDataChanged(["snapshots", "facts", "clusters", "summaries", "questions", "jobs"]);
         }
       } while (isJobRunRequested);
     } catch (error) {
@@ -1257,6 +1365,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       notifyDataChanged(["models"]);
     }
 
+    // Ollama has just answered every step: work that stopped while it did not,
+    // or that waited for a model, goes on now rather than at the next page read.
+    void queueSnapshotWork().catch(dependencies.reportError);
+
     return buildRpcMessage("aiSetup.turnedOn", await readAiSetupStatus(await getDatabase()));
   };
 
@@ -1273,35 +1385,43 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
     if (status.state === "running") {
       await enqueueCapture((openedDatabase) => requeuePausedJobs(openedDatabase, getNow()));
+      // No longer paused: the badge and the strip follow.
+      notifyDataChanged(["jobs"]);
     }
   };
 
   /**
-   * Queues the work the session's snapshots need — embedding, and fact
+   * Queues the work each active session's snapshots need — embedding, and fact
    * extraction while a generation model is active — then runs what is due.
    */
   const queueSnapshotWork = async (): Promise<void> => {
     await enqueueCapture(async (openedDatabase) => {
-      await enqueueSnapshotEmbeddings(openedDatabase, getNow());
-      await enqueueFactExtractions(openedDatabase);
-      await enqueueEntityResolutions(openedDatabase);
+      for (const { id } of await listActiveSessions(openedDatabase)) {
+        await enqueueSnapshotEmbeddings(openedDatabase, id, getNow());
+        await enqueueFactExtractions(openedDatabase, id);
+        await enqueueEntityResolutions(openedDatabase, id);
+      }
     });
     await resumeLocalAi();
     await runJobs();
   };
 
   /**
-   * Offers the active session a saved session to continue, once its first
+   * Offers the session a search was recorded in a saved session to continue, once its first
    * search is recorded (REQ-STO-006). Off the capture queue — matching by
    * meaning loads the model — except for the write, which is re-checked there.
    */
   const checkReattach = async (searchNodeId: string): Promise<void> => {
     try {
       const openedDatabase = await getDatabase();
-      const session = await getActiveSession(openedDatabase);
+      const searchNode = await openedDatabase.get(NODE_STORE, searchNodeId);
+      const session =
+        searchNode === undefined
+          ? undefined
+          : await openedDatabase.get(SESSION_STORE, searchNode.sessionId);
 
       if (
-        session === undefined ||
+        session?.status !== "active" ||
         session.reattachSuggestion !== undefined ||
         session.reattachDeclined === true ||
         (await readSessionRoot(openedDatabase, session.id))?.id !== searchNodeId
@@ -1452,8 +1572,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
             const count = await rejectFacts(openedDatabase, request.payload.factIds, getNow());
 
             // A cluster's fact set may have changed: its summary is due again.
-            await enqueueClusterSummaries(openedDatabase, getNow());
-            await enqueueOpenQuestions(openedDatabase, getNow());
+            for (const { id } of await listActiveSessions(openedDatabase)) {
+              await enqueueClusterSummaries(openedDatabase, id, getNow());
+              await enqueueOpenQuestions(openedDatabase, id, getNow());
+            }
 
             return count;
           });
@@ -1466,12 +1588,14 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "facts.restoreRejections": {
           const restoredCount = await serializeWork(async () => {
             const openedDatabase = await getDatabase();
-            const session = await getActiveSession(openedDatabase);
+            const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
             const count =
-              session === undefined ? 0 : await restoreRejections(openedDatabase, session.id);
+              sessionId === undefined ? 0 : await restoreRejections(openedDatabase, sessionId);
 
-            await enqueueClusterSummaries(openedDatabase, getNow());
-            await enqueueOpenQuestions(openedDatabase, getNow());
+            for (const { id } of await listActiveSessions(openedDatabase)) {
+              await enqueueClusterSummaries(openedDatabase, id, getNow());
+              await enqueueOpenQuestions(openedDatabase, id, getNow());
+            }
 
             return count;
           });
@@ -1527,15 +1651,27 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "questions.read": {
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
           return buildRpcMessage("questions.view", {
-            view: (await readOpenQuestions(await getDatabase())) ?? null,
+            view:
+              sessionId === undefined
+                ? null
+                : ((await readOpenQuestions(openedDatabase, sessionId)) ?? null),
           });
         }
 
         case "questions.refresh": {
-          const queued = await serializeWork(async () =>
-            requestOpenQuestions(await getDatabase(), getNow()),
-          );
+          const queued = await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
+            return (
+              sessionId !== undefined &&
+              (await requestOpenQuestions(openedDatabase, sessionId, getNow()))
+            );
+          });
 
           if (queued) {
             void runJobs();
@@ -1545,14 +1681,32 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "gaps.read": {
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
           return buildRpcMessage("gaps.view", {
-            gaps: (await readResearchGaps(await getDatabase(), request.payload.entityType)) ?? null,
+            gaps:
+              sessionId === undefined
+                ? null
+                : ((await readResearchGaps(
+                    openedDatabase,
+                    sessionId,
+                    request.payload.entityType,
+                  )) ?? null),
           });
         }
 
         case "gaps.search": {
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
+          if (sessionId === undefined) {
+            throw new Error("Start or reopen a session to search from its gaps.");
+          }
+
           const url = await openGapSearch(
-            await getDatabase(),
+            openedDatabase,
+            sessionId,
             {
               createTab: (properties) => dependencies.resumeApi.createTab(properties),
               groupTabs: (options) => dependencies.sessionTabs.groupTabs(options),
@@ -1564,7 +1718,12 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "table.read": {
-          const view = await readComparisonTable(await getDatabase(), request.payload.entityType);
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+          const view =
+            sessionId === undefined
+              ? undefined
+              : await readComparisonTable(openedDatabase, sessionId, request.payload.entityType);
 
           return buildRpcMessage("table.view", {
             title: view?.title ?? "",
@@ -1575,24 +1734,42 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "table.setColumns": {
           const { entityType, columns } = request.payload;
 
-          await serializeWork(async () =>
-            saveTableColumns(await getDatabase(), entityType, columns),
-          );
+          await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
+            return (
+              sessionId !== undefined &&
+              (await saveTableColumns(openedDatabase, sessionId, entityType, columns))
+            );
+          });
 
           return buildRpcMessage("table.columnsSaved", { entityType });
         }
 
         case "summaries.read": {
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
           return buildRpcMessage("summaries.view", {
-            session: (await readSummariesView(await getDatabase())) ?? null,
+            session:
+              sessionId === undefined
+                ? null
+                : ((await readSummariesView(openedDatabase, sessionId)) ?? null),
           });
         }
 
         case "summaries.refresh": {
           const { clusterId } = request.payload;
-          const queued = await serializeWork(async () =>
-            requestClusterSummary(await getDatabase(), clusterId, getNow()),
-          );
+          const queued = await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+            const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
+            return (
+              sessionId !== undefined &&
+              (await requestClusterSummary(openedDatabase, sessionId, clusterId, getNow()))
+            );
+          });
 
           if (queued) {
             void runJobs();
@@ -1602,7 +1779,11 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "summaries.open": {
-          await dependencies.openSummariesPage();
+          const sessionId = await resolveSessionId(await getDatabase(), request.payload.sessionId);
+
+          if (sessionId !== undefined) {
+            await dependencies.openSummariesPage(sessionId);
+          }
 
           return buildRpcMessage("summaries.opened", {});
         }
@@ -1622,7 +1803,11 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           const requestedAt = getNow();
           const queued = await serializeWork(async () => {
             const openedDatabase = await getDatabase();
-            const jobs = await enqueueFactExtractions(openedDatabase);
+            const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+            const jobs =
+              sessionId === undefined
+                ? []
+                : await enqueueFactExtractions(openedDatabase, sessionId);
             const pending = jobs.filter(
               ({ status }) => status === "queued" || status === "running",
             );
@@ -1806,26 +1991,41 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "session.getActive": {
           return await serializeWork(async () => {
             const openedDatabase = await getDatabase();
-            const session = await reconcileActiveSession({
+
+            await reconcileSessions({
               database: openedDatabase,
               getGroup: dependencies.tabGroups.getGroup,
             });
-            const live = session ?? (await getLiveSession(openedDatabase));
+
+            const active = (await listActiveSessions(openedDatabase)).toSorted(
+              (first, second) => first.createdAt - second.createdAt,
+            );
+            const viewed = await readViewedSession(openedDatabase);
 
             return buildRpcMessage("session.active", {
-              session:
-                session === undefined
-                  ? null
-                  : buildSessionSummary(
-                      session,
-                      await countSessionNodes(openedDatabase, session.id),
-                    ),
-              closedSession:
-                live?.status === "closed"
-                  ? buildSessionSummary(live, await countSessionNodes(openedDatabase, live.id))
-                  : null,
+              sessions: await Promise.all(
+                active.map(async (session) =>
+                  buildSessionSummary(session, await countSessionNodes(openedDatabase, session.id)),
+                ),
+              ),
+              viewedId: viewed?.id ?? null,
             });
           });
+        }
+
+        case "session.view": {
+          const viewedId = await serializeWork(async () => {
+            const openedDatabase = await getDatabase();
+
+            await viewSession(openedDatabase, request.payload.sessionId, getNow());
+
+            return (await readViewedSession(openedDatabase))?.id ?? null;
+          });
+
+          // Pages that follow the viewed session draw the new one.
+          pushGraphSnapshot();
+
+          return buildRpcMessage("session.viewed", { viewedId });
         }
 
         case "graph.subscribe": {
@@ -1835,11 +2035,16 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           // change can fall between the snapshot answered here and the pushes
           // that follow it.
           await enqueueCapture(async (openedDatabase) => {
-            snapshot = await readGraphSnapshot(openedDatabase);
+            const requestedId = request.payload.sessionId;
+
+            snapshot = await readGraphSnapshot(
+              openedDatabase,
+              await resolveSessionId(openedDatabase, requestedId),
+            );
 
             // A one-shot message has nowhere to push to; it gets one snapshot.
             if (emit !== undefined) {
-              graphSubscribers.add(emit);
+              graphSubscribers.set(emit, requestedId);
             }
           });
 
@@ -1862,7 +2067,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "tab.focus": {
           const { tabId } = request.payload;
           const openedDatabase = await getDatabase();
-          const session = await getActiveSession(openedDatabase);
+          const session = await getSessionForTab(openedDatabase, { tabId, groupId: NO_TAB_GROUP });
 
           // Only a tab the map draws as open may be selected: the map is not a
           // channel for selecting arbitrary tabs, and a closed node has none.
@@ -1872,7 +2077,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           ) {
             return buildRpcMessage("tab.focusRefused", {
               tabId,
-              reason: "This page's tab is not open in the active session.",
+              reason: "This page's tab is not open in an active session.",
             });
           }
 
@@ -1886,69 +2091,13 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "map.open": {
-          await dependencies.openMap();
+          const sessionId = await resolveSessionId(await getDatabase(), request.payload.sessionId);
+
+          if (sessionId !== undefined) {
+            await dependencies.openMap(sessionId);
+          }
 
           return buildRpcMessage("map.opened", {});
-        }
-
-        case "session.save": {
-          const openedDatabase = await getDatabase();
-          const active = await getActiveSession(openedDatabase);
-
-          if (active === undefined) {
-            return buildRpcMessage("session.saveFailed", { reason: "No session is active." });
-          }
-
-          // The open pages send what they hold first; their batches reach the
-          // capture queue before the save below, so nothing read is lost.
-          const { nodes } = await readSessionGraph(openedDatabase, active.id);
-          const tabIds = [
-            ...new Set(nodes.filter((node) => node.tabState === "open").map((node) => node.tabId)),
-          ];
-
-          await Promise.allSettled(
-            tabIds.map((tabId) =>
-              Promise.race([
-                dependencies.pageSignals.requestFlush(tabId),
-                new Promise((resolve) => {
-                  setTimer(() => {
-                    resolve(undefined);
-                  }, SAVE_FLUSH_TIMEOUT_MS);
-                }),
-              ]),
-            ),
-          );
-
-          let saved: Awaited<ReturnType<typeof saveActiveSession>>;
-
-          await captureAndPush(async (databaseInQueue) => {
-            await trackActiveDwell({
-              database: databaseInQueue,
-              focusedTabId: undefined,
-              now: getNow(),
-            });
-            saved = await saveActiveSession({
-              database: databaseInQueue,
-              queryGroupTabs: dependencies.tabCapture.queryGroupTabs,
-              now: getNow(),
-            });
-          });
-
-          if (saved === undefined) {
-            return buildRpcMessage("session.saveFailed", {
-              reason: "The session could not be saved.",
-            });
-          }
-
-          // The session is saved already: closing its tabs changes nothing recorded.
-          await closeTabsKeepingWindow(dependencies.closeTabs, saved.tabs).catch(
-            dependencies.reportError,
-          );
-
-          return buildRpcMessage("session.saved", {
-            sessionId: saved.session.id,
-            title: saved.session.title,
-          });
         }
 
         case "library.list": {
@@ -1988,7 +2137,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           let failure: string | undefined;
 
           await captureAndPush(async (openedDatabase) => {
-            const active = await getActiveSession(openedDatabase);
+            const active = await readViewedSession(openedDatabase);
 
             if (active === undefined) {
               failure = "No session is active.";
@@ -2037,7 +2186,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "session.keepSeparate": {
           await serializeWork(async () => {
             const openedDatabase = await getDatabase();
-            const active = await getActiveSession(openedDatabase);
+            const active = await readViewedSession(openedDatabase);
 
             if (active !== undefined) {
               await declineReattach(openedDatabase, active.id);
@@ -2179,6 +2328,29 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           return buildRpcMessage("aiSetup.opened", {});
         }
 
+        case "aiActivity.read": {
+          const openedDatabase = await getDatabase();
+          const [session, isPermitted, isPaused] = await Promise.all([
+            readViewedSession(openedDatabase),
+            readJobPermission(),
+            isLocalAiPaused(openedDatabase),
+          ]);
+          const activity = await readJobActivity(openedDatabase, {
+            now: getNow(),
+            isPermitted,
+            ...(session === undefined ? {} : { sessionId: session.id }),
+          });
+
+          // A pause is the last failure remembered, not a fresh look: while the
+          // user is looking at it, ask Ollama once whether it is back. If it is,
+          // the jobs return to the queue and the strip hears so through `jobs`.
+          if (isPaused) {
+            void resumeLocalAi().then(runJobs).catch(dependencies.reportError);
+          }
+
+          return buildRpcMessage("aiActivity.state", getActivityState(activity, { isPaused }));
+        }
+
         case "aiSetup.read": {
           return buildRpcMessage("aiSetup.status", await readAiSetupStatus(await getDatabase()));
         }
@@ -2257,20 +2429,35 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         }
 
         case "recorded.open": {
-          await dependencies.openRecordedPage();
+          const sessionId = await resolveSessionId(await getDatabase(), request.payload.sessionId);
+
+          if (sessionId !== undefined) {
+            await dependencies.openRecordedPage(sessionId);
+          }
 
           return buildRpcMessage("recorded.opened", {});
         }
 
         case "recorded.read": {
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
           return buildRpcMessage("recorded.session", {
-            session: (await readRecordedSession(await getDatabase())) ?? null,
+            session:
+              sessionId === undefined
+                ? null
+                : ((await readRecordedSession(openedDatabase, sessionId)) ?? null),
           });
         }
 
         case "map.readExcerpt": {
           const { nodeId } = request.payload;
-          const text = await readRecordedText(await getDatabase(), nodeId);
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+          const text =
+            sessionId === undefined
+              ? null
+              : await readRecordedText(openedDatabase, sessionId, nodeId);
 
           return buildRpcMessage("map.excerpt", {
             nodeId,
@@ -2281,9 +2468,15 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         case "recorded.readText": {
           const { nodeId } = request.payload;
 
+          const openedDatabase = await getDatabase();
+          const sessionId = await resolveSessionId(openedDatabase, request.payload.sessionId);
+
           return buildRpcMessage("recorded.text", {
             nodeId,
-            text: await readRecordedText(await getDatabase(), nodeId),
+            text:
+              sessionId === undefined
+                ? null
+                : await readRecordedText(openedDatabase, sessionId, nodeId),
           });
         }
 
@@ -2451,6 +2644,8 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           now: getNow(),
         });
         await closeSessionForGroup(openedDatabase, group.id);
+        // The other sessions go on being read, so their reading time resumes.
+        await followFocus(openedDatabase);
       });
       pushGraphSnapshot();
     },
@@ -2505,7 +2700,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
       // Spaces retired more than 14 days ago give their disk back (REQ-LIN-004).
       await enqueueCapture((openedDatabase) => purgeRetiredSpaces(openedDatabase, getNow()));
       await serializeWork(async () => {
-        await reconcileActiveSession({
+        await reconcileSessions({
           database: await getDatabase(),
           getGroup: dependencies.tabGroups.getGroup,
         });
@@ -2567,6 +2762,9 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     handleContentMessage,
     handleWindowFocusChanged: () => captureAndPush((openedDatabase) => followFocus(openedDatabase)),
     handleIdleStateChanged: async (state: IdleState) => {
+      // Whether held-back generation may run changed with it.
+      notifyDataChanged(["jobs"]);
+
       // The user stepped away: text generation may run now (REQ-MOD-008).
       if (state !== "active") {
         void runJobs();

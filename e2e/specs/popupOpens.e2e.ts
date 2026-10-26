@@ -28,7 +28,7 @@ describe("toolbar popup", () => {
     await closePopup();
   });
 
-  it("opens an anchored popup showing the greeting when the icon is clicked", async () => {
+  it("opens an anchored popup showing its panel when the icon is clicked", async () => {
     await clickToolbarAction();
 
     const panel = await waitForPopupPanel();
@@ -37,9 +37,8 @@ describe("toolbar popup", () => {
 
     const popup = await readPopup();
     expect(popup.uri).toBe(getExtensionUrl(POPUP_PATH));
-    expect(popup.greeting).toBe("Hello World");
-    expect(popup.greetingVisible).toBe(true);
-    expect(popup.panelWidth).toBe(320);
+    expect(popup.panelVisible).toBe(true);
+    expect(popup.panelWidth).toBe(416);
   });
 
   it("closes and reopens on a second click", async () => {
@@ -49,6 +48,6 @@ describe("toolbar popup", () => {
 
     await clickToolbarAction();
     expect((await waitForPopupPanel()).state).toBe("open");
-    expect((await readPopup()).greeting).toBe("Hello World");
+    expect((await readPopup()).panelVisible).toBe(true);
   });
 });

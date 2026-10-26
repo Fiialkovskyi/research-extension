@@ -97,23 +97,69 @@ describe("resumeSession", () => {
     ]);
   });
 
-  it("is refused while another session is active, opening nothing", async () => {
-    await database.put(SESSION_STORE, { ...SAVED, id: "other", status: "active", groupId: 5 });
+  it("resumes beside an active session, leaving it untouched", async () => {
+    const other: StoredSession = { ...SAVED, id: "other", status: "active", groupId: 5 };
+    await database.put(SESSION_STORE, other);
 
-    const api = buildApi({ getGroup: vi.fn(() => Promise.resolve({ color: "blue" })) });
+    await resumeSession({ database, sessionId: "session-1", api: buildApi(), now: 9 });
 
-    await expect(resumeSession({ database, sessionId: "session-1", api, now: 9 })).rejects.toThrow(
-      "already active",
-    );
-    expect(api.createTab).not.toHaveBeenCalled();
+    expect(await database.get(SESSION_STORE, "other")).toEqual(other);
+    expect((await database.get(SESSION_STORE, "session-1"))?.status).toBe("active");
   });
 
-  it("ends a closed session, as starting one does", async () => {
+  it("leaves another closed session closed", async () => {
     await database.put(SESSION_STORE, { ...SAVED, id: "away", status: "closed" });
 
     await resumeSession({ database, sessionId: "session-1", api: buildApi(), now: 9 });
 
-    expect((await database.get(SESSION_STORE, "away"))?.status).toBe("saved");
+    expect((await database.get(SESSION_STORE, "away"))?.status).toBe("closed");
+  });
+
+  it("refuses a session that is already active, opening nothing", async () => {
+    await database.put(SESSION_STORE, { ...SAVED, status: "active" });
+    const api = buildApi();
+
+    await expect(resumeSession({ database, sessionId: "session-1", api, now: 9 })).rejects.toThrow(
+      "Only a saved session can be resumed.",
+    );
+    expect(api.createTab).not.toHaveBeenCalled();
+  });
+
+  it("refuses a closed session whose group is still open, opening nothing", async () => {
+    await database.put(SESSION_STORE, { ...SAVED, status: "closed" });
+    const api = buildApi({ getGroup: vi.fn(() => Promise.resolve({ color: "blue" })) });
+
+    await expect(resumeSession({ database, sessionId: "session-1", api, now: 9 })).rejects.toThrow(
+      "still open in its tab group",
+    );
+    expect(api.createTab).not.toHaveBeenCalled();
+  });
+
+  it("resumes a closed session, whose group is gone", async () => {
+    await database.put(SESSION_STORE, { ...SAVED, status: "closed" });
+
+    const resumed = await resumeSession({
+      database,
+      sessionId: "session-1",
+      api: buildApi(),
+      now: 9,
+    });
+
+    expect(resumed).toMatchObject({ status: "active", groupId: 77, formerGroupIds: [42] });
+    expect((await database.get(SESSION_STORE, "session-1"))?.status).toBe("active");
+  });
+
+  it("closes the pages a closed window left open that are not reopened", async () => {
+    await database.put(NODE_STORE, {
+      id: "gone",
+      sessionId: "session-1",
+      tabId: 4,
+      tabState: "open",
+    } as never);
+
+    await resumeSession({ database, sessionId: "session-1", api: buildApi(), now: 9 });
+
+    expect((await database.get(NODE_STORE, "gone"))?.tabState).toBe("closed");
   });
 
   it("closes the tabs it opened when the browser refuses to group them", async () => {

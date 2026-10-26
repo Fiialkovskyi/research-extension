@@ -74,13 +74,13 @@ export const researchMapRequestSchemas = {
    * Sent over a port: the background answers with a snapshot, and sends a new
    * one on the same port after every change until the port disconnects.
    */
-  "graph.subscribe": v.object({}),
+  "graph.subscribe": v.object({ sessionId: v.optional(v.string()) }),
   /** Select the tab that shows one of the active session's open nodes. */
   "tab.focus": v.object({ tabId: v.number() }),
   /** Select the map's tab, opening one if none is open. */
-  "map.open": v.object({}),
+  "map.open": v.object({ sessionId: v.optional(v.string()) }),
   /** The start of an active-session page's captured text, for the telemetry view's tooltip. */
-  "map.readExcerpt": v.object({ nodeId: v.string() }),
+  "map.readExcerpt": v.object({ nodeId: v.string(), sessionId: v.optional(v.string()) }),
 } as const;
 
 export const researchMapResponseSchemas = {

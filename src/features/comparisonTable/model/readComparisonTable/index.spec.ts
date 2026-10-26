@@ -120,7 +120,7 @@ beforeEach(async () => {
 
 describe("readComparisonTable", () => {
   it("lists the commonest type's entities, merged ones as one row, with their cells", async () => {
-    const view = await readComparisonTable(await openResearchDatabase());
+    const view = await readComparisonTable(await openResearchDatabase(), "s");
 
     expect(view?.title).toBe("E-bikes");
     expect(view?.table.types).toEqual([
@@ -150,7 +150,7 @@ describe("readComparisonTable", () => {
 
     await rejectFacts(database, [shopPrice!.id]);
 
-    const view = await readComparisonTable(database);
+    const view = await readComparisonTable(database, "s");
 
     expect(view?.table.rows[0]?.cells["price"]).toMatchObject({
       value: "1749 USD",
@@ -172,14 +172,14 @@ describe("readComparisonTable", () => {
       encryptedFact: new ArrayBuffer(32),
     } as never);
 
-    expect((await readComparisonTable(database))?.table.rows.map(({ name }) => name)).toEqual([
+    expect((await readComparisonTable(database, "s"))?.table.rows.map(({ name }) => name)).toEqual([
       "Volta E5",
       "Corsa",
     ]);
   });
 
   it("shows another type when asked", async () => {
-    const view = await readComparisonTable(await openResearchDatabase(), "Company");
+    const view = await readComparisonTable(await openResearchDatabase(), "s", "Company");
 
     expect(view?.table.entityType).toBe("company");
     expect(view?.table.rows.map(({ name }) => name)).toEqual(["Acme"]);
@@ -188,9 +188,9 @@ describe("readComparisonTable", () => {
   it("uses the columns the user saved, and offers the rest", async () => {
     const database = await openResearchDatabase();
 
-    await saveTableColumns(database, "product", ["price"]);
+    await saveTableColumns(database, "s", "product", ["price"]);
 
-    const view = await readComparisonTable(database);
+    const view = await readComparisonTable(database, "s");
 
     expect(view?.table.columns.map(({ key }) => key)).toEqual(["price"]);
     expect(view?.table.otherColumns.map(({ key }) => key)).toEqual(["weight"]);
@@ -200,11 +200,11 @@ describe("readComparisonTable", () => {
   it("returns to the proposed columns when the choice is cleared", async () => {
     const database = await openResearchDatabase();
 
-    await saveTableColumns(database, "product", ["price"]);
-    await saveTableColumns(database, "product", []);
+    await saveTableColumns(database, "s", "product", ["price"]);
+    await saveTableColumns(database, "s", "product", []);
 
     expect(await database.count(TABLE_COLUMNS_STORE)).toBe(0);
-    expect((await readComparisonTable(database))?.table.columns).toHaveLength(2);
+    expect((await readComparisonTable(database, "s"))?.table.columns).toHaveLength(2);
   });
 
   it("gives an empty table without resolved facts, and nothing without a session", async () => {
@@ -213,13 +213,13 @@ describe("readComparisonTable", () => {
     await database.clear(ENTITY_STORE);
     await database.clear(FACT_STORE);
 
-    expect((await readComparisonTable(database))?.table).toMatchObject({
+    expect((await readComparisonTable(database, "s"))?.table).toMatchObject({
       entityType: null,
       rows: [],
     });
 
     await database.clear(SESSION_STORE);
 
-    expect(await readComparisonTable(database)).toBeUndefined();
+    expect(await readComparisonTable(database, "s")).toBeUndefined();
   });
 });

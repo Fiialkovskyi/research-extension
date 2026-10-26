@@ -102,7 +102,7 @@ describe("enqueueFactExtractions", () => {
   it("queues one job per snapshot, below embedding, with the prompt and model in its identity", async () => {
     await database.put(MODEL_STORE, GENERATION_MODEL);
 
-    const jobs = await enqueueFactExtractions(database);
+    const jobs = await enqueueFactExtractions(database, "session-1");
 
     expect(jobs).toHaveLength(2);
     expect(jobs.every(({ type }) => type === "extractFacts")).toBe(true);
@@ -116,7 +116,7 @@ describe("enqueueFactExtractions", () => {
   it("queues nothing without an active text-generation model", async () => {
     await database.put(MODEL_STORE, { ...GENERATION_MODEL, active: false });
 
-    expect(await enqueueFactExtractions(database)).toEqual([]);
+    expect(await enqueueFactExtractions(database, "session-1")).toEqual([]);
     expect(await database.count(JOB_STORE)).toBe(0);
   });
 
@@ -127,16 +127,16 @@ describe("enqueueFactExtractions", () => {
       status: "saved",
     });
 
-    expect(await enqueueFactExtractions(database)).toEqual([]);
+    expect(await enqueueFactExtractions(database, "session-1")).toEqual([]);
   });
 
   it("does not queue a page twice, even once its extraction is done", async () => {
     await database.put(MODEL_STORE, GENERATION_MODEL);
 
-    const [first] = await enqueueFactExtractions(database);
+    const [first] = await enqueueFactExtractions(database, "session-1");
 
     await completeJob(database, first!.id);
-    await enqueueFactExtractions(database);
+    await enqueueFactExtractions(database, "session-1");
 
     expect(await database.count(JOB_STORE)).toBe(2);
   });
@@ -144,7 +144,7 @@ describe("enqueueFactExtractions", () => {
   it("queues a page extracted by another model no more, keeping its facts (REQ-LIN-005)", async () => {
     await database.put(MODEL_STORE, GENERATION_MODEL);
 
-    const [first] = await enqueueFactExtractions(database);
+    const [first] = await enqueueFactExtractions(database, "session-1");
     const snapshotId = (first!.payload as { snapshotId: string }).snapshotId;
 
     await database.put(EXTRACTION_STORE, {
@@ -155,7 +155,7 @@ describe("enqueueFactExtractions", () => {
     await database.put(MODEL_STORE, { ...GENERATION_MODEL, active: false });
     await database.put(MODEL_STORE, { ...GENERATION_MODEL, ref: "ollama:qwen3:8b@def" });
 
-    const again = await enqueueFactExtractions(database);
+    const again = await enqueueFactExtractions(database, "session-1");
 
     expect(again.map(({ payload }) => payload)).not.toContainEqual({ snapshotId });
     expect(again).toHaveLength(1);
@@ -163,10 +163,10 @@ describe("enqueueFactExtractions", () => {
 
   it("queues the pages not yet extracted for another model", async () => {
     await database.put(MODEL_STORE, GENERATION_MODEL);
-    await enqueueFactExtractions(database);
+    await enqueueFactExtractions(database, "session-1");
     await database.put(MODEL_STORE, { ...GENERATION_MODEL, active: false });
     await database.put(MODEL_STORE, { ...GENERATION_MODEL, ref: "ollama:qwen3:8b@def" });
-    await enqueueFactExtractions(database);
+    await enqueueFactExtractions(database, "session-1");
 
     expect(await database.count(JOB_STORE)).toBe(4);
   });

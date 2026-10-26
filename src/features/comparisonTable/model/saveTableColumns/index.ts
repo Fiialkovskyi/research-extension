@@ -1,8 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { encryptBytes, getDataKey } from "@/features/dataProtection";
-import { getLiveSession } from "@/features/researchSession";
-import { type ResearchDatabaseSchema, TABLE_COLUMNS_STORE } from "@/shared/storage";
+import { type ResearchDatabaseSchema, TABLE_COLUMNS_STORE, SESSION_STORE } from "@/shared/storage";
 
 import { getTableColumnsId } from "../readSavedColumns";
 
@@ -15,10 +14,11 @@ import { getTableColumnsId } from "../readSavedColumns";
  */
 export const saveTableColumns = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   entityType: string,
   columns: readonly string[],
 ): Promise<boolean> => {
-  const session = await getLiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
   if (session === undefined) {
     return false;

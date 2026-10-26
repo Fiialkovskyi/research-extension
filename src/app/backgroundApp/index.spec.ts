@@ -7,6 +7,7 @@ import { type BackgroundApp, createBackgroundApp, type BackgroundDependencies } 
 import { IN_BROWSER_BACKEND_OFF_REASON } from "./constants";
 import type { InferenceWorker } from "@/features/inference";
 import { EXTRACTION_PROBES, PARAPHRASE_PROBES } from "@/features/modelConformance";
+import { RECLUSTER_DELAY_MS } from "@/features/researchClusters";
 import { SESSION_TAB_VALUE_KEY, type SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
@@ -38,6 +39,7 @@ import {
   TABLE_COLUMNS_STORE,
   QUESTION_STORE,
   BLOCKED_SITES_STORE,
+  type StoredJob,
   type StoredSession,
 } from "@/shared/storage";
 
@@ -152,11 +154,6 @@ const buildDependencies = (
       getGroup: () => Promise.reject(new Error("no groups in this test")),
       activateTab: () => Promise.resolve(),
       removeTab: () => Promise.resolve(),
-    },
-    closeTabs: {
-      queryWindowTabIds: () => Promise.resolve([]),
-      createTabIn: () => Promise.resolve(),
-      removeTabs: () => Promise.resolve(),
     },
     // No recompute of clusters unless a test drives the timer itself.
     setTimer: () => undefined,
@@ -861,10 +858,8 @@ describe("a research session through the background", () => {
     expect(await database.count(SESSION_STORE)).toBe(0);
   });
 
-  it("refuses a second session without opening a tab, naming the active one", async () => {
-    const tabGroups = createStubTabGroups({
-      getGroup: vi.fn().mockResolvedValue({ color: "blue", title: "E-bike motors" }),
-    });
+  it("starts a second session beside the active one, and views it", async () => {
+    const tabGroups = createStubTabGroups({ groupTabs: vi.fn().mockResolvedValue(43) });
     const { app, database } = await createSessionApp({ tabGroups });
     await database.put(SESSION_STORE, activeSession);
 
@@ -872,11 +867,17 @@ describe("a research session through the background", () => {
       buildRpcMessage("tabGroup.create", { title: "Batteries" }),
     );
 
-    expect(response).toMatchObject({
-      type: "tabGroup.failed",
-      payload: { reason: 'A session is already active: "E-bike motors".' },
+    expect(response).toMatchObject({ type: "tabGroup.created", payload: { groupId: 43 } });
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({ status: "active" });
+    expect(await database.countFromIndex(SESSION_STORE, "status", "active")).toBe(2);
+
+    const answer = await app.handleMessage(buildRpcMessage("session.getActive", {}));
+
+    expect(answer).toMatchObject({
+      type: "session.active",
+      payload: { sessions: [{ id: "session-1" }, { title: "Batteries" }] },
     });
-    expect(tabGroups.createTab).not.toHaveBeenCalled();
+    expect((answer.payload as { viewedId: string }).viewedId).not.toBe("session-1");
   });
 
   it("refuses a blank session title before any tab is opened", async () => {
@@ -905,12 +906,13 @@ describe("a research session through the background", () => {
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
       type: "session.active",
       payload: {
-        session: { id: "session-1", title: "E-bike motors", groupId: 42, pageCount: 0 },
+        sessions: [{ id: "session-1", title: "E-bike motors", groupId: 42, pageCount: 0 }],
+        viewedId: "session-1",
       },
     });
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
       type: "session.active",
-      payload: { session: null, closedSession: { id: "session-1" } },
+      payload: { sessions: [], viewedId: null },
     });
   });
 
@@ -985,7 +987,7 @@ describe("a research session through the background", () => {
     });
   });
 
-  it("reports a closed session beside no active one", async () => {
+  it("lists a session whose group is gone with the saved ones, not the active", async () => {
     const { app, database } = await createSessionApp({
       tabGroups: createStubTabGroups({
         getGroup: vi.fn().mockRejectedValue(new Error("No group with id: 42")),
@@ -995,10 +997,10 @@ describe("a research session through the background", () => {
 
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
       type: "session.active",
-      payload: {
-        session: null,
-        closedSession: { id: "session-1", title: "E-bike motors", groupId: 42 },
-      },
+      payload: { sessions: [], viewedId: null },
+    });
+    expect(await app.handleMessage(buildRpcMessage("library.list", {}))).toMatchObject({
+      payload: { sessions: [{ id: "session-1", title: "E-bike motors" }] },
     });
   });
 
@@ -1069,7 +1071,7 @@ describe("capturing the session's tabs through the background", () => {
     expect(await database.count(NODE_STORE)).toBe(2);
     expect(await database.count(EDGE_STORE)).toBe(1);
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
-      payload: { session: { pageCount: 2 } },
+      payload: { sessions: [{ pageCount: 2 }] },
     });
   });
 
@@ -1233,6 +1235,85 @@ const createSubscribedApp = async (overrides: Partial<BackgroundDependencies> = 
 
   return { app, database, map };
 };
+
+describe("several sessions through the background", () => {
+  const second = { ...activeSession, id: "session-2", title: "Batteries", groupId: 43 };
+
+  /** Two active sessions, each with one tab in its own group. */
+  const createTwoSessionsApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
+    const tabCapture = createTabCapture(
+      sessionTab(),
+      sessionTab({ id: 8, groupId: 43, url: "https://example.org/b" }),
+    );
+    const { app, database } = await createSessionApp({ tabCapture, ...overrides });
+
+    await database.put(SESSION_STORE, activeSession);
+    await database.put(SESSION_STORE, second);
+
+    return { app, database };
+  };
+
+  it("records each tab into the session of its group, leaving the other graph alone", async () => {
+    const { app, database } = await createTwoSessionsApp();
+
+    await app.handleNavigationCommitted(commit("https://example.org/a"));
+    await app.handleNavigationCommitted({ ...commit("https://example.org/b"), tabId: 8 });
+
+    const nodes = await database.getAll(NODE_STORE);
+
+    expect(nodes.map(({ sessionId, tabId }) => [sessionId, tabId]).toSorted()).toEqual([
+      ["session-1", 7],
+      ["session-2", 8],
+    ]);
+  });
+
+  it("views the session it is asked to, closing and ending nothing", async () => {
+    const { app, database } = await createTwoSessionsApp();
+
+    const response = await app.handleMessage(
+      buildRpcMessage("session.view", { sessionId: "session-2" }),
+    );
+
+    expect(response).toMatchObject({ type: "session.viewed", payload: { viewedId: "session-2" } });
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      payload: { sessions: [{ id: "session-1" }, { id: "session-2" }], viewedId: "session-2" },
+    });
+    expect(await database.countFromIndex(SESSION_STORE, "status", "active")).toBe(2);
+  });
+
+  it("keeps the viewed session when the popup is opened again", async () => {
+    const { app } = await createTwoSessionsApp();
+
+    await app.handleMessage(buildRpcMessage("session.view", { sessionId: "session-2" }));
+    await app.handleMessage(buildRpcMessage("session.getActive", {}));
+
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      payload: { viewedId: "session-2" },
+    });
+  });
+
+  it("pushes each map page only the graph of its own session", async () => {
+    const { app } = await createTwoSessionsApp();
+    const first = createFakePort();
+    const other = createFakePort();
+
+    app.attachPort(first.port);
+    app.attachPort(other.port);
+    first.send(buildRpcMessage("graph.subscribe", { sessionId: "session-1" }));
+    other.send(buildRpcMessage("graph.subscribe", { sessionId: "session-2" }));
+    await vi.waitFor(() => expect(readSnapshots(first.posted)).toHaveLength(1));
+    await vi.waitFor(() => expect(readSnapshots(other.posted)).toHaveLength(1));
+
+    await app.handleNavigationCommitted({ ...commit("https://example.org/b"), tabId: 8 });
+    await vi.waitFor(() =>
+      expect(readSnapshots(other.posted).at(-1)?.payload.nodes).toHaveLength(1),
+    );
+
+    expect(readSnapshots(first.posted).at(-1)?.payload.session).toMatchObject({ id: "session-1" });
+    expect(readSnapshots(first.posted).at(-1)?.payload.nodes).toHaveLength(0);
+    expect(readSnapshots(other.posted).at(-1)?.payload.session).toMatchObject({ id: "session-2" });
+  });
+});
 
 describe("the research map through the background", () => {
   it("answers a subscription with the active session's graph", async () => {
@@ -1432,14 +1513,31 @@ describe("the research map through the background", () => {
     });
   });
 
-  it("opens the map when asked", async () => {
+  it("opens the map for the viewed session when asked", async () => {
     const openMap = vi.fn(() => Promise.resolve());
-    const app = createBackgroundApp(buildDependencies({ openMap }));
+    const { app, database } = await createSessionApp({ openMap });
+    await database.put(SESSION_STORE, activeSession);
 
     const response = await app.handleMessage(buildRpcMessage("map.open", {}));
 
     expect(response).toMatchObject({ type: "map.opened" });
-    expect(openMap).toHaveBeenCalledTimes(1);
+    expect(openMap).toHaveBeenCalledWith("session-1");
+  });
+
+  it("opens the map for the session it is asked for, not the viewed one", async () => {
+    const openMap = vi.fn(() => Promise.resolve());
+    const { app, database } = await createSessionApp({ openMap });
+    await database.put(SESSION_STORE, activeSession);
+    await database.put(SESSION_STORE, {
+      ...activeSession,
+      id: "session-2",
+      groupId: 43,
+      viewedAt: 99,
+    });
+
+    await app.handleMessage(buildRpcMessage("map.open", { sessionId: "session-1" }));
+
+    expect(openMap).toHaveBeenCalledWith("session-1");
   });
 });
 
@@ -1762,11 +1860,15 @@ describe("page signals and reading time through the background", () => {
 /** A timer the test fires by hand, recording how often it was armed. */
 const createTimer = () => {
   const pending = new Map<number, () => void>();
+  const delays = new Map<number, number>();
   let next = 0;
 
   return {
     armed: () => next,
-    pending: () => pending.size,
+    /** Timers still to fire; with a delay, only those armed for it. */
+    pending: (delayMs?: number) =>
+      [...pending.keys()].filter((id) => delayMs === undefined || delays.get(id) === delayMs)
+        .length,
     fire: () => {
       const due = [...pending.values()];
 
@@ -1775,9 +1877,10 @@ const createTimer = () => {
         callback();
       });
     },
-    setTimer: (callback: () => void) => {
+    setTimer: (callback: () => void, delayMs: number) => {
       next += 1;
       pending.set(next, callback);
+      delays.set(next, delayMs);
       return next;
     },
     clearTimer: (handle: unknown) => {
@@ -1799,7 +1902,7 @@ describe("clustering through the background", () => {
     await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
     await app.handleNavigationCommitted(commit("https://example.org/b"));
 
-    expect(timer.pending()).toBe(1);
+    expect(timer.pending(RECLUSTER_DELAY_MS)).toBe(1);
     expect(await database.count(CLUSTERING_STORE)).toBe(0);
 
     timer.fire();
@@ -2087,7 +2190,7 @@ describe("embedding deep-read pages through the background", () => {
         expect.objectContaining({ status: "done" }),
       ]),
     );
-    await vi.waitFor(() => expect(timer.pending()).toBe(1));
+    await vi.waitFor(() => expect(timer.pending(RECLUSTER_DELAY_MS)).toBe(1));
 
     timer.fire();
 
@@ -2172,70 +2275,75 @@ describe("what was recorded, through the background", () => {
       payload: { session: null },
     });
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
-      payload: { session: null, closedSession: null },
+      payload: { sessions: [], viewedId: null },
     });
   });
 
-  it("opens the page through its dependency", async () => {
+  it("opens the page for the viewed session through its dependency", async () => {
     const openRecordedPage = vi.fn(() => Promise.resolve());
-    const { app } = await createSessionApp({ openRecordedPage });
+    const { app, database } = await createSessionApp({ openRecordedPage });
+    await database.put(SESSION_STORE, activeSession);
 
     expect(await app.handleMessage(buildRpcMessage("recorded.open", {}))).toMatchObject({
       type: "recorded.opened",
     });
-    expect(openRecordedPage).toHaveBeenCalledTimes(1);
+    expect(openRecordedPage).toHaveBeenCalledWith("session-1");
   });
 });
 
 describe("saving and resuming through the background", () => {
-  it("saves the session with the scroll its page sends when asked, and closes its tabs", async () => {
-    const holder: { app?: BackgroundApp } = {};
-    const removeTabs = vi.fn((_ids: number[]) => Promise.resolve());
+  it("keeps the session saved as the user goes, and lists it once its group is gone", async () => {
+    const tabs = [sessionTab(), sessionTab({ id: 8, url: "https://example.org/c" })];
+    const queryGroupTabs = vi.fn(async () => tabs.map((tab) => ({ ...tab, windowId: 1 })));
+    const timer = createTimer();
     const signals = await createSignalsApp({
-      tabCapture: {
-        ...createTabCapture(sessionTab(), sessionTab({ id: 8, url: "https://example.org/c" })),
-        queryGroupTabs: vi.fn(async () => [
-          { ...sessionTab(), windowId: 1 },
-          { ...sessionTab({ id: 8, url: "https://example.org/c" }), windowId: 1 },
-        ]),
-      },
-      closeTabs: {
-        queryWindowTabIds: () => Promise.resolve([1, 7, 8]),
-        createTabIn: () => Promise.resolve(),
-        removeTabs,
-      },
+      tabCapture: { ...createTabCapture(...tabs), queryGroupTabs },
+      setTimer: timer.setTimer,
+      clearTimer: timer.clearTimer,
     });
     const { app, database, clock } = signals;
 
-    holder.app = app;
-    signals.requestFlush.mockImplementation(async (tabId: number) => {
-      if (tabId === 7) {
-        await holder.app?.handleContentMessage(batch(0.9), FROM_PAGE_A);
-      }
-    });
     await app.handleNavigationCommitted(commit("https://example.org/a"));
     await app.handleNavigationCommitted({ ...commit("https://example.org/c"), tabId: 8 });
     clock.focusedTabId = 7;
     await app.handleTabActivated(7);
+    await app.handleContentMessage(batch(0.9), FROM_PAGE_A);
 
-    expect(await app.handleMessage(buildRpcMessage("session.save", {}))).toMatchObject({
-      type: "session.saved",
-      payload: { sessionId: "session-1" },
+    expect((await database.get(SESSION_STORE, "session-1"))?.savedTabs).toBeUndefined();
+
+    // Once capture has been quiet for a moment, the tabs are recorded.
+    timer.fire();
+    await vi.waitFor(async () => {
+      expect((await database.get(SESSION_STORE, "session-1"))?.savedTabs).toHaveLength(2);
     });
 
-    const session = await database.get(SESSION_STORE, "session-1");
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      status: "active",
+      savedTabs: [
+        expect.objectContaining({ url: "https://example.org/a" }),
+        expect.objectContaining({ url: "https://example.org/c" }),
+      ],
+    });
+
+    // Closing the group removes its tabs one by one, then the group, before
+    // capture is quiet again: what was on record stays.
+    queryGroupTabs.mockResolvedValue([{ ...tabs[0]!, windowId: 1 }]);
+    await app.handleTabRemoved(8, { isWindowClosing: false });
+    queryGroupTabs.mockResolvedValue([]);
+    await app.handleTabRemoved(7, { isWindowClosing: false });
+    await app.handleGroupRemoved({ id: 42 });
+    timer.fire();
+
     const nodeA = await readNodeByUrl(database, "https://example.org/a");
 
-    expect(session).toMatchObject({
-      status: "saved",
+    expect(await database.get(SESSION_STORE, "session-1")).toMatchObject({
+      status: "closed",
       savedTabs: [
         expect.objectContaining({ url: "https://example.org/a" }),
         expect.objectContaining({ url: "https://example.org/c" }),
       ],
       lastPosition: expect.objectContaining({ nodeId: nodeA?.id, readFraction: 0.9 }),
     });
-    expect(nodeA?.signals.maxScroll).toBe(0.9);
-    expect(removeTabs).toHaveBeenCalledWith([7, 8]);
     expect(await app.handleMessage(buildRpcMessage("library.list", {}))).toMatchObject({
       payload: { sessions: [expect.objectContaining({ id: "session-1", pageCount: 2 })] },
     });
@@ -2297,25 +2405,45 @@ describe("saving and resuming through the background", () => {
     ]);
   });
 
-  it("refuses to resume while a session is active", async () => {
+  it("resumes beside an active session, leaving it recording", async () => {
+    const removeTab = vi.fn(() => Promise.resolve());
     const { app, database } = await createSignalsApp({
       resumeApi: {
         createTab: vi.fn(() => Promise.resolve({ id: 1 })),
         groupTabs: vi.fn(() => Promise.resolve(77)),
         updateGroup: vi.fn(() => Promise.resolve()),
-        getGroup: vi.fn(() => Promise.resolve({ color: "blue" })),
+        getGroup: vi.fn(() => Promise.reject(new Error("No group"))),
         activateTab: vi.fn(() => Promise.resolve()),
-        removeTab: vi.fn(() => Promise.resolve()),
+        removeTab,
       },
     });
 
-    await database.put(SESSION_STORE, { ...activeSession, id: "session-0", status: "saved" });
+    await database.put(SESSION_STORE, {
+      ...activeSession,
+      id: "session-0",
+      groupId: 5,
+      status: "saved",
+    });
 
     expect(
       await app.handleMessage(buildRpcMessage("session.resume", { sessionId: "session-0" })),
+    ).toMatchObject({ type: "session.resumed", payload: { sessionId: "session-0" } });
+    expect((await database.get(SESSION_STORE, "session-0"))?.status).toBe("active");
+    expect((await database.get(SESSION_STORE, activeSession.id))?.status).toBe("active");
+    expect(removeTab).not.toHaveBeenCalled();
+    expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
+      payload: { viewedId: "session-0" },
+    });
+  });
+
+  it("refuses to resume a session that is already active", async () => {
+    const { app } = await createSignalsApp();
+
+    expect(
+      await app.handleMessage(buildRpcMessage("session.resume", { sessionId: activeSession.id })),
     ).toMatchObject({
       type: "session.resumeFailed",
-      payload: { reason: expect.stringContaining("already active") },
+      payload: { reason: "Only a saved session can be resumed." },
     });
   });
 });
@@ -2376,7 +2504,7 @@ describe("continuing a saved session through the background", () => {
       }),
     );
     expect(await app.handleMessage(buildRpcMessage("session.getActive", {}))).toMatchObject({
-      payload: { session: { reattachSuggestion: { sessionId: "old" } } },
+      payload: { sessions: [{ reattachSuggestion: { sessionId: "old" } }] },
     });
   });
 
@@ -4133,5 +4261,207 @@ describe("telling pages that data changed", () => {
     await app.handleMessage(buildRpcMessage("recorded.read", {}));
 
     expect(readDataChanges(page.posted)).toEqual([]);
+  });
+});
+
+/** A stored job for the activity strip's cases: queued and due, entered at time 1. */
+const activityJob = (overrides: Partial<StoredJob> & { id: string }): StoredJob => ({
+  type: "embedSnapshot",
+  inputHashes: [overrides.id],
+  producerVersion: "1",
+  status: "queued",
+  priority: 0,
+  attempts: 0,
+  nextAttemptAt: 0,
+  createdAt: 1,
+  queuedAt: 1,
+  updatedAt: 1,
+  ...overrides,
+});
+
+const readActivity = async (app: BackgroundApp) =>
+  (await app.handleMessage(buildRpcMessage("aiActivity.read", {}))) as {
+    type: string;
+    payload: Record<string, unknown>;
+  };
+
+describe("what the local AI is doing, through the background", () => {
+  it("is ready with what was done for the active session when nothing is pending", async () => {
+    const { app, database } = await createSessionApp();
+
+    await database.put(SESSION_STORE, activeSession);
+    for (const id of ["a", "b"]) {
+      await database.put(
+        JOB_STORE,
+        activityJob({ id, status: "done", sessionId: activeSession.id }),
+      );
+    }
+
+    expect(await readActivity(app)).toMatchObject({
+      type: "aiActivity.state",
+      payload: { kind: "ready", totals: { pagesRead: 2 }, failed: 0 },
+    });
+  });
+
+  it("names the running work and how far the batch has got", async () => {
+    const { app, database } = await createSessionApp();
+
+    await database.put(JOB_STORE, activityJob({ id: "done", status: "done", updatedAt: 5 }));
+    await database.put(
+      JOB_STORE,
+      activityJob({ id: "run", status: "running", type: "extractFacts", updatedAt: 9 }),
+    );
+    await database.put(JOB_STORE, activityJob({ id: "next" }));
+
+    expect((await readActivity(app)).payload).toEqual({
+      kind: "working",
+      label: "Extracting facts",
+      settled: 1,
+      total: 3,
+      startedAt: 9,
+      failed: 0,
+    });
+  });
+
+  it("waits for the user while only text generation is queued and they are active", async () => {
+    const { app, database } = await createSessionApp();
+
+    await database.put(JOB_STORE, activityJob({ id: "facts", type: "extractFacts" }));
+
+    expect((await readActivity(app)).payload).toEqual({ kind: "waiting", waiting: 1, failed: 0 });
+  });
+
+  it("works on held-back generation once the user is away", async () => {
+    const { app, database } = await createSessionApp({
+      readIdleState: () => Promise.resolve("idle"),
+    });
+
+    await database.put(JOB_STORE, activityJob({ id: "facts", type: "extractFacts" }));
+
+    expect((await readActivity(app)).payload).toMatchObject({
+      kind: "working",
+      label: "Extracting facts",
+    });
+  });
+
+  it("is paused while Ollama does not answer and work waits", async () => {
+    const { app, database } = await createSessionApp();
+
+    await database.put(MODEL_STORE, {
+      ref: "ollama:nomic-embed-text:latest@abc",
+      active: true,
+      conformance: "passed",
+      installedAt: 1,
+      manifest: { reference: { hub: "ollama" }, contract: { family: "embedding" } },
+    } as never);
+    await database.put(
+      JOB_STORE,
+      activityJob({
+        id: "stuck",
+        attempts: 1,
+        nextAttemptAt: Number.MAX_SAFE_INTEGER,
+        failureReason: "Ollama is not running at http://127.0.0.1:11434.",
+      }),
+    );
+
+    expect((await readActivity(app)).payload).toEqual({ kind: "paused", waiting: 1, failed: 0 });
+  });
+
+  it("tells subscribed pages that jobs changed as a job is claimed and settled", async () => {
+    const { app, database } = await createSessionApp();
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+
+    // A type with no runner: claimed, then failed into a retry, which settles the attempt.
+    await database.put(JOB_STORE, activityJob({ id: "orphan", type: "noRunner" }));
+    await app.handleAlarm("jobs.wake");
+
+    await vi.waitFor(async () =>
+      expect((await database.get(JOB_STORE, "orphan"))?.attempts).toBe(1),
+    );
+    await vi.waitFor(() => expect(readDataChanges(page.posted).flat()).toContain("jobs"));
+  });
+
+  it("tells subscribed pages that jobs changed when the user steps away or back", async () => {
+    const { app } = await createSessionApp();
+    const page = createFakePort();
+
+    app.attachPort(page.port);
+    page.send(buildRpcMessage("data.subscribe", {}));
+    await vi.waitFor(() => expect(page.posted).toHaveLength(1));
+    await app.handleIdleStateChanged("active");
+
+    await vi.waitFor(() => expect(readDataChanges(page.posted).flat()).toContain("jobs"));
+  });
+});
+
+/**
+ * A job that stopped because Ollama did not answer: out of retries, or waiting
+ * out its backoff. It names no snapshot, so a rerun fails for a reason of its own.
+ */
+const stuckJob = (isOutOfRetries = true) =>
+  activityJob({
+    id: "stuck",
+    ...(isOutOfRetries
+      ? { status: "failed", attempts: 4 }
+      : { attempts: 1, nextAttemptAt: Number.MAX_SAFE_INTEGER }),
+    failureReason: "Ollama is not running at http://127.0.0.1:11434.",
+  });
+
+describe("a pause that is over, through the background", () => {
+  it("hands paused work back once AI is turned on, since Ollama has just answered", async () => {
+    const ollama = createFakeOllama({ hasModel: false, chatModels: ["qwen3:4b"] });
+    const { app, database } = await createSessionApp({ fetchResource: ollama.fetchResource });
+
+    await database.put(JOB_STORE, stuckJob());
+
+    expect(await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}))).toMatchObject({
+      type: "aiSetup.turnedOn",
+    });
+    await vi.waitFor(async () =>
+      expect((await database.get(JOB_STORE, "stuck"))?.failureReason).not.toMatch(/^Ollama/u),
+    );
+    expect((await readActivity(app)).payload).not.toMatchObject({ kind: "paused" });
+  });
+
+  it("asks Ollama again when the popup reads a pause, and resumes if it is back", async () => {
+    const ollama = createFakeOllama();
+    const { app, database } = await createSessionApp({ fetchResource: ollama.fetchResource });
+
+    await database.put(MODEL_STORE, {
+      ref: "ollama:nomic-embed-text:latest@abc",
+      active: true,
+      conformance: "passed",
+      installedAt: 1,
+      manifest: { reference: { hub: "ollama" }, contract: { family: "embedding" } },
+    } as never);
+    await database.put(JOB_STORE, stuckJob(false));
+
+    expect((await readActivity(app)).payload).toMatchObject({ kind: "paused" });
+    await vi.waitFor(async () =>
+      expect((await database.get(JOB_STORE, "stuck"))?.failureReason).not.toMatch(/^Ollama/u),
+    );
+    expect((await readActivity(app)).payload).not.toMatchObject({ kind: "paused" });
+  });
+
+  it("stays paused while Ollama is still not answering", async () => {
+    const ollama = createFakeOllama({ isRunning: false });
+    const { app, database } = await createSessionApp({ fetchResource: ollama.fetchResource });
+
+    await database.put(MODEL_STORE, {
+      ref: "ollama:nomic-embed-text:latest@abc",
+      active: true,
+      conformance: "passed",
+      installedAt: 1,
+      manifest: { reference: { hub: "ollama" }, contract: { family: "embedding" } },
+    } as never);
+    await database.put(JOB_STORE, stuckJob(false));
+
+    expect((await readActivity(app)).payload).toMatchObject({ kind: "paused" });
+    await vi.waitFor(() => expect(ollama.fetchResource).toHaveBeenCalled());
+    expect((await readActivity(app)).payload).toMatchObject({ kind: "paused" });
   });
 });

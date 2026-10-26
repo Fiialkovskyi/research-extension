@@ -6,13 +6,9 @@ import { POPUP_BROWSER_SELECTOR, UI_TIMEOUT_MS } from "../../constants";
 describe("POPUP_SNAPSHOT_SCRIPT", () => {
   it("reads the elements the popup marks for testing", () => {
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="popup-panel"]');
-    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="greeting"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="session-active"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="group-form"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="session-page-count"]');
-    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[role="treeitem"]');
-    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="unread-count"]');
-    expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="unread-page"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="saved-session"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="left-off"]');
     expect(POPUP_SNAPSHOT_SCRIPT).toContain('[data-testid="reattach-offer"]');

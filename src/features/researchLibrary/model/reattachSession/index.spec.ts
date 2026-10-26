@@ -126,8 +126,16 @@ describe("reattachSession", () => {
     expect(await database.get(CLUSTERING_STORE, "new")).toBeUndefined();
   });
 
-  it("changes nothing when the sessions are not active and saved", async () => {
+  it("continues a closed session, whose group is gone, like a saved one", async () => {
     await database.put(SESSION_STORE, { ...OLD, status: "closed" });
+
+    expect(
+      await reattachSession({ database, activeSessionId: "new", savedSessionId: "old", now: 5 }),
+    ).toMatchObject({ id: "old", status: "active" });
+  });
+
+  it("changes nothing when the sessions are not active and saved", async () => {
+    await database.put(SESSION_STORE, { ...OLD, status: "done" as never });
 
     await expect(
       reattachSession({ database, activeSessionId: "new", savedSessionId: "old", now: 5 }),

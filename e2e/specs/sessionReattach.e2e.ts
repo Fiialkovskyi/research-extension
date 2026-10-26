@@ -5,6 +5,7 @@ import {
   clickPopupButton,
   clickToolbarAction,
   closePopup,
+  closeTabGroup,
   enterBrowserChrome,
   leaveBrowserChrome,
   loadUrlInSelectedTab,
@@ -106,14 +107,11 @@ describe("continuing saved research", () => {
     await loadUrlInSelectedTab(`http://duckduckgo.com:${readPort()}/?q=e-bike+motors`);
     await waitForGraph((snapshot) => snapshot.nodes.length === 1, "the first search");
 
-    await clickToolbarAction();
-    await waitForPopupPanel();
-    await readPopup();
-    await clickPopupButton("save-session");
-    await closePopup().catch(() => undefined);
+    // Closing its group puts the research aside; it was saved as it went.
+    await closeTabGroup(savedTitle);
     await waitForGraph(
-      (snapshot) => snapshot.sessions.some((session) => session.status === "saved"),
-      "the saved session",
+      (snapshot) => snapshot.sessions.some((session) => session.status === "closed"),
+      "the closed session",
     );
 
     await startSession(newTitle);

@@ -1,7 +1,7 @@
 import type { IDBPDatabase } from "idb";
 
 import { addNodeSignals, readTabNode } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
+import { getSessionForTab, NO_TAB_GROUP } from "@/features/researchSession";
 import type { ResearchDatabaseSchema } from "@/shared/storage";
 
 /**
@@ -15,7 +15,7 @@ export const recordTabFocus = async (
   tabId: number,
   now: number = Date.now(),
 ): Promise<void> => {
-  const session = await getActiveSession(database);
+  const session = await getSessionForTab(database, { tabId, groupId: NO_TAB_GROUP });
 
   if (session === undefined) {
     return;

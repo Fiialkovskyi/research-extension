@@ -2,7 +2,7 @@ import type { IDBPDatabase } from "idb";
 
 import { readBlockedSites } from "@/features/siteDenylist";
 import { closeNode, readTabNode, recordEdge, recordNode } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
+import { getSessionForGroup, listLiveSessions, NO_TAB_GROUP } from "@/features/researchSession";
 import type { ResearchDatabaseSchema } from "@/shared/storage";
 
 import { CAPTURE_EDGE_WEIGHTS, JOINED_TRANSITION } from "../../constants";
@@ -21,30 +21,36 @@ export interface FollowTabMembershipOptions {
 /**
  * Brings the graph in line with a tab whose group changed.
  *
- * A tab that joined the session's group — dragged in by the user — is recorded
+ * A tab that joined a session's group — dragged in by the user — is recorded
  * from the page it shows, linked to its opener when it has one. A tab that left
- * the group has its node closed and is not followed any further (CAP-004).
- * A tab that joined while showing no web page is recorded by its first commit.
+ * a session's group has its node in that session closed and is not followed
+ * there any further (CAP-004); dragged from one session's group into another's,
+ * it does both. A tab that joined while showing no web page is recorded by its
+ * first commit.
  */
 export const followTabMembership = async ({
   database,
   tab,
 }: FollowTabMembershipOptions): Promise<void> => {
-  const session = await getActiveSession(database);
+  const joined = await getSessionForGroup(database, tab.groupId ?? NO_TAB_GROUP);
+  const session = joined?.status === "active" ? joined : undefined;
+  const active = (await listLiveSessions(database)).filter(({ status }) => status === "active");
+
+  for (const other of active) {
+    if (other.id !== session?.id) {
+      const left = await readTabNode(database, other.id, tab.id);
+
+      if (left !== undefined) {
+        await closeNode(database, left.id);
+      }
+    }
+  }
 
   if (session === undefined) {
     return;
   }
 
   const current = await readTabNode(database, session.id, tab.id);
-
-  if (tab.groupId !== session.groupId) {
-    if (current !== undefined) {
-      await closeNode(database, current.id);
-    }
-
-    return;
-  }
 
   if (
     current !== undefined ||

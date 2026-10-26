@@ -6,7 +6,6 @@ import { readSealedFact } from "@/features/factExtraction";
 import { getFactKey, readRejectedKeys } from "@/features/factRejections";
 import { getActiveModel } from "@/features/modelRegistry";
 import { readClustering } from "@/features/researchClusters";
-import { getLiveSession } from "@/features/researchSession";
 import {
   FACT_STORE,
   JOB_STORE,
@@ -15,6 +14,7 @@ import {
   type ResearchDatabaseSchema,
   type StoredSummary,
   SUMMARY_STORE,
+  SESSION_STORE,
 } from "@/shared/storage";
 
 import { SUMMARIZE_CLUSTER_JOB } from "../../constants";
@@ -42,8 +42,9 @@ export interface SummariesView {
  */
 export const readSummariesView = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
 ): Promise<SummariesView | undefined> => {
-  const session = await getLiveSession(database);
+  const session = await database.get(SESSION_STORE, sessionId);
 
   if (session === undefined) {
     return undefined;

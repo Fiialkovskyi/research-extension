@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GraphSnapshot } from "@/features/researchMap";
 import { buildRpcMessage } from "@/shared/rpc";
@@ -231,6 +231,54 @@ describe("MapApp", () => {
       push("map.excerpt", { nodeId: "node-0", text: "Mid-drive motors." });
 
       expect(screen.getByTestId("telemetry-excerpt")).toHaveTextContent("Mid-drive motors.");
+    });
+  });
+
+  describe("a map pinned to a session", () => {
+    afterEach(() => {
+      window.history.replaceState(null, "", "/");
+    });
+
+    it("subscribes to the session in its address, and names it in the tab", () => {
+      window.history.replaceState(null, "", "/?session=session-2");
+      const { client, sent, push } = createStubClient();
+
+      render(<MapApp client={client} />);
+
+      expect(sent).toContainEqual({ type: "graph.subscribe", payload: { sessionId: "session-2" } });
+
+      push("graph.snapshot", buildSnapshot("A"));
+
+      expect(document.title).toBe("Research map: E-bike motors");
+    });
+
+    it("says the session is gone, not that none is active", () => {
+      window.history.replaceState(null, "", "/?session=session-2");
+      const { client, push } = createStubClient();
+      render(<MapApp client={client} />);
+
+      push("graph.snapshot", { session: null, nodes: [], edges: [], clusters: [], activity: [] });
+
+      expect(screen.getByTestId("map-empty")).toHaveTextContent("This session is gone");
+    });
+
+    it("keeps the session in its address when the view changes back to the tree", () => {
+      window.history.replaceState(null, "", "/?session=session-2#history");
+      const { client } = createStubClient();
+      render(<MapApp client={client} />);
+
+      fireEvent.keyDown(window, { key: "2" });
+
+      expect(window.location.search).toBe("?session=session-2");
+      expect(window.location.hash).toBe("");
+    });
+
+    it("follows the viewed session when opened without one", () => {
+      const { client, sent } = createStubClient();
+
+      render(<MapApp client={client} />);
+
+      expect(sent).toContainEqual({ type: "graph.subscribe", payload: {} });
     });
   });
 });

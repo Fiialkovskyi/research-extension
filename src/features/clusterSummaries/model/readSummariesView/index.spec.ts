@@ -124,7 +124,7 @@ describe("readSummariesView", () => {
   it("shows each cluster, its summary and its citations resolved to page and quote", async () => {
     await storeSummary(await getFactSetHash(["a:0:0"]));
 
-    expect(await readSummariesView(await openResearchDatabase())).toEqual({
+    expect(await readSummariesView(await openResearchDatabase(), "s")).toEqual({
       title: "E-bikes",
       canSummarize: true,
       clusters: [
@@ -163,7 +163,7 @@ describe("readSummariesView", () => {
     await storeFact("a:0:1", "a", "another");
 
     expect(
-      (await readSummariesView(await openResearchDatabase()))?.clusters[0]?.summary?.isStale,
+      (await readSummariesView(await openResearchDatabase(), "s"))?.clusters[0]?.summary?.isStale,
     ).toBe(true);
   });
 
@@ -171,7 +171,7 @@ describe("readSummariesView", () => {
     await storeSummary(await getFactSetHash(["a:0:0"]), "ollama:removed@1");
 
     expect(
-      (await readSummariesView(await openResearchDatabase()))?.clusters[0]?.summary?.isStale,
+      (await readSummariesView(await openResearchDatabase(), "s"))?.clusters[0]?.summary?.isStale,
     ).toBe(true);
   });
 
@@ -181,7 +181,7 @@ describe("readSummariesView", () => {
     await storeSummary(await getFactSetHash(["a:0:0"]));
     await rejectFacts(database, ["a:0:0"]);
 
-    const [bikes] = (await readSummariesView(database))?.clusters ?? [];
+    const [bikes] = (await readSummariesView(database, "s"))?.clusters ?? [];
 
     expect(bikes?.factCount).toBe(0);
     expect(bikes?.summary).toMatchObject({
@@ -201,14 +201,14 @@ describe("readSummariesView", () => {
       payload: { clusterId: "bikes", factSetHash: "h", requestedAt: 1 },
     } as never);
 
-    expect((await readSummariesView(await openResearchDatabase()))?.clusters[0]?.isPending).toBe(
-      true,
-    );
+    expect(
+      (await readSummariesView(await openResearchDatabase(), "s"))?.clusters[0]?.isPending,
+    ).toBe(true);
   });
 
   it("shows nothing without a live session", async () => {
     await (await openResearchDatabase()).clear(SESSION_STORE);
 
-    expect(await readSummariesView(await openResearchDatabase())).toBeUndefined();
+    expect(await readSummariesView(await openResearchDatabase(), "s")).toBeUndefined();
   });
 });

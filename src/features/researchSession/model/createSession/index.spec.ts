@@ -22,42 +22,58 @@ describe("createSession", () => {
     expect(await database.get(SESSION_STORE, session.id)).toEqual(session);
   });
 
-  it("refuses a second active session and names the first", async () => {
+  it("records a second session beside the first", async () => {
     await createSession({ database, title: "E-bike motors", groupId: 42 });
 
-    await expect(createSession({ database, title: "Batteries", groupId: 43 })).rejects.toThrow(
-      'A session is already active: "E-bike motors".',
-    );
-    expect(await database.count(SESSION_STORE)).toBe(1);
+    await createSession({ database, title: "Batteries", groupId: 43 });
+
+    expect(await database.countFromIndex(SESSION_STORE, "status", "active")).toBe(2);
   });
 
-  it("lets exactly one of two simultaneous starts through", async () => {
+  it("lets two simultaneous starts for different groups both through", async () => {
     const outcomes = await Promise.allSettled([
       createSession({ database, title: "First", groupId: 1 }),
       createSession({ database, title: "Second", groupId: 2 }),
     ]);
 
-    expect(outcomes.filter((outcome) => outcome.status === "fulfilled")).toHaveLength(1);
-    expect(await database.countFromIndex(SESSION_STORE, "status", "active")).toBe(1);
+    expect(outcomes.every((outcome) => outcome.status === "fulfilled")).toBe(true);
+    expect(await database.countFromIndex(SESSION_STORE, "status", "active")).toBe(2);
   });
 
-  it("starts a new session once the previous one is saved", async () => {
+  it("refuses a group that already belongs to a live session", async () => {
+    await createSession({ database, title: "E-bike motors", groupId: 42 });
+
+    await expect(createSession({ database, title: "Again", groupId: 42 })).rejects.toThrow(
+      "That tab group already belongs to a session.",
+    );
+    expect(await database.count(SESSION_STORE)).toBe(1);
+  });
+
+  it("refuses a group a live session followed before", async () => {
     const first = await createSession({ database, title: "E-bike motors", groupId: 42 });
-    await database.put(SESSION_STORE, { ...first, status: "saved" });
+    await database.put(SESSION_STORE, { ...first, groupId: 50, formerGroupIds: [42] });
 
-    await expect(
-      createSession({ database, title: "Batteries", groupId: 43 }),
-    ).resolves.toMatchObject({ title: "Batteries", status: "active" });
+    await expect(createSession({ database, title: "Again", groupId: 42 })).rejects.toThrow(
+      "That tab group already belongs to a session.",
+    );
   });
 
-  it("ends a closed session in the same start, keeping it as saved", async () => {
+  it("leaves a closed session closed", async () => {
     const first = await createSession({ database, title: "E-bike motors", groupId: 42 });
     await database.put(SESSION_STORE, { ...first, status: "closed" });
 
     const second = await createSession({ database, title: "Batteries", groupId: 43 });
 
     expect(second).toMatchObject({ status: "active", formerGroupIds: [] });
-    expect(await database.get(SESSION_STORE, first.id)).toMatchObject({ status: "saved" });
-    expect(await database.countFromIndex(SESSION_STORE, "status", "closed")).toBe(0);
+    expect(await database.get(SESSION_STORE, first.id)).toMatchObject({ status: "closed" });
+  });
+
+  it("starts beside a saved session", async () => {
+    const first = await createSession({ database, title: "E-bike motors", groupId: 42 });
+    await database.put(SESSION_STORE, { ...first, status: "saved" });
+
+    await expect(
+      createSession({ database, title: "Batteries", groupId: 43 }),
+    ).resolves.toMatchObject({ title: "Batteries", status: "active" });
   });
 });

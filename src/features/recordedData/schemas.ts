@@ -52,15 +52,15 @@ export const recordedSessionSchema = v.object({
 
 export const recordedDataRequestSchemas = {
   /** What the live session recorded. */
-  "recorded.read": v.object({}),
+  "recorded.read": v.object({ sessionId: v.optional(v.string()) }),
   /** A page's snapshot text, decrypted. */
-  "recorded.readText": v.object({ nodeId: v.string() }),
+  "recorded.readText": v.object({ nodeId: v.string(), sessionId: v.optional(v.string()) }),
   /** Delete a page and everything derived from it. */
   "node.delete": v.object({ nodeId: v.string() }),
   /** Delete a session and everything recorded for it. */
   "session.delete": v.object({ sessionId: v.string() }),
   /** Select the "What was recorded" tab, opening one if none is open. */
-  "recorded.open": v.object({}),
+  "recorded.open": v.object({ sessionId: v.optional(v.string()) }),
 } as const;
 
 export const recordedDataResponseSchemas = {

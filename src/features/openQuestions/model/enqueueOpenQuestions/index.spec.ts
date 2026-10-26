@@ -91,7 +91,7 @@ beforeEach(seedSession);
 describe("enqueueOpenQuestions", () => {
   it("queues questions a minute ahead, keyed by the session's fact set", async () => {
     const now = Date.now() + 1_000;
-    const job = await enqueueOpenQuestions(await openResearchDatabase(), now);
+    const job = await enqueueOpenQuestions(await openResearchDatabase(), "s", now);
 
     expect(job).toMatchObject({
       type: "suggestQuestions",
@@ -112,11 +112,11 @@ describe("enqueueOpenQuestions", () => {
     } as never);
 
     // Current facts, another model: kept (REQ-LIN-005).
-    expect(await enqueueOpenQuestions(database)).toBeUndefined();
+    expect(await enqueueOpenQuestions(database, "s")).toBeUndefined();
 
     await database.clear(QUESTION_STORE);
     await database.clear(MODEL_STORE);
 
-    expect(await enqueueOpenQuestions(database)).toBeUndefined();
+    expect(await enqueueOpenQuestions(database, "s")).toBeUndefined();
   });
 });

@@ -17,3 +17,9 @@ export const POPUP_PATH = "popup.html";
 
 /** Path of the options document inside the package, where models are managed. */
 export const OPTIONS_PATH = "options.html";
+
+/**
+ * Query parameter that pins a page (map, recorded data, summaries) to one
+ * session: `map.html?session=<id>`. A page without it follows the viewed session.
+ */
+export const SESSION_QUERY_PARAMETER = "session";

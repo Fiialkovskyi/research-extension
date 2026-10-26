@@ -4,12 +4,12 @@ import { enqueueJob } from "@/features/jobQueue";
 import { getActiveModel } from "@/features/modelRegistry";
 import { EXTRACTOR_VERSION } from "@/features/pageSnapshots";
 import { readSessionGraph } from "@/features/researchGraph";
-import { getActiveSession } from "@/features/researchSession";
 import {
   type ResearchDatabaseSchema,
   SNAPSHOT_STORE,
   SPACE_STORE,
   type StoredJob,
+  SESSION_STORE,
 } from "@/shared/storage";
 
 import { EMBED_SNAPSHOT_JOB } from "../../constants";
@@ -29,14 +29,15 @@ import { buildEmbeddingSpace } from "../buildEmbeddingSpace";
  */
 export const enqueueSnapshotEmbeddings = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   now: number = Date.now(),
 ): Promise<StoredJob[]> => {
   const [session, model] = await Promise.all([
-    getActiveSession(database),
+    database.get(SESSION_STORE, sessionId),
     getActiveModel(database, "embedding"),
   ]);
 
-  if (session === undefined || model?.manifest.contract.family !== "embedding") {
+  if (session?.status !== "active" || model?.manifest.contract.family !== "embedding") {
     return [];
   }
 

@@ -100,4 +100,23 @@ describe("enqueueJob", () => {
     expect(queued).toMatchObject({ status: "queued", attempts: 0, checkpoint: 7 });
     expect(queued).not.toHaveProperty("failureReason");
   });
+
+  it("records when new work entered the queue", async () => {
+    const before = Date.now();
+    const queued = await enqueueJob(database, work);
+
+    expect(queued.queuedAt).toBeGreaterThanOrEqual(before);
+    expect(queued.queuedAt).toBe(queued.createdAt);
+  });
+
+  it("records a failed job asked for again as entering the queue now, not when first created", async () => {
+    const id = await buildJobId(work);
+    await database.put(JOB_STORE, job({ id, status: "failed", attempts: 4, queuedAt: 0 }));
+
+    const before = Date.now();
+    const queued = await enqueueJob(database, work);
+
+    expect(queued.createdAt).toBe(0);
+    expect(queued.queuedAt).toBeGreaterThanOrEqual(before);
+  });
 });

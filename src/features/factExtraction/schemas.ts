@@ -59,7 +59,7 @@ export const sealedFactSchema = v.object({
  * explicit request); its answer is the session's queued extraction count.
  */
 export const factExtractionRequestSchemas = {
-  "facts.extractNow": v.object({}),
+  "facts.extractNow": v.object({ sessionId: v.optional(v.string()) }),
 } as const;
 
 export const factExtractionResponseSchemas = {

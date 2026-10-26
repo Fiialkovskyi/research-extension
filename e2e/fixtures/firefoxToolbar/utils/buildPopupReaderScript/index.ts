@@ -8,36 +8,25 @@ import { ACTOR_ERROR_PREFIX, POPUP_BROWSER_SELECTOR, UI_TIMEOUT_MS } from "../..
  */
 export const POPUP_SNAPSHOT_SCRIPT = `
     const panel = document.querySelector('[data-testid="popup-panel"]');
-    const greeting = document.querySelector('[data-testid="greeting"]');
-    const rect = greeting?.getBoundingClientRect();
+    const rect = panel?.getBoundingClientRect();
     const session = document.querySelector('[data-testid="session-active"]');
-    const closedSession = document.querySelector('[data-testid="session-closed"]');
     return JSON.stringify({
       uri: document.documentURI,
-      greeting: greeting?.textContent ?? null,
-      greetingVisible: !!rect && rect.width > 0 && rect.height > 0,
+      panelVisible: !!rect && rect.width > 0 && rect.height > 0,
       panelWidth: panel ? Math.round(panel.getBoundingClientRect().width) : 0,
       backgroundColor: panel ? getComputedStyle(panel).backgroundColor : "",
-      textColor: greeting ? getComputedStyle(greeting).color : "",
+      textColor: panel ? getComputedStyle(panel).color : "",
       activeSession: session?.textContent ?? null,
-      closedSession: closedSession?.textContent ?? null,
-      hasSessionForm: !!document.querySelector('[data-testid="group-form"]'),
+      sessionOptions: Array.from(document.querySelectorAll('[data-testid="session-select"] option'), (entry) => entry.textContent),
+      hasSessionForm: !!document.querySelector('[data-testid="group-form"], [data-testid="session-new"]'),
       hasOpenMap: !!document.querySelector('[data-testid="open-map"]'),
       pageCount: document.querySelector('[data-testid="session-page-count"]')?.textContent ?? null,
-      treeRows: Array.from(document.querySelectorAll('[role="treeitem"]'), (row) => ({
-        kind: row.dataset.rowKind,
-        text: row.textContent,
-        level: Number(row.getAttribute("aria-level")),
-        expanded: row.getAttribute("aria-expanded"),
-        engagement: row.dataset.engagement ?? null,
-        tabState: row.dataset.tabState ?? null,
-      })),
-      unreadCount: document.querySelector('[data-testid="unread-count"]')?.textContent ?? null,
-      unreadPages: Array.from(document.querySelectorAll('[data-testid="unread-page"]'), (entry) => entry.textContent),
       savedSessions: Array.from(document.querySelectorAll('[data-testid="saved-session"]'), (entry) => entry.textContent),
       leftOff: document.querySelector('[data-testid="left-off"]')?.textContent ?? null,
       reattachOffer: document.querySelector('[data-testid="reattach-offer"]')?.textContent ?? null,
       setupBanner: document.querySelector('[data-testid="setup-banner"]')?.textContent ?? null,
+      activityState: document.querySelector('[data-testid="activity-strip"]')?.dataset.state ?? null,
+      activityStrip: document.querySelector('[data-testid="activity-strip"]')?.textContent ?? null,
     });
   `;
 

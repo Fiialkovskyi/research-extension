@@ -15,6 +15,7 @@ import {
 } from "@/shared/storage";
 
 const GROUP_ID = 42;
+const OTHER_GROUP_ID = 43;
 
 let database: IDBPDatabase<ResearchDatabaseSchema>;
 
@@ -64,5 +65,29 @@ describe("closeTabNode", () => {
     await closeTabNode(database, 99);
 
     expect(await readNodes()).toEqual([expect.objectContaining({ tabState: "open" })]);
+  });
+
+  it("closes the tab's node in its own session only", async () => {
+    await database.put(SESSION_STORE, {
+      id: "session-2",
+      title: "Batteries",
+      groupId: OTHER_GROUP_ID,
+      formerGroupIds: [],
+      status: "active",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await followTabMembership({ database, tab: sessionTab() });
+    await followTabMembership({
+      database,
+      tab: sessionTab({ id: 8, url: "https://example.org/b", groupId: OTHER_GROUP_ID }),
+    });
+
+    await closeTabNode(database, 8);
+
+    const nodes = await readNodes();
+
+    expect(nodes.find(({ tabId }) => tabId === 7)).toMatchObject({ tabState: "open" });
+    expect(nodes.find(({ tabId }) => tabId === 8)).toMatchObject({ tabState: "closed" });
   });
 });

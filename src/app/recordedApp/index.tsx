@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { entityResolutionResponseSchemas } from "@/features/entityResolution";
 import { factExtractionResponseSchemas } from "@/features/factExtraction";
@@ -6,6 +6,7 @@ import { type RecordedSession, recordedDataResponseSchemas } from "@/features/re
 import { useDataChanges, type WatchData } from "@/features/liveData/ui/useDataChanges";
 import { RecordedPage } from "@/features/recordedData/ui/recordedPage";
 import { getErrorMessage } from "@/shared/getErrorMessage";
+import { readPinnedSessionId } from "@/shared/readPinnedSessionId";
 import {
   buildRpcMessage,
   parseRpcMessage,
@@ -25,7 +26,7 @@ export interface RecordedAppProps {
 }
 
 /** The kinds of data this page shows, so it reads again only when one of them changes. */
-const WATCHED_TOPICS = ["pages", "snapshots", "facts", "models"] as const;
+const WATCHED_TOPICS = ["pages", "snapshots", "facts", "models", "viewed"] as const;
 
 const responseSchemas = {
   ...recordedDataResponseSchemas,
@@ -66,6 +67,12 @@ const readRecordedState = (answer: unknown): RecordedState | { failure: string }
 
 /** Composition root of the "What was recorded" page. */
 export function RecordedApp({ client }: RecordedAppProps) {
+  /** The session the page was opened for; a page opened without one follows the viewed session. */
+  const [pinnedId] = useState(() => readPinnedSessionId(window.location.search));
+  const sessionField = useMemo(
+    () => (pinnedId === undefined ? {} : { sessionId: pinnedId }),
+    [pinnedId],
+  );
   const [state, setState] = useState<RecordedState>({ status: "loading" });
   const [isExtractionRequested, setIsExtractionRequested] = useState(false);
   const [texts, setTexts] = useState<ReadonlyMap<string, string | null>>(new Map());
@@ -94,7 +101,9 @@ export function RecordedApp({ client }: RecordedAppProps) {
   /** Reads again, after a deletion or a change: the background owns what is recorded. */
   const load = useCallback(async () => {
     try {
-      const next = readRecordedState(await client.request(buildRpcMessage("recorded.read", {})));
+      const next = readRecordedState(
+        await client.request(buildRpcMessage("recorded.read", sessionField)),
+      );
 
       if ("failure" in next) {
         setFailure(next.failure);
@@ -104,12 +113,12 @@ export function RecordedApp({ client }: RecordedAppProps) {
     } catch (error) {
       setFailure(getErrorMessage(error));
     }
-  }, [client]);
+  }, [client, sessionField]);
 
   useEffect(() => {
     let isCurrent = true;
 
-    client.request(buildRpcMessage("recorded.read", {})).then(
+    client.request(buildRpcMessage("recorded.read", sessionField)).then(
       (answer) => {
         if (!isCurrent) {
           return;
@@ -133,17 +142,22 @@ export function RecordedApp({ client }: RecordedAppProps) {
     return () => {
       isCurrent = false;
     };
-  }, [client]);
+  }, [client, sessionField]);
+
+  useEffect(() => {
+    document.title =
+      state.status === "ready" ? `What was recorded: ${state.session.title}` : "What was recorded";
+  }, [state]);
 
   const showText = useCallback(
     async (nodeId: string) => {
-      const answer = await ask(buildRpcMessage("recorded.readText", { nodeId }));
+      const answer = await ask(buildRpcMessage("recorded.readText", { nodeId, ...sessionField }));
 
       if (answer?.type === "recorded.text") {
         setTexts((previous) => new Map(previous).set(nodeId, answer.payload.text));
       }
     },
-    [ask],
+    [ask, sessionField],
   );
 
   const deleteNode = useCallback(
@@ -155,11 +169,11 @@ export function RecordedApp({ client }: RecordedAppProps) {
   );
 
   const extractFacts = useCallback(async () => {
-    if ((await ask(buildRpcMessage("facts.extractNow", {}))) !== undefined) {
+    if ((await ask(buildRpcMessage("facts.extractNow", sessionField))) !== undefined) {
       setIsExtractionRequested(true);
       await load();
     }
-  }, [ask, load]);
+  }, [ask, load, sessionField]);
 
   useDataChanges(client.watch, WATCHED_TOPICS, load);
 
@@ -197,7 +211,9 @@ export function RecordedApp({ client }: RecordedAppProps) {
       {state.status === "loading" && <p className="text-sm">Loading…</p>}
       {state.status === "empty" && (
         <p data-testid="recorded-empty" className="text-sm">
-          No research session is recorded.
+          {pinnedId === undefined
+            ? "No research session is recorded."
+            : "This session is gone: it was deleted."}
         </p>
       )}
       {state.status === "ready" && (

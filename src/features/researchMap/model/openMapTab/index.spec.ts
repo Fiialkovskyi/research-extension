@@ -57,4 +57,31 @@ describe("openMapTab", () => {
 
     expect(api.createTab).toHaveBeenCalledTimes(1);
   });
+
+  it("selects the page already open for the same session", async () => {
+    const open = buildTab({ id: 4, url: `${MAP_URL}?session=a` });
+    const api = createApi([buildTab(), open]);
+
+    await openMapTab(api, MAP_URL, "a");
+
+    expect(api.focusTab).toHaveBeenCalledWith(open);
+    expect(api.createTab).not.toHaveBeenCalled();
+  });
+
+  it("opens a second tab of the page for another session", async () => {
+    const api = createApi([buildTab({ id: 4, url: `${MAP_URL}?session=a` })]);
+
+    await openMapTab(api, MAP_URL, "b");
+
+    expect(api.createTab).toHaveBeenCalledWith(`${MAP_URL}?session=b`);
+    expect(api.focusTab).not.toHaveBeenCalled();
+  });
+
+  it("does not mistake the page of a longer path for the same page", async () => {
+    const api = createApi([buildTab({ id: 4, url: `${MAP_URL}x?session=a` })]);
+
+    await openMapTab(api, MAP_URL, "a");
+
+    expect(api.createTab).toHaveBeenCalledTimes(1);
+  });
 });

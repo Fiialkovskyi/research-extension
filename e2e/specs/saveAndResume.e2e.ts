@@ -4,8 +4,10 @@ import { UI_TIMEOUT_MS } from "../fixtures/firefoxToolbar/constants";
 import {
   clickInTabShowing,
   clickPopupButton,
+  selectPopupSession,
   clickToolbarAction,
   closePopup,
+  closeTabGroup,
   enterBrowserChrome,
   leaveBrowserChrome,
   loadUrlInSelectedTab,
@@ -79,7 +81,7 @@ const waitForPopup = async (
 
 const isSessionUrl = (url: string) => url.endsWith("/a.html") || url.endsWith("/c.html");
 
-// Page A opens page C; the user is on A when they put the research aside.
+// Page A opens page C; the user is on A when they close the session's group.
 describe("saving and resuming research", () => {
   const title = `Saved ${Date.now()}`;
 
@@ -92,7 +94,7 @@ describe("saving and resuming research", () => {
     await leaveBrowserChrome();
   });
 
-  it("saves the session: its tabs close and the library lists it", async () => {
+  it("keeps the session saved: once its group is closed the library lists it", async () => {
     await clickToolbarAction();
     await waitForPopupPanel();
     await readPopup();
@@ -107,21 +109,19 @@ describe("saving and resuming research", () => {
     await clickInTabShowing("/a.html", "#open-c");
     await waitForGraph((snapshot) => snapshot.nodes.length === 2, "pages A and C");
     await selectTabShowing("/a.html");
-
-    await clickToolbarAction();
-    await waitForPopupPanel();
-    await readPopup();
-    await clickPopupButton("save-session");
-    await closePopup().catch(() => undefined);
-
-    await browser.waitUntil(
-      async () => !(await readTabGroups()).some((group) => group.label === title),
-      { timeout: UI_TIMEOUT_MS, timeoutMsg: "The session's group was never closed." },
+    await waitForGraph(
+      (snapshot) =>
+        snapshot.sessions.some(
+          (session) => session.status === "active" && session.savedTabCount === 2,
+        ),
+      "both tabs on record",
     );
 
+    await closeTabGroup(title);
+
     const graph = await waitForGraph(
-      (snapshot) => snapshot.sessions.some((session) => session.status === "saved"),
-      "the saved session",
+      (snapshot) => snapshot.sessions.some((session) => session.status === "closed"),
+      "the closed session",
     );
 
     expect(graph.nodes.every((node) => node.tabState === "closed")).toBe(true);
@@ -138,6 +138,7 @@ describe("saving and resuming research", () => {
   });
 
   it("resumes it: the group comes back with its tabs and pages, where the user left off", async () => {
+    await selectPopupSession(title);
     await clickPopupButton("resume-session");
     await closePopup().catch(() => undefined);
 

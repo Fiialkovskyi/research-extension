@@ -29,10 +29,10 @@ describe("submitPopupGroupTitle", () => {
     expect(executeAsyncScript.mock.calls[0]?.[0]).toContain("Motors");
   });
 
-  it("fails when the popup has no session form", async () => {
+  it("keeps waiting while the popup shows no session form", async () => {
     executeAsyncScript.mockResolvedValue(JSON.stringify({ submitted: false }));
 
-    await expect(submitPopupGroupTitle("Motors")).rejects.toThrow(/no session form/);
+    await expect(submitPopupGroupTitle("Motors")).rejects.toThrow(/not met/);
   });
 
   it("surfaces an actor failure rather than timing out on it", async () => {

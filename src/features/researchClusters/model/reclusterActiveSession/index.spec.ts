@@ -75,14 +75,14 @@ beforeEach(async () => {
 
 describe("reclusterActiveSession", () => {
   it("clusters the active session's graph and stores the result", async () => {
-    const clustering = await reclusterActiveSession(database, 50);
+    const clustering = await reclusterActiveSession(database, "session-1", 50);
 
     expect(clustering?.clusters.map(({ memberIds }) => memberIds)).toEqual([["a", "b"]]);
     expect(await readClustering(database, "session-1")).toEqual(clustering);
   });
 
   it("keeps the cluster's id from the last run", async () => {
-    const first = await reclusterActiveSession(database, 50);
+    const first = await reclusterActiveSession(database, "session-1", 50);
 
     await database.put(NODE_STORE, { ...page("c", 3), parentNodeId: "b" });
     await database.put(EDGE_STORE, {
@@ -95,7 +95,7 @@ describe("reclusterActiveSession", () => {
       createdAt: 3,
     });
 
-    const again = await reclusterActiveSession(database, 60);
+    const again = await reclusterActiveSession(database, "session-1", 60);
 
     expect(again?.clusters[0]?.id).toBe(first?.clusters[0]?.id);
     expect(again?.clusters[0]?.memberIds).toEqual(["a", "b", "c"]);
@@ -104,7 +104,7 @@ describe("reclusterActiveSession", () => {
   it("does nothing without an active session", async () => {
     await database.clear(SESSION_STORE);
 
-    expect(await reclusterActiveSession(database)).toBeUndefined();
+    expect(await reclusterActiveSession(database, "session-1")).toBeUndefined();
     expect(await database.count(CLUSTERING_STORE)).toBe(0);
   });
 
@@ -127,7 +127,7 @@ describe("reclusterActiveSession", () => {
       ),
     );
 
-    const clustering = await reclusterActiveSession(database, 70);
+    const clustering = await reclusterActiveSession(database, "session-1", 70);
 
     expect(clustering?.embeddingSpaceId).toBe("space-1");
     expect(clustering?.clusters.map(({ memberIds }) => memberIds.toSorted())).toEqual([

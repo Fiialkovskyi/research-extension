@@ -34,7 +34,7 @@ beforeEach(async () => {
 
 describe("readResearchGaps", () => {
   it("lists the categories no page is, searching the session's title without entities", async () => {
-    const gaps = await readResearchGaps(await openResearchDatabase());
+    const gaps = await readResearchGaps(await openResearchDatabase(), "s");
 
     expect(gaps?.cellGaps).toEqual([]);
     expect(gaps?.categoryGaps.map(({ query }) => query)).toEqual([
@@ -50,6 +50,6 @@ describe("readResearchGaps", () => {
 
     await database.clear(SESSION_STORE);
 
-    expect(await readResearchGaps(database)).toBeUndefined();
+    expect(await readResearchGaps(database, "s")).toBeUndefined();
   });
 });

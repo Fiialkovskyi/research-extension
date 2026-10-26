@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import { parseResearchSnapshot } from ".";
 
 const snapshot = {
-  sessions: [{ title: "Motors", groupId: 1791, status: "active" }],
+  sessions: [
+    { id: "session-1", title: "Motors", groupId: 1791, status: "active", savedTabCount: 2 },
+  ],
   nodes: [
     {
       id: "node-a",
+      sessionId: "session-1",
       url: "http://duckduckgo.com/?q=motors",
       kind: "serp",
       query: "motors",

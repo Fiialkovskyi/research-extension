@@ -16,6 +16,7 @@ import {
 } from "@/shared/storage";
 
 const GROUP_ID = 42;
+const OTHER_GROUP_ID = 43;
 
 let database: IDBPDatabase<ResearchDatabaseSchema>;
 
@@ -304,5 +305,37 @@ describe("recordNavigation", () => {
       await recordNavigation({ database, api: createApi(sessionTab()), navigation: commit() }),
     ).toMatchObject({ kind: "page" });
     expect((await readNodes())[0]).not.toHaveProperty("query");
+  });
+
+  it("records into the session whose group holds the tab, leaving the other graph alone", async () => {
+    await database.put(SESSION_STORE, {
+      id: "session-2",
+      title: "Batteries",
+      groupId: OTHER_GROUP_ID,
+      formerGroupIds: [],
+      status: "active",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const api = createApi(
+      sessionTab(),
+      sessionTab({ id: 8, url: "https://example.org/b", groupId: OTHER_GROUP_ID }),
+    );
+
+    await recordNavigation({
+      database,
+      api,
+      navigation: commit({ tabId: 8, url: "https://example.org/b" }),
+    });
+    await recordNavigation({ database, api, navigation: commit() });
+
+    const nodes = await readNodes();
+
+    expect(nodes.filter(({ sessionId }) => sessionId === "session-2")).toEqual([
+      expect.objectContaining({ tabId: 8 }),
+    ]);
+    expect(nodes.filter(({ sessionId }) => sessionId === "session-1")).toEqual([
+      expect.objectContaining({ tabId: 7 }),
+    ]);
   });
 });

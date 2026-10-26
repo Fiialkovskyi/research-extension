@@ -16,6 +16,7 @@ import {
 } from "@/shared/storage";
 
 const GROUP_ID = 42;
+const OTHER_GROUP_ID = 43;
 
 let database: IDBPDatabase<ResearchDatabaseSchema>;
 
@@ -130,5 +131,51 @@ describe("followTabMembership", () => {
     expect(await readNodes()).toEqual([
       expect.objectContaining({ kind: "serp", query: "hub motor", domain: "www.bing.com" }),
     ]);
+  });
+
+  it("moves a tab dragged from one session's group to another's", async () => {
+    await database.put(SESSION_STORE, {
+      id: "session-2",
+      title: "Batteries",
+      groupId: OTHER_GROUP_ID,
+      formerGroupIds: [],
+      status: "active",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await followTabMembership({ database, tab: sessionTab() });
+
+    await followTabMembership({ database, tab: sessionTab({ groupId: OTHER_GROUP_ID }) });
+
+    const nodes = await readNodes();
+    const left = nodes.find(({ sessionId }) => sessionId === "session-1");
+    const joined = nodes.find(({ sessionId }) => sessionId === "session-2");
+
+    expect(left).toMatchObject({ tabState: "closed" });
+    expect(joined).toMatchObject({ tabId: 7, tabState: "open", transitionType: "joined" });
+  });
+
+  it("does not touch another session's tab when one tab leaves its group", async () => {
+    await database.put(SESSION_STORE, {
+      id: "session-2",
+      title: "Batteries",
+      groupId: OTHER_GROUP_ID,
+      formerGroupIds: [],
+      status: "active",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await followTabMembership({ database, tab: sessionTab() });
+    await followTabMembership({
+      database,
+      tab: sessionTab({ id: 8, url: "https://example.org/b", groupId: OTHER_GROUP_ID }),
+    });
+
+    await followTabMembership({ database, tab: sessionTab({ groupId: -1 }) });
+
+    const nodes = await readNodes();
+
+    expect(nodes.find(({ tabId }) => tabId === 7)).toMatchObject({ tabState: "closed" });
+    expect(nodes.find(({ tabId }) => tabId === 8)).toMatchObject({ tabState: "open" });
   });
 });

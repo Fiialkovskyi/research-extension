@@ -51,8 +51,11 @@ while it is off the manifest names no model host. A user turns AI on from the se
 (`setup.html`): `aiSetup.turnOn` asks Ollama for the recommended embedding model, then the
 recommended text-generation model, and each is registered, judged (step 6) and activated (step 7)
 like any model. Nothing is sent to Ollama until the user started setup, which the background records
-rather than reading it from the loopback permission, now granted at install. The seven steps below
-are the in-extension path, kept for when the flag is turned back on.
+rather than reading it from the loopback permission, now granted at install. Once a model is
+on, its work runs through the job queue, and the popup's activity strip shows it: `aiActivity`
+turns `jobQueue/readJobActivity`'s summary into one state, which the background answers and
+announces under the `jobs` data topic. The seven steps below are the in-extension path, kept for
+when the flag is turned back on.
 
 1. **A profile says which model.** `shared/config/modelProfiles` — repository, pinned commit, which
    weight file, and the contract values a repository does not publish about itself (pooling,

@@ -36,9 +36,9 @@ export const openQuestionsViewSchema = v.object({
 });
 
 export const openQuestionRequestSchemas = {
-  "questions.read": v.object({}),
+  "questions.read": v.object({ sessionId: v.optional(v.string()) }),
   /** Suggest questions now, while the user is active ("Suggest questions", "Refresh"). */
-  "questions.refresh": v.object({}),
+  "questions.refresh": v.object({ sessionId: v.optional(v.string()) }),
 } as const;
 
 export const openQuestionResponseSchemas = {

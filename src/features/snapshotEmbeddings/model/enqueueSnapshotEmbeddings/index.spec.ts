@@ -120,7 +120,7 @@ describe("enqueueSnapshotEmbeddings", () => {
   it("queues one job per snapshot into the active model's space, and stores the space", async () => {
     await database.put(MODEL_STORE, EMBEDDING_MODEL);
 
-    const jobs = await enqueueSnapshotEmbeddings(database, 10);
+    const jobs = await enqueueSnapshotEmbeddings(database, "session-1", 10);
     const [space] = await database.getAll(SPACE_STORE);
 
     expect(jobs).toHaveLength(2);
@@ -134,7 +134,7 @@ describe("enqueueSnapshotEmbeddings", () => {
   it("queues nothing without an active embedding model", async () => {
     await database.put(MODEL_STORE, { ...EMBEDDING_MODEL, active: false });
 
-    expect(await enqueueSnapshotEmbeddings(database)).toEqual([]);
+    expect(await enqueueSnapshotEmbeddings(database, "session-1")).toEqual([]);
     expect(await database.count(JOB_STORE)).toBe(0);
   });
 
@@ -142,17 +142,17 @@ describe("enqueueSnapshotEmbeddings", () => {
     await database.put(MODEL_STORE, EMBEDDING_MODEL);
     await database.clear(SESSION_STORE);
 
-    expect(await enqueueSnapshotEmbeddings(database)).toEqual([]);
+    expect(await enqueueSnapshotEmbeddings(database, "session-1")).toEqual([]);
   });
 
   it("does not queue a snapshot already embedded in that space again", async () => {
     await database.put(MODEL_STORE, EMBEDDING_MODEL);
 
-    const [first] = await enqueueSnapshotEmbeddings(database);
+    const [first] = await enqueueSnapshotEmbeddings(database, "session-1");
 
     await completeJob(database, first?.id ?? "");
 
-    const again = await enqueueSnapshotEmbeddings(database);
+    const again = await enqueueSnapshotEmbeddings(database, "session-1");
 
     expect(again.find((job) => job.id === first?.id)?.status).toBe("done");
     expect(await database.count(JOB_STORE)).toBe(2);

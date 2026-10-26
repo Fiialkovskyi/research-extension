@@ -95,4 +95,32 @@ describe("runNextJob", () => {
 
     expect((await database.get(JOB_STORE, job.id))?.failureReason).toContain('"summarize"');
   });
+
+  it("reports the claimed job before its runner starts", async () => {
+    const database = await openResearchDatabase();
+    const job = await enqueueJob(database, {
+      type: "embedSnapshot",
+      inputHashes: ["a"],
+      producerVersion: "1",
+    });
+    const order: string[] = [];
+    const onClaimed = vi.fn(() => order.push("claimed"));
+
+    await runNextJob(
+      database,
+      {
+        embedSnapshot: () => {
+          order.push("ran");
+          return Promise.resolve();
+        },
+      },
+      { onClaimed },
+    );
+
+    expect(onClaimed).toHaveBeenCalledOnce();
+    expect(onClaimed).toHaveBeenCalledWith(
+      expect.objectContaining({ id: job.id, status: "running" }),
+    );
+    expect(order).toEqual(["claimed", "ran"]);
+  });
 });

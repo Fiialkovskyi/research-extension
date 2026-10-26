@@ -52,7 +52,11 @@ export const findReattachCandidate = async ({
     return undefined;
   }
 
-  const saved = await database.getAllFromIndex(SESSION_STORE, "status", "saved");
+  // A closed session, its group gone, is saved as the user went and can be continued too.
+  const saved = [
+    ...(await database.getAllFromIndex(SESSION_STORE, "status", "saved")),
+    ...(await database.getAllFromIndex(SESSION_STORE, "status", "closed")),
+  ];
   const roots = (
     await Promise.all(
       saved.map(async (session) => ({

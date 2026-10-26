@@ -138,12 +138,14 @@ describe("restoring a closed session", () => {
     await runChromeAfterFlush(`await gBrowser.removeTabGroup(${findGroup(title)});`);
     await waitForGroup(title, false);
 
+    // A session whose group is gone is listed with the saved ones.
     const closed = await readPopupWhen(
-      (snapshot) => snapshot.closedSession !== null,
+      (snapshot) =>
+        snapshot.activeSession === null &&
+        snapshot.savedSessions.some((details) => details.includes(title)),
       "the closed session",
     );
 
-    expect(closed.closedSession).toContain(title);
     expect(closed.activeSession).toBeNull();
     expect(closed.hasSessionForm).toBe(true);
 
@@ -156,7 +158,6 @@ describe("restoring a closed session", () => {
     );
 
     expect(reopened.activeSession).toContain(title);
-    expect(reopened.hasSessionForm).toBe(false);
     // The page's tab came back under a new id: its old node is closed and the
     // restored tab has the one open node.
     await waitForOneOpenNode(getSessionPageUrl(title), "the restored group's page");
@@ -195,7 +196,7 @@ describe("restoring a closed session", () => {
     await waitForOneOpenNode(getSessionPageUrl(title), "the restored tab's page");
   });
 
-  it("ends a closed session when a new one starts, so restoring its group does not revive it", async () => {
+  it("leaves a closed session closed when a new one starts, and restoring its group brings it back beside the new one", async () => {
     const first = `First ${Date.now()}`;
     const second = `Second ${Date.now()}`;
 
@@ -207,12 +208,15 @@ describe("restoring a closed session", () => {
     await undoCloseTab();
     await waitForGroup(first, true);
 
+    // Both record at once, and the new one is the one the popup refers to.
     const snapshot = await readPopupWhen(
-      (candidate) => candidate.activeSession !== null,
-      "the active session",
+      (candidate) =>
+        candidate.activeSession !== null &&
+        candidate.sessionOptions.some((option) => option.includes(first)) &&
+        candidate.sessionOptions.some((option) => option.includes(second)),
+      "both sessions active",
     );
 
     expect(snapshot.activeSession).toContain(second);
-    expect(snapshot.closedSession).toBeNull();
   });
 });

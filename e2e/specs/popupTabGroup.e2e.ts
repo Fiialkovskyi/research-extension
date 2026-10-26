@@ -66,7 +66,6 @@ describe("starting a session from the popup", () => {
     );
 
     expect(during.activeSession).toContain(title);
-    expect(during.hasSessionForm).toBe(false);
 
     // Closing the group's last tab ends the session, so the form comes back.
     await closePopup();

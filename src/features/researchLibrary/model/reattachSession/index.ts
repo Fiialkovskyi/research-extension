@@ -58,7 +58,7 @@ export const reattachSession = async ({
     sessions.get(savedSessionId),
   ]);
 
-  if (active?.status !== "active" || saved?.status !== "saved") {
+  if (active?.status !== "active" || (saved?.status !== "saved" && saved?.status !== "closed")) {
     transaction.abort();
     await transaction.done.catch(() => undefined);
     throw new Error("Only a saved session can be continued from the active one.");

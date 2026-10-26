@@ -92,9 +92,9 @@ beforeEach(seedSession);
 describe("requestOpenQuestions", () => {
   it("marks the debounced job as asked for and due now", async () => {
     const database = await openResearchDatabase();
-    const job = await enqueueOpenQuestions(database, Date.now());
+    const job = await enqueueOpenQuestions(database, "s", Date.now());
 
-    expect(await requestOpenQuestions(database, 7)).toBe(true);
+    expect(await requestOpenQuestions(database, "s", 7)).toBe(true);
     expect(await database.get(JOB_STORE, job!.id)).toMatchObject({
       nextAttemptAt: 7,
       payload: { requestedAt: 7 },
@@ -106,6 +106,6 @@ describe("requestOpenQuestions", () => {
 
     await database.clear(FACT_STORE);
 
-    expect(await requestOpenQuestions(database)).toBe(false);
+    expect(await requestOpenQuestions(database, "s")).toBe(false);
   });
 });

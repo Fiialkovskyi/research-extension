@@ -1,31 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { type ActivityState, aiActivityResponseSchemas } from "@/features/aiActivity";
+import { ActivityStrip } from "@/features/aiActivity/ui/activityStrip";
 import { aiSetupResponseSchemas, type AiSetupStatus } from "@/features/aiSetup";
 import { SetupBanner } from "@/features/aiSetup/ui/setupBanner";
-import { Greeting } from "@/features/greeting/ui/greeting";
-import { type GraphSnapshot, researchMapResponseSchemas } from "@/features/researchMap";
-import { buildResearchTree, listUnreadPages, type TreeFocus } from "@/features/researchTree";
-import { ResearchTree } from "@/features/researchTree/ui/researchTree";
-import { UnreadQueue } from "@/features/researchTree/ui/unreadQueue";
+import { researchMapResponseSchemas } from "@/features/researchMap";
 import {
   researchLibraryResponseSchemas,
   type SavedSessionSummary,
 } from "@/features/researchLibrary";
-import { formatLeftOff, LibraryList } from "@/features/researchLibrary/ui/libraryList";
-import { ollamaResponseSchemas } from "@/features/ollama";
+import { formatLeftOff } from "@/features/researchLibrary/ui/formatLeftOff";
+import { SessionPicker } from "@/features/researchLibrary/ui/sessionPicker";
 import { recordedDataResponseSchemas } from "@/features/recordedData";
-import { researchSessionResponseSchemas } from "@/features/researchSession";
+import { researchSessionResponseSchemas, type SessionSummary } from "@/features/researchSession";
 import { tabGroupResponseSchemas } from "@/features/tabGroups";
-import { GroupForm } from "@/features/tabGroups/ui/groupForm";
+import type { DataTopic } from "@/features/liveData";
+import { useDataChanges, type WatchData } from "@/features/liveData/ui/useDataChanges";
 import { getErrorMessage } from "@/shared/getErrorMessage";
 import {
   buildRpcMessage,
   parseRpcMessage,
   type RpcMessage,
-  RpcMessageError,
   rpcResponseSchemas,
 } from "@/shared/rpc";
-import { Button, Panel, StatusDot } from "@/shared/ui";
+import { Button, Panel } from "@/shared/ui";
 
 /**
  * The popup's end of its conversation with the background.
@@ -35,6 +33,8 @@ import { Button, Panel, StatusDot } from "@/shared/ui";
  */
 export interface PopupClient {
   request: (message: RpcMessage<string, unknown>) => Promise<unknown>;
+  /** Hears that data changed, so the AI strip and banner follow the queue; absent in some tests. */
+  watch?: WatchData;
 }
 
 /**
@@ -50,21 +50,9 @@ export interface PageAccess {
   request: () => Promise<boolean>;
 }
 
-/**
- * A long-lived connection for the research tree: the background answers a
- * subscription with the graph and pushes it again after every change, until
- * the popup closes and the connection with it.
- */
-export interface GraphStream {
-  send: (message: RpcMessage<string, unknown>) => void;
-  /** Registers a listener and returns the function that removes it. */
-  subscribe: (listener: (message: unknown) => void) => () => void;
-}
-
 export interface PopupAppProps {
   client: PopupClient;
   pageAccess: PageAccess;
-  graph: GraphStream;
   /** Opens the options page, where local AI is set up. */
   openSettings?: () => void;
 }
@@ -76,52 +64,50 @@ const responseSchemas = {
   ...rpcResponseSchemas,
 } as const;
 
+/** An active session, as the popup lists and describes it. */
+type ActiveSession = SessionSummary;
+
 /**
- * What the popup shows: nothing yet, the form to start a session (with the
- * last failure, if any, and the closed session a start would end), or the
- * session that is active.
+ * What the popup shows: nothing yet, or the sessions being recorded — none, one
+ * or several — and which of them it refers to.
  */
 type PopupState =
   | { status: "loading" }
-  | { status: "ready"; pending: boolean; failure?: string; closedTitle?: string }
-  | {
-      status: "active";
-      title: string;
-      pageCount: number;
-      lastPosition?: { title: string; readFraction: number };
-      reattachSuggestion?: { sessionId: string; title: string };
-    };
+  | { status: "ready"; sessions: ActiveSession[]; viewedId: string | undefined };
 
-/** Turns the background's answer into what the popup shows. */
-const readAnswer = (answer: unknown): PopupState => {
+/** The sessions and the viewed one an answer lists, or why it could not. */
+const readAnswer = (answer: unknown): PopupState | { failure: string } => {
   const response = parseRpcMessage(answer, responseSchemas);
 
   switch (response.type) {
     case "session.active":
-      if (response.payload.session !== null) {
-        return {
-          status: "active",
-          title: response.payload.session.title,
-          pageCount: response.payload.session.pageCount,
-          ...(response.payload.session.lastPosition === undefined
-            ? {}
-            : { lastPosition: response.payload.session.lastPosition }),
-          ...(response.payload.session.reattachSuggestion === undefined
-            ? {}
-            : { reattachSuggestion: response.payload.session.reattachSuggestion }),
-        };
-      }
-
-      return response.payload.closedSession === null
-        ? { status: "ready", pending: false }
-        : { status: "ready", pending: false, closedTitle: response.payload.closedSession.title };
-    case "tabGroup.created":
-      // A session that has just started has recorded nothing yet.
-      return { status: "active", title: response.payload.title, pageCount: 0 };
+      return {
+        status: "ready",
+        sessions: response.payload.sessions,
+        viewedId: response.payload.viewedId ?? undefined,
+      };
     case "tabGroup.failed":
     case "rpc.refused":
     case "rpc.failed":
-      return { status: "ready", pending: false, failure: response.payload.reason };
+      return { failure: response.payload.reason };
+    default:
+      return { failure: `The background answered "${response.type}".` };
+  }
+};
+
+/** Why starting a session failed, or `undefined` when it started. */
+const readStartFailure = (answer: unknown): string | undefined => {
+  const response = parseRpcMessage(answer, responseSchemas);
+
+  switch (response.type) {
+    case "tabGroup.created":
+      return undefined;
+    case "tabGroup.failed":
+    case "rpc.refused":
+    case "rpc.failed":
+      return response.payload.reason;
+    default:
+      return `The background answered "${response.type}".`;
   }
 };
 
@@ -146,12 +132,6 @@ const readMapAnswer = (answer: unknown): string | undefined => {
   }
 };
 
-/** Every message the graph stream may carry to this surface. */
-const graphResponseSchemas = {
-  ...researchMapResponseSchemas,
-  ...rpcResponseSchemas,
-} as const;
-
 /** Every answer the background may send about saved research. */
 const libraryResponseSchemas = {
   ...researchLibraryResponseSchemas,
@@ -166,12 +146,11 @@ const readLibrary = (answer: unknown): SavedSessionSummary[] => {
   return response.type === "library.listed" ? response.payload.sessions : [];
 };
 
-/** Why a save, resume or delete failed, or `undefined` when it did not. */
+/** Why a resume or delete failed, or `undefined` when it did not. */
 const readLibraryFailure = (answer: unknown): string | undefined => {
   const response = parseRpcMessage(answer, libraryResponseSchemas);
 
   switch (response.type) {
-    case "session.saveFailed":
     case "session.resumeFailed":
     case "session.reattachFailed":
     case "rpc.refused":
@@ -182,11 +161,6 @@ const readLibraryFailure = (answer: unknown): string | undefined => {
   }
 };
 
-/** A request that failed or was answered with nothing this surface reads. */
-const readFailure = (error: unknown): PopupState => {
-  return { status: "ready", pending: false, failure: getErrorMessage(error) };
-};
-
 /** Where the user stands with AI; `undefined` on any other answer. */
 const readAiSetupStatus = (answer: unknown): AiSetupStatus | undefined => {
   const response = parseRpcMessage(answer, { ...aiSetupResponseSchemas, ...rpcResponseSchemas });
@@ -194,27 +168,57 @@ const readAiSetupStatus = (answer: unknown): AiSetupStatus | undefined => {
   return response.type === "aiSetup.status" ? response.payload : undefined;
 };
 
-/** Composition root of the toolbar popup surface. */
-/** Whether local AI is paused waiting for Ollama; `false` on any other answer. */
-const readLocalAiPaused = (answer: unknown): boolean => {
-  const response = parseRpcMessage(answer, { ...ollamaResponseSchemas, ...rpcResponseSchemas });
+/** What the local AI is doing; `undefined` on any other answer. */
+const readActivityState = (answer: unknown): ActivityState | undefined => {
+  const response = parseRpcMessage(answer, { ...aiActivityResponseSchemas, ...rpcResponseSchemas });
 
-  return response.type === "ollama.healthReport" && response.payload.isPaused;
+  return response.type === "aiActivity.state" ? response.payload : undefined;
 };
 
-export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppProps) {
+interface AiAnswers {
+  status?: AiSetupStatus;
+  activity?: ActivityState;
+}
+
+/** Asks whether AI is set up and what it is doing; an answer that fails is left out. */
+const requestAi = async (client: PopupClient): Promise<AiAnswers> => {
+  const [status, activity] = await Promise.all([
+    client
+      .request(buildRpcMessage("aiSetup.read", {}))
+      .then(readAiSetupStatus)
+      .catch(() => undefined),
+    client
+      .request(buildRpcMessage("aiActivity.read", {}))
+      .then(readActivityState)
+      .catch(() => undefined),
+  ]);
+
+  return {
+    ...(status === undefined ? {} : { status }),
+    ...(activity === undefined ? {} : { activity }),
+  };
+};
+
+/** What the AI strip and the setup banner show: the queue, and the models that set AI up. */
+const AI_TOPICS: readonly DataTopic[] = ["jobs", "models"];
+
+/** Composition root of the toolbar popup surface. */
+export function PopupApp({ client, pageAccess, openSettings }: PopupAppProps) {
   const [state, setState] = useState<PopupState>({ status: "loading" });
-  const [snapshot, setSnapshot] = useState<GraphSnapshot | undefined>();
-  /** Kept apart from the snapshot, so a new one leaves collapsed rows collapsed. */
-  const [treeFocus, setTreeFocus] = useState<TreeFocus>({
-    focusedId: undefined,
-    collapsed: new Set(),
-  });
-  const isActive = state.status === "active";
-  const isReady = state.status === "ready" && !state.pending;
+  /** True while a start or a resume is in flight, so it is not sent twice. */
+  const [isPending, setIsPending] = useState(false);
+  /** Why the last start or resume failed, until the next one. */
+  const [failure, setFailure] = useState<string | undefined>();
+  const sessions = state.status === "ready" ? state.sessions : [];
+  const viewed =
+    state.status === "ready"
+      ? (sessions.find(({ id }) => id === state.viewedId) ?? sessions[0])
+      : undefined;
+  /** The library is listed again when this changes: a closed group saves its session. */
+  const libraryKey = state.status === "ready" ? sessions.map(({ id }) => id).join(",") : undefined;
   const [library, setLibrary] = useState<SavedSessionSummary[]>([]);
-  const [isLocalAiPaused, setIsLocalAiPaused] = useState(false);
   const [aiSetup, setAiSetup] = useState<AiSetupStatus | undefined>();
+  const [activity, setActivity] = useState<ActivityState | undefined>();
 
   /** Opens the setup page; Firefox closes the popup as the page takes focus. */
   const openSetup = useCallback(() => {
@@ -234,34 +238,9 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
     [client],
   );
 
-  // Whether similarity is waiting for Ollama, asked once while a session runs.
-  useEffect(() => {
-    if (!isActive) {
-      return undefined;
-    }
-
-    let isCurrent = true;
-
-    client
-      .request(buildRpcMessage("ollama.health", {}))
-      .then(readLocalAiPaused)
-      .then(
-        (isPaused) => {
-          if (isCurrent) {
-            setIsLocalAiPaused(isPaused);
-          }
-        },
-        () => undefined,
-      );
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [client, isActive]);
-
   // The saved sessions, whenever the popup offers to start one.
   useEffect(() => {
-    if (!isReady) {
+    if (libraryKey === undefined) {
       return undefined;
     }
 
@@ -271,9 +250,9 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
       .request(buildRpcMessage("library.list", {}))
       .then(readLibrary)
       .then(
-        (sessions) => {
+        (listed) => {
           if (isCurrent) {
-            setLibrary(sessions);
+            setLibrary(listed);
           }
         },
         () => undefined,
@@ -282,45 +261,8 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
     return () => {
       isCurrent = false;
     };
-  }, [client, isReady]);
+  }, [client, libraryKey]);
 
-  // The tree follows the graph for as long as the popup is open.
-  useEffect(() => {
-    if (!isActive) {
-      return undefined;
-    }
-
-    const unsubscribe = graph.subscribe((message) => {
-      let response;
-
-      try {
-        response = parseRpcMessage(message, graphResponseSchemas);
-      } catch (error) {
-        // A message this surface cannot validate is not its to render.
-        if (error instanceof RpcMessageError) {
-          return;
-        }
-
-        throw error;
-      }
-
-      if (response.type === "graph.snapshot") {
-        setSnapshot(response.payload.session === null ? undefined : response.payload);
-      }
-    });
-
-    // Sent after listening, so the first snapshot cannot arrive unheard.
-    graph.send(buildRpcMessage("graph.subscribe", {}));
-
-    return unsubscribe;
-  }, [graph, isActive]);
-
-  const focusTab = useCallback(
-    (tabId: number) => {
-      graph.send(buildRpcMessage("tab.focus", { tabId }));
-    },
-    [graph],
-  );
   const [mapFailure, setMapFailure] = useState<string | undefined>();
   /** `undefined` until the browser has said. */
   const [hasPageAccess, setHasPageAccess] = useState<boolean | undefined>();
@@ -362,12 +304,18 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
       .then(
         (next) => {
           if (isCurrent) {
-            setState(next);
+            if ("failure" in next) {
+              setFailure(next.failure);
+              setState({ status: "ready", sessions: [], viewedId: undefined });
+            } else {
+              setState(next);
+            }
           }
         },
         (error: unknown) => {
           if (isCurrent) {
-            setState(readFailure(error));
+            setFailure(getErrorMessage(error));
+            setState({ status: "ready", sessions: [], viewedId: undefined });
           }
         },
       );
@@ -377,26 +325,51 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
     };
   }, [client]);
 
-  // Whether AI is set up, read from storage on every open: nothing here asks Ollama.
+  /** Reads the sessions again, as the background has them now. */
+  const refresh = useCallback(async () => {
+    const next = readAnswer(await client.request(buildRpcMessage("session.getActive", {})));
+
+    if ("failure" in next) {
+      setFailure(next.failure);
+    } else {
+      setState(next);
+    }
+  }, [client]);
+
+  /** Shows what the background said about AI; an answer it could not give leaves the last one. */
+  const showAi = useCallback((answers: AiAnswers) => {
+    if (answers.status !== undefined) {
+      setAiSetup(answers.status);
+    }
+
+    if (answers.activity !== undefined) {
+      setActivity(answers.activity);
+    }
+  }, []);
+
+  // Whether AI is set up and what it is doing, read from storage on every open:
+  // nothing here asks Ollama.
   useEffect(() => {
     let isCurrent = true;
 
-    client
-      .request(buildRpcMessage("aiSetup.read", {}))
-      .then(readAiSetupStatus)
-      .then(
-        (status) => {
-          if (isCurrent && status !== undefined) {
-            setAiSetup(status);
-          }
-        },
-        () => undefined,
-      );
+    void requestAi(client).then((answers) => {
+      if (isCurrent) {
+        showAi(answers);
+      }
+    });
 
     return () => {
       isCurrent = false;
     };
-  }, [client]);
+  }, [client, showAi]);
+
+  // Read again whenever the queue or the models change, so setup finishing
+  // swaps the banner for the strip.
+  const readAi = useCallback(async () => {
+    showAi(await requestAi(client));
+  }, [client, showAi]);
+
+  useDataChanges(client.watch, AI_TOPICS, readAi);
 
   // The background does the work, so it finishes even if the user dismisses
   // the popup first. Firefox keeps the popup open when the extension itself
@@ -410,59 +383,79 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
         requestPageAccess();
       }
 
-      setState({ status: "ready", pending: true });
+      setIsPending(true);
+      setFailure(undefined);
 
       // A reply this surface cannot parse is a failure too, so it is caught
       // by the same handler rather than escaping as an unhandled rejection.
       client
         .request(buildRpcMessage("tabGroup.create", { title }))
-        .then(readAnswer)
-        .then(setState, (error: unknown) => {
-          setState(readFailure(error));
+        .then(async (answer) => {
+          const reason = readStartFailure(answer);
+
+          if (reason === undefined) {
+            await refresh();
+          } else {
+            setFailure(reason);
+          }
+        })
+        .catch((error: unknown) => {
+          setFailure(getErrorMessage(error));
+        })
+        .finally(() => {
+          setIsPending(false);
         });
     },
-    [client, hasPageAccess, requestPageAccess],
+    [client, hasPageAccess, refresh, requestPageAccess],
   );
 
-  /** Saves the session: the background closes its tabs once it is recorded. */
-  const saveSession = useCallback(() => {
-    client
-      .request(buildRpcMessage("session.save", {}))
-      .then((answer) => {
-        const failure = readLibraryFailure(answer);
-
-        if (failure === undefined) {
-          setState({ status: "ready", pending: false });
-        } else {
-          setMapFailure(failure);
-        }
-      })
-      .catch((error: unknown) => {
-        setMapFailure(getErrorMessage(error));
-      });
-  }, [client]);
-
-  /** Resumes a saved session, then shows it as the active one. */
+  /**
+   * Resumes a saved session beside the ones being recorded, and refers to it.
+   * Nothing is closed, so a refusal changes nothing but the message.
+   */
   const resume = useCallback(
     (sessionId: string) => {
-      setState({ status: "ready", pending: true });
+      setIsPending(true);
+      setFailure(undefined);
+
       client
         .request(buildRpcMessage("session.resume", { sessionId }))
         .then(async (answer) => {
-          const failure = readLibraryFailure(answer);
+          const reason = readLibraryFailure(answer);
 
-          if (failure !== undefined) {
-            setState({ status: "ready", pending: false, failure });
-            return;
+          if (reason === undefined) {
+            await refresh();
+          } else {
+            setFailure(reason);
           }
-
-          setState(readAnswer(await client.request(buildRpcMessage("session.getActive", {}))));
         })
         .catch((error: unknown) => {
-          setState(readFailure(error));
+          setFailure(getErrorMessage(error));
+        })
+        .finally(() => {
+          setIsPending(false);
         });
     },
-    [client],
+    [client, refresh],
+  );
+
+  /**
+   * Chooses which active session the popup, and the pages opened from it,
+   * refer to. Shown at once; the background has the last word.
+   */
+  const view = useCallback(
+    (sessionId: string) => {
+      setState((previous) =>
+        previous.status === "ready" ? { ...previous, viewedId: sessionId } : previous,
+      );
+      client
+        .request(buildRpcMessage("session.view", { sessionId }))
+        .then(refresh)
+        .catch((error: unknown) => {
+          setMapFailure(getErrorMessage(error));
+        });
+    },
+    [client, refresh],
   );
 
   /** Answers the offer to continue a saved session, then shows the session as it is now. */
@@ -471,19 +464,19 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
       client
         .request(message)
         .then(async (answer) => {
-          const failure = readLibraryFailure(answer);
+          const reason = readLibraryFailure(answer);
 
-          if (failure !== undefined) {
-            setMapFailure(failure);
+          if (reason !== undefined) {
+            setMapFailure(reason);
           }
 
-          setState(readAnswer(await client.request(buildRpcMessage("session.getActive", {}))));
+          await refresh();
         })
         .catch((error: unknown) => {
           setMapFailure(getErrorMessage(error));
         });
     },
-    [client],
+    [client, refresh],
   );
 
   /** Deletes a saved session, then lists the library again. */
@@ -501,27 +494,31 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
 
   // Opened like the map: the background finds its tab or opens one outside groups.
   const openRecorded = useCallback(() => {
-    client.request(buildRpcMessage("recorded.open", {})).catch((error: unknown) => {
-      setMapFailure(getErrorMessage(error));
-    });
-  }, [client]);
+    client
+      .request(buildRpcMessage("recorded.open", { sessionId: viewed?.id }))
+      .catch((error: unknown) => {
+        setMapFailure(getErrorMessage(error));
+      });
+  }, [client, viewed?.id]);
 
   // Opened like the recorded page, beside it.
   const openSummaries = useCallback(() => {
-    client.request(buildRpcMessage("summaries.open", {})).catch((error: unknown) => {
-      setMapFailure(getErrorMessage(error));
-    });
-  }, [client]);
+    client
+      .request(buildRpcMessage("summaries.open", { sessionId: viewed?.id }))
+      .catch((error: unknown) => {
+        setMapFailure(getErrorMessage(error));
+      });
+  }, [client, viewed?.id]);
 
-  // The background finds the map's tab or opens one, outside the session's group.
+  // The background finds the viewed session's map tab or opens one, outside any group.
   const openMap = useCallback(() => {
     client
-      .request(buildRpcMessage("map.open", {}))
+      .request(buildRpcMessage("map.open", { sessionId: viewed?.id }))
       .then(readMapAnswer)
       .then(setMapFailure, (error: unknown) => {
         setMapFailure(getErrorMessage(error));
       });
-  }, [client]);
+  }, [client, viewed?.id]);
 
   return (
     <Panel>
@@ -532,52 +529,50 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
           onToggle={toggleSetupBanner}
         />
       )}
-      <Greeting />
-      {state.status === "ready" && state.closedTitle !== undefined && (
-        <p data-testid="session-closed" className="mt-2 text-sm">
-          Session “{state.closedTitle}” is closed. Restore its group or one of its tabs to go on
-          with it; starting a new session ends it.
-        </p>
+      {aiSetup?.isSetUp === true && activity !== undefined && (
+        <ActivityStrip state={activity} onOpenSetup={openSetup} />
       )}
-      {state.status === "ready" && state.closedTitle !== undefined && (
-        <div className="mt-2">
-          <Button data-testid="open-recorded" onClick={openRecorded}>
-            What was recorded
-          </Button>{" "}
-          <Button data-testid="open-summaries" onClick={openSummaries}>
-            Synthesis
-          </Button>
+      {state.status !== "loading" && (
+        <div className="mt-3">
+          <SessionPicker
+            active={sessions}
+            {...(viewed === undefined ? {} : { viewedId: viewed.id })}
+            saved={library}
+            pending={isPending}
+            onCreate={startSession}
+            onView={view}
+            onResume={resume}
+            onDelete={deleteSaved}
+          />
         </div>
       )}
-      {state.status === "ready" && <GroupForm pending={state.pending} onSubmit={startSession} />}
-      {isReady && <LibraryList sessions={library} onResume={resume} onDelete={deleteSaved} />}
-      {state.status === "ready" && state.failure !== undefined && (
+      {failure !== undefined && (
         <p
           data-testid="group-error"
           role="alert"
           className="mt-2 text-sm text-red-700 dark:text-red-400"
         >
-          {state.failure}
+          {failure}
         </p>
       )}
-      {state.status === "active" && (
+      {viewed !== undefined && (
         <p className="mt-2 text-sm">
-          <span data-testid="session-active">Session “{state.title}” is active.</span>{" "}
+          <span data-testid="session-active">Session “{viewed.title}” is active.</span>{" "}
           <span data-testid="session-page-count">
-            {state.pageCount === 1 ? "1 page recorded" : `${state.pageCount} pages recorded`}
+            {viewed.pageCount === 1 ? "1 page recorded" : `${viewed.pageCount} pages recorded`}
           </span>
         </p>
       )}
-      {state.status === "active" && state.reattachSuggestion !== undefined && (
+      {viewed?.reattachSuggestion !== undefined && (
         <div data-testid="reattach-offer" role="group" className="mt-2 text-sm">
-          <p>This looks like “{state.reattachSuggestion.title}”. Continue that research here?</p>
+          <p>This looks like “{viewed.reattachSuggestion.title}”. Continue that research here?</p>
           <div className="mt-1 flex gap-2">
             <Button
               data-testid="reattach-continue"
               onClick={() => {
                 answerReattach(
                   buildRpcMessage("session.reattach", {
-                    savedSessionId: state.reattachSuggestion?.sessionId ?? "",
+                    savedSessionId: viewed.reattachSuggestion?.sessionId ?? "",
                   }),
                 );
               }}
@@ -595,12 +590,12 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
           </div>
         </div>
       )}
-      {state.status === "active" && state.lastPosition !== undefined && (
+      {viewed?.lastPosition !== undefined && (
         <p data-testid="left-off" className="mt-1 text-sm">
-          {formatLeftOff(state.lastPosition)}
+          {formatLeftOff(viewed.lastPosition)}
         </p>
       )}
-      {state.status === "active" && (
+      {viewed !== undefined && (
         <div className="mt-3">
           <Button data-testid="open-map" onClick={openMap}>
             Open map
@@ -610,33 +605,10 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
           </Button>{" "}
           <Button data-testid="open-summaries" onClick={openSummaries}>
             Synthesis
-          </Button>{" "}
-          <Button data-testid="save-session" onClick={saveSession}>
-            Save research
           </Button>
         </div>
       )}
-      {state.status === "active" && isLocalAiPaused && (
-        <p
-          data-testid="local-ai-paused"
-          className="mt-3 text-xs text-slate-500 dark:text-slate-400"
-        >
-          <span className="mr-1.5 inline-block align-middle">
-            <StatusDot tone="attention" />
-          </span>
-          AI is paused: Ollama isn&apos;t running. Open it and similar pages resume; pages are still
-          recorded.{" "}
-          <button
-            type="button"
-            data-testid="local-ai-paused-help"
-            className="underline"
-            onClick={openSetup}
-          >
-            Help
-          </button>
-        </p>
-      )}
-      {state.status === "active" && hasPageAccess === false && (
+      {viewed !== undefined && hasPageAccess === false && (
         <div data-testid="page-access-missing" className="mt-3 text-sm">
           <p>
             Reading and scrolling are not being recorded: the extension has no access to page
@@ -649,18 +621,7 @@ export function PopupApp({ client, pageAccess, graph, openSettings }: PopupAppPr
           </div>
         </div>
       )}
-      {state.status === "active" && snapshot !== undefined && (
-        <div className="mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto">
-          <UnreadQueue pages={listUnreadPages(snapshot.nodes)} onFocusTab={focusTab} />
-          <ResearchTree
-            forest={buildResearchTree(snapshot.nodes, snapshot.clusters)}
-            focus={treeFocus}
-            onFocusChange={setTreeFocus}
-            onFocusTab={focusTab}
-          />
-        </div>
-      )}
-      {state.status === "active" && mapFailure !== undefined && (
+      {viewed !== undefined && mapFailure !== undefined && (
         <p
           data-testid="map-error"
           role="alert"

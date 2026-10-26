@@ -98,7 +98,7 @@ beforeEach(async () => {
 
 describe("readRecordedSession", () => {
   it("lists the live session's pages, oldest first, with what was kept about each", async () => {
-    const recorded = await readRecordedSession(database);
+    const recorded = await readRecordedSession(database, "session-1");
 
     expect(recorded).toMatchObject({ id: "session-1", title: "E-bike motors", status: "active" });
     expect(recorded?.pages.map(({ id }) => id)).toEqual(["b", "a"]);
@@ -133,14 +133,14 @@ describe("readRecordedSession", () => {
       invalidChunkCount: 0,
     });
 
-    const recorded = await readRecordedSession(database);
+    const recorded = await readRecordedSession(database, "session-1");
 
     expect(recorded?.pages[1]?.facts).toEqual({ kept: 7, dropped: 2, isFinished: false });
     expect(recorded?.pages[0]?.facts).toBeNull();
   });
 
   it("says whether facts can be extracted: only with an active generation model", async () => {
-    expect((await readRecordedSession(database))?.canExtractFacts).toBe(false);
+    expect((await readRecordedSession(database, "session-1"))?.canExtractFacts).toBe(false);
 
     await database.put(MODEL_STORE, {
       ref: "ollama:qwen3:4b@abc",
@@ -150,27 +150,31 @@ describe("readRecordedSession", () => {
       installedAt: 1,
     } as never);
 
-    expect((await readRecordedSession(database))?.canExtractFacts).toBe(true);
+    expect((await readRecordedSession(database, "session-1"))?.canExtractFacts).toBe(true);
   });
 
   it("never includes a page's text", async () => {
-    expect(JSON.stringify(await readRecordedSession(database))).not.toContain("cranks");
+    expect(JSON.stringify(await readRecordedSession(database, "session-1"))).not.toContain(
+      "cranks",
+    );
   });
 
   it("gives nothing without a live session", async () => {
     await database.clear(SESSION_STORE);
 
-    expect(await readRecordedSession(database)).toBeUndefined();
+    expect(await readRecordedSession(database, "session-1")).toBeUndefined();
   });
 });
 
 describe("readRecordedText", () => {
   it("returns a page's text, decrypted", async () => {
-    expect(await readRecordedText(database, "a")).toBe("Mid-drive motors sit at the cranks.");
+    expect(await readRecordedText(database, "session-1", "a")).toBe(
+      "Mid-drive motors sit at the cranks.",
+    );
   });
 
   it("returns nothing for a page without text, or of another session", async () => {
-    expect(await readRecordedText(database, "b")).toBeNull();
-    expect(await readRecordedText(database, "elsewhere")).toBeNull();
+    expect(await readRecordedText(database, "session-1", "b")).toBeNull();
+    expect(await readRecordedText(database, "session-1", "elsewhere")).toBeNull();
   });
 });

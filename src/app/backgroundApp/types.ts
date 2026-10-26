@@ -4,7 +4,7 @@ import type { IDBPDatabase } from "idb";
 import type { InferenceWorker } from "@/features/inference";
 import type { PageSender, PageSignalsApi } from "@/features/pageSignals";
 import type { EmbeddingSession } from "@/features/snapshotEmbeddings";
-import type { CloseTabsApi, ResumeApi } from "@/features/researchLibrary";
+import type { ResumeApi } from "@/features/researchLibrary";
 import type { SessionTab, SessionTabApi } from "@/features/researchSession";
 import type { CaptureTab, CommittedNavigation, TabCaptureApi } from "@/features/tabCapture";
 import type { TabGroupApi } from "@/features/tabGroups";
@@ -56,12 +56,15 @@ export interface BackgroundDependencies {
   reportError: (error: unknown) => void;
   /** Selects a tab and focuses its window, for a node activated on the map. */
   focusTab: (tabId: number) => Promise<void>;
-  /** Selects the map's tab, opening one outside any tab group if none is open. */
-  openMap: () => Promise<void>;
-  /** Selects the "What was recorded" tab, opening one outside any tab group if none is open. */
-  openRecordedPage: () => Promise<void>;
-  /** Selects the Summaries tab, opening one outside any tab group if none is open. */
-  openSummariesPage: () => Promise<void>;
+  /**
+   * Selects the map's tab for a session, opening one outside any tab group if
+   * none is open for it; another session's map stays open beside it.
+   */
+  openMap: (sessionId: string) => Promise<void>;
+  /** The same for the "What was recorded" page. */
+  openRecordedPage: (sessionId: string) => Promise<void>;
+  /** The same for the Summaries page. */
+  openSummariesPage: (sessionId: string) => Promise<void>;
   /** Selects the setup page's tab, opening one outside any tab group if none is open. */
   openSetupPage: () => Promise<void>;
   /** Shows the one system notification, after install, that AI needs setting up. */
@@ -70,8 +73,6 @@ export interface BackgroundDependencies {
   setBadge: (state: BadgeState) => Promise<void>;
   /** The browser calls resuming a saved session uses: opening, grouping and selecting tabs. */
   resumeApi: ResumeApi;
-  /** The browser calls closing a saved session's tabs uses, keeping their window open. */
-  closeTabs: CloseTabsApi;
   /** Injects the page observer and asks it for a page's text. */
   pageSignals: PageSignalsApi;
   /**

@@ -3,11 +3,12 @@ import type { IDBPDatabase } from "idb";
 import { type ResearchDatabaseSchema, SESSION_STORE, type StoredSession } from "@/shared/storage";
 
 /**
- * Makes the closed session active again when its group is back.
+ * Makes the closed session that follows the group active again, now that the
+ * group is back.
  *
  * A restored group keeps its id on every path that restores it — undoing a
  * deletion, reopening a saved group, a window's group coming back — so the id
- * alone identifies the session. A group that is not the closed session's is
+ * alone identifies the session. A group that is no closed session's is
  * ignored, so every group creation can be passed here.
  *
  * @returns The reopened session, or `undefined` when the group was not the session's.
@@ -17,9 +18,11 @@ export const reopenSessionForGroup = async (
   groupId: number,
 ): Promise<StoredSession | undefined> => {
   const transaction = database.transaction(SESSION_STORE, "readwrite");
-  const closed = await transaction.store.index("status").get("closed");
+  const closed = (await transaction.store.index("status").getAll("closed")).find(
+    (session) => session.groupId === groupId,
+  );
 
-  if (closed === undefined || closed.groupId !== groupId) {
+  if (closed === undefined) {
     await transaction.done;
     return undefined;
   }

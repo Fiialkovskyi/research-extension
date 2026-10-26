@@ -532,6 +532,27 @@ describe("applyDatabaseUpgrade", () => {
     after.close();
   });
 
+  it("indexes jobs by when they last changed, keeping the jobs a version-22 profile had", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 22);
+
+    await before.put(JOB_STORE, { id: "old", updatedAt: 100 } as never);
+    await before.put(JOB_STORE, { id: "new", updatedAt: 300 } as never);
+    before.close();
+
+    const after = await openAt(name, 23);
+
+    expect(after.version).toBe(23);
+    expect(
+      (await after.getAllFromIndex(JOB_STORE, "updatedAt", IDBKeyRange.lowerBound(200))).map(
+        (job) => job.id,
+      ),
+    ).toEqual(["new"]);
+    expect(await after.count(JOB_STORE)).toBe(2);
+
+    after.close();
+  });
+
   it("keys model files by model and path together, so one model holds many files", async () => {
     const database = await openAt(getNextDatabaseName(), 1);
 

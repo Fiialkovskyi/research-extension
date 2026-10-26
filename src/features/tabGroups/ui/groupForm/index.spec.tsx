@@ -60,3 +60,22 @@ describe("GroupForm", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });
+
+describe("GroupForm with a way out", () => {
+  it("takes the focus, and calls cancel from its button", () => {
+    const onCancel = vi.fn();
+    render(<GroupForm onSubmit={() => {}} onCancel={onCancel} />);
+
+    expect(screen.getByLabelText("Session title")).toHaveFocus();
+
+    fireEvent.click(screen.getByTestId("group-cancel"));
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no cancel unless it was given one", () => {
+    render(<GroupForm onSubmit={() => {}} />);
+
+    expect(screen.queryByTestId("group-cancel")).toBeNull();
+  });
+});

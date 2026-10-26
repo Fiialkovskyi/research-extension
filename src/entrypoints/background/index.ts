@@ -87,7 +87,7 @@ export default defineBackground(() => {
 
       await focusBrowserTab(tabId, tab.windowId ?? browser.windows.WINDOW_ID_CURRENT);
     },
-    openMap: () =>
+    openMap: (sessionId) =>
       openMapTab(
         {
           queryTabs: async () => (await browser.tabs.query({})).map(readMapTab),
@@ -96,8 +96,9 @@ export default defineBackground(() => {
           ungroupTab: (tabId) => browser.tabs.ungroup(tabId),
         },
         browser.runtime.getURL(MAP_PAGE_PATH),
+        sessionId,
       ),
-    openRecordedPage: () =>
+    openRecordedPage: (sessionId) =>
       openMapTab(
         {
           queryTabs: async () => (await browser.tabs.query({})).map(readMapTab),
@@ -106,8 +107,9 @@ export default defineBackground(() => {
           ungroupTab: (tabId) => browser.tabs.ungroup(tabId),
         },
         browser.runtime.getURL(RECORDED_PAGE_PATH),
+        sessionId,
       ),
-    openSummariesPage: () =>
+    openSummariesPage: (sessionId) =>
       openMapTab(
         {
           queryTabs: async () => (await browser.tabs.query({})).map(readMapTab),
@@ -116,6 +118,7 @@ export default defineBackground(() => {
           ungroupTab: (tabId) => browser.tabs.ungroup(tabId),
         },
         browser.runtime.getURL(SUMMARIES_PAGE_PATH),
+        sessionId,
       ),
     openSetupPage: () =>
       openMapTab(
@@ -172,14 +175,6 @@ export default defineBackground(() => {
       getGroup: (groupId) => browser.tabGroups.get(groupId),
       activateTab: (tabId) => browser.tabs.update(tabId, { active: true }),
       removeTab: (tabId) => browser.tabs.remove(tabId),
-    },
-    closeTabs: {
-      queryWindowTabIds: async (windowId) =>
-        (await browser.tabs.query({ windowId })).flatMap(({ id }) =>
-          id === undefined ? [] : [id],
-        ),
-      createTabIn: (windowId) => browser.tabs.create({ windowId }),
-      removeTabs: (tabIds) => browser.tabs.remove(tabIds),
     },
     backgroundLifetime: {
       // Read-only and cheap: it exists only to count as activity.

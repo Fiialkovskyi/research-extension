@@ -3,8 +3,12 @@ import type { IDBPDatabase } from "idb";
 import { getFactSetHash } from "@/features/clusterSummaries";
 import { enqueueJob } from "@/features/jobQueue";
 import { getActiveModel } from "@/features/modelRegistry";
-import { getActiveSession } from "@/features/researchSession";
-import { QUESTION_STORE, type ResearchDatabaseSchema, type StoredJob } from "@/shared/storage";
+import {
+  QUESTION_STORE,
+  type ResearchDatabaseSchema,
+  type StoredJob,
+  SESSION_STORE,
+} from "@/shared/storage";
 
 import {
   QUESTIONS_DEBOUNCE_MS,
@@ -24,14 +28,15 @@ import { readSessionFactIds } from "../readSessionFactIds";
  */
 export const enqueueOpenQuestions = async (
   database: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
   now: number = Date.now(),
 ): Promise<StoredJob | undefined> => {
   const [session, model] = await Promise.all([
-    getActiveSession(database),
+    database.get(SESSION_STORE, sessionId),
     getActiveModel(database, "text-generation"),
   ]);
 
-  if (session === undefined || model === undefined) {
+  if (session?.status !== "active" || model === undefined) {
     return undefined;
   }
 

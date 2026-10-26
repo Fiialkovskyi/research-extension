@@ -2,8 +2,6 @@ import type { IDBPDatabase } from "idb";
 
 import { type ResearchDatabaseSchema, SESSION_STORE, type StoredSession } from "@/shared/storage";
 
-import { assertNoActiveSession } from "../assertNoActiveSession";
-
 export interface CreateSessionOptions {
   database: IDBPDatabase<ResearchDatabaseSchema>;
   title: string;
@@ -12,19 +10,16 @@ export interface CreateSessionOptions {
 }
 
 /**
- * Records a new active session for a tab group, ending a closed one first.
+ * Records a new active session for a tab group, which becomes the viewed one.
  *
- * The check for an active session and the write share one `readwrite`
- * transaction. IndexedDB runs overlapping `readwrite` transactions on one store
- * one after the other, so two starts requested at once cannot both pass the
- * check: the second sees the first's session and is refused.
+ * Other sessions, active or closed, are left as they are: several sessions
+ * record at once. A tab group belongs to at most one session, so the write
+ * shares one `readwrite` transaction with the check that no live session
+ * already follows (or followed) the group; IndexedDB runs overlapping
+ * `readwrite` transactions on one store one after the other, so two starts for
+ * one group cannot both pass it.
  *
- * A closed session — its group removed, and possibly coming back — does not
- * block a start. It is ended (kept as `saved`) in the same transaction, so at
- * most one session is ever active or closed, and a group the user restores
- * later cannot revive it alongside the new one.
- *
- * @throws If a session is already active.
+ * @throws If a live session already owns the group.
  */
 export const createSession = async ({
   database,
@@ -33,16 +28,16 @@ export const createSession = async ({
 }: CreateSessionOptions): Promise<StoredSession> => {
   const transaction = database.transaction(SESSION_STORE, "readwrite");
 
-  const statuses = transaction.store.index("status");
+  const live = [
+    ...(await transaction.store.index("status").getAll("active")),
+    ...(await transaction.store.index("status").getAll("closed")),
+  ];
 
-  assertNoActiveSession(await statuses.get("active"));
+  if (live.some((other) => other.groupId === groupId || other.formerGroupIds.includes(groupId))) {
+    throw new Error("That tab group already belongs to a session.");
+  }
 
   const now = Date.now();
-  const closed = await statuses.get("closed");
-
-  if (closed !== undefined) {
-    await transaction.store.put({ ...closed, status: "saved", updatedAt: now });
-  }
 
   const session: StoredSession = {
     id: crypto.randomUUID(),
@@ -50,6 +45,7 @@ export const createSession = async ({
     groupId,
     formerGroupIds: [],
     status: "active",
+    viewedAt: now,
     createdAt: now,
     updatedAt: now,
   };
