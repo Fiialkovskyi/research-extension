@@ -46,6 +46,8 @@ export const pageObserverRequestSchemas = {
   "content.extract": v.object({}),
   /** The session is being saved: send what is held now, without waiting for the timer. */
   "content.flush": v.object({}),
+  /** The page was just added to a session: show the notice, naming it. */
+  "pageNotice.show": v.object({ sessionTitle: v.pipe(v.string(), v.maxLength(500)) }),
 } as const;
 
 /** The observer's answers to the background. */
@@ -54,4 +56,6 @@ export const pageObserverResponseSchemas = {
   "content.extracting": v.object({}),
   /** What the page held has been sent, or there was nothing to send. */
   "content.flushed": v.object({}),
+  /** The notice was handed to the page. */
+  "pageNotice.shown": v.object({}),
 } as const;

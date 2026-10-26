@@ -27,6 +27,8 @@ export interface PageObserverDependencies {
   clearTimer: (handle: number) => void;
   /** Extracts the page's readable text, or `undefined` when it has none. */
   extract: (document: Document) => TruncatedText | undefined;
+  /** Shows the notice that this page was added to the named session. */
+  showNotice: (sessionTitle: string) => void;
 }
 
 type MarkedWindow = Window & { [OBSERVED_MARKER]?: boolean };
@@ -179,6 +181,12 @@ export const observePage = (dependencies: PageObserverDependencies): (() => void
 
     if (request.type === "content.flush") {
       return flush().then(() => buildRpcMessage("content.flushed", {}));
+    }
+
+    if (request.type === "pageNotice.show") {
+      dependencies.showNotice(request.payload.sessionTitle);
+
+      return Promise.resolve(buildRpcMessage("pageNotice.shown", {}));
     }
 
     extractOnce();

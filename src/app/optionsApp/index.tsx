@@ -5,6 +5,7 @@ import { aiSetupResponseSchemas, type AiSetupStatus } from "@/features/aiSetup";
 import { diagnosticsResponseSchemas } from "@/features/diagnostics";
 import { LifetimeProbeCard } from "@/features/diagnostics/ui/lifetimeProbeCard";
 import { EmbeddingSpacesCard } from "@/features/embeddingSpaces/ui/embeddingSpacesCard";
+import { PageNoticeToggle } from "@/features/pageNotice/ui/pageNoticeToggle";
 import { BlockedSitesCard } from "@/features/siteDenylist/ui/blockedSitesCard";
 import { PolicyReport } from "@/features/diagnostics/ui/policyReport";
 import { inferenceResponseSchemas } from "@/features/inference";
@@ -235,6 +236,7 @@ export function OptionsApp({
       </section>
 
       <BlockedSitesCard client={client} />
+      <PageNoticeToggle client={client} />
 
       <details data-testid="advanced-section" className="mt-6">
         <summary className="cursor-pointer text-sm font-medium">Advanced</summary>

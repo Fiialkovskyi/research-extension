@@ -165,6 +165,10 @@ export default defineBackground(() => {
         browser.tabs.sendMessage(tabId, buildRpcMessage("content.extract", {}), { frameId: 0 }),
       requestFlush: (tabId) =>
         browser.tabs.sendMessage(tabId, buildRpcMessage("content.flush", {}), { frameId: 0 }),
+      requestNotice: (tabId, sessionTitle) =>
+        browser.tabs.sendMessage(tabId, buildRpcMessage("pageNotice.show", { sessionTitle }), {
+          frameId: 0,
+        }),
     },
     resumeApi: {
       // `discarded` opens a tab without loading its page; `title` is what it

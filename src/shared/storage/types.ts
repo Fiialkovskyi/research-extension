@@ -4,6 +4,7 @@ import type { InferenceDevice, ModelManifest } from "../modelManifest";
 import type {
   ACTIVITY_STORE,
   AI_SETUP_STORE,
+  SETTINGS_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -443,6 +444,13 @@ export interface StoredAiSetup {
   isBannerCollapsed?: boolean;
 }
 
+/** The user's choices from the options page. One record, `id: "user"`. */
+export interface StoredSettings {
+  id: "user";
+  /** Whether a page that was just recorded shows a notice; on unless this is `false`. */
+  isPageNoticeEnabled?: boolean;
+}
+
 export interface StoredBlockedSites {
   id: "user";
   keyId: string;
@@ -763,5 +771,9 @@ export interface ResearchDatabaseSchema extends DBSchema {
   [AI_SETUP_STORE]: {
     key: string;
     value: StoredAiSetup;
+  };
+  [SETTINGS_STORE]: {
+    key: string;
+    value: StoredSettings;
   };
 }

@@ -10,6 +10,7 @@ export const SIGNAL_FLUSH_INTERVAL_MS = 2_000;
 
 /**
  * The host access a page observer needs: every page, since a session can visit
- * any. Optional in the manifest and asked for when a session starts.
+ * any. Required in the manifest and granted at install; the popup asks again
+ * only when the user revoked it.
  */
 export const PAGE_ACCESS_ORIGINS = ["<all_urls>"];

@@ -1,6 +1,7 @@
 # model-swap Specification
 
 ## Purpose
+
 Defines what happens when the active embedding or text-generation model changes: a session moves to a new embedding space only once that space is complete, old spaces are kept for a while and can be removed, and statements already generated stay as they are, labelled with their producer, until their inputs change or the user asks.
 
 ## Requirements

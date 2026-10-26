@@ -12,6 +12,13 @@ const { browser, click, $ } = vi.hoisted(() => {
       getWindowHandles: vi.fn(),
       switchToWindow: vi.fn(),
       getUrl: vi.fn(),
+      waitUntil: vi.fn(
+        async (condition: () => Promise<unknown>, options: { timeoutMsg: string }) => {
+          if (!(await condition())) {
+            throw new Error(options.timeoutMsg);
+          }
+        },
+      ),
     },
   };
 });

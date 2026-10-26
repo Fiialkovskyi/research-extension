@@ -10,6 +10,7 @@ import {
   startAiSetup,
   type TurnOnProgress,
 } from "@/features/aiSetup";
+import { isPageNoticeEnabled, setPageNoticeEnabled } from "@/features/pageNotice";
 import {
   type InferenceWorker,
   loadModelIntoWorker,
@@ -260,6 +261,18 @@ const listInstalledOllamaModels = async (
   (await openedDatabase.getAll(MODEL_STORE)).filter(
     (model) => model.manifest.reference.hub === "ollama",
   );
+
+/**
+ * The title the page's notice names, when a page was just recorded in a
+ * session and the user has not turned the notice off.
+ */
+const readNoticeTitle = async (
+  openedDatabase: IDBPDatabase<ResearchDatabaseSchema>,
+  sessionId: string,
+): Promise<string | undefined> =>
+  (await isPageNoticeEnabled(openedDatabase))
+    ? (await openedDatabase.get(SESSION_STORE, sessionId))?.title
+    : undefined;
 
 /** The active sessions, each recorded from its own tab group. */
 const listActiveSessions = async (
@@ -1469,6 +1482,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
 
     let answer: RpcMessage<string, unknown> | undefined;
     let isSnapshotStored = false;
+    let noticeTitle: string | undefined;
 
     await captureAndPush(async (openedDatabase) => {
       switch (request.type) {
@@ -1508,6 +1522,7 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           });
           answer = buildRpcMessage("content.stored", {});
           isSnapshotStored = true;
+          noticeTitle = await readNoticeTitle(openedDatabase, target.node.sessionId);
           return;
         }
       }
@@ -1516,6 +1531,12 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
     // Not awaited into the answer: embedding takes seconds, the page needs none of it.
     if (isSnapshotStored) {
       void queueSnapshotWork();
+    }
+
+    // The page's text is kept: it was taken into the research. The notice is a
+    // courtesy, so a page that has moved on or refuses it changes nothing.
+    if (noticeTitle !== undefined) {
+      dependencies.pageSignals.requestNotice(sender.tabId, noticeTitle).catch(() => undefined);
     }
 
     return (
@@ -1603,6 +1624,22 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
           void runJobs();
 
           return buildRpcMessage("facts.rejectionsRestored", { restoredCount });
+        }
+
+        case "pageNotice.read": {
+          return buildRpcMessage("pageNotice.status", {
+            isEnabled: await isPageNoticeEnabled(await getDatabase()),
+          });
+        }
+
+        case "pageNotice.set": {
+          const openedDatabase = await getDatabase();
+
+          await setPageNoticeEnabled(openedDatabase, request.payload.isEnabled);
+
+          return buildRpcMessage("pageNotice.status", {
+            isEnabled: await isPageNoticeEnabled(openedDatabase),
+          });
         }
 
         case "denylist.read": {

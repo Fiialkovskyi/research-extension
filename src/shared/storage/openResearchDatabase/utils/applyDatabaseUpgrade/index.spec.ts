@@ -16,6 +16,7 @@ import {
   HEARTBEAT_STORE,
   INFERENCE_RUN_STORE,
   JOB_STORE,
+  SETTINGS_STORE,
   KEY_STORE,
   MODEL_FILE_STORE,
   MODEL_STORE,
@@ -549,6 +550,22 @@ describe("applyDatabaseUpgrade", () => {
       ),
     ).toEqual(["new"]);
     expect(await after.count(JOB_STORE)).toBe(2);
+
+    after.close();
+  });
+
+  it("adds a settings store keyed by id, keeping what a version-23 profile had", async () => {
+    const name = getNextDatabaseName();
+    const before = await openAt(name, 23);
+
+    await before.put(JOB_STORE, { id: "old", updatedAt: 100 } as never);
+    before.close();
+
+    const after = await openAt(name, 24);
+
+    expect(after.version).toBe(24);
+    expect(after.transaction(SETTINGS_STORE).store.keyPath).toBe("id");
+    expect(await after.count(JOB_STORE)).toBe(1);
 
     after.close();
   });

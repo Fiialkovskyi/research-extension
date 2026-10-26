@@ -22,7 +22,7 @@ recorded. An empty group is never recorded either, for the closing of a group's 
 The timer lives in memory, like the recluster debounce: if the event page unloads first, the next
 capture event arms it again.
 
-*Rejected:* recording on group removal (the tabs are gone); deriving the tabs from open nodes at
+_Rejected:_ recording on group removal (the tabs are gone); deriving the tabs from open nodes at
 close (tab-strip order is not recorded, and closed tabs have closed their nodes by then); reusing
 the 5 s recluster debounce (steady activity postpones it indefinitely — the e2e suite's database
 reader, switching tabs every 100 ms, showed exactly that).

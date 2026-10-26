@@ -6,6 +6,7 @@ import { openResearchDatabase } from ".";
 import {
   ACTIVITY_STORE,
   AI_SETUP_STORE,
+  SETTINGS_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   DATABASE_VERSION,
@@ -62,6 +63,7 @@ describe("openResearchDatabase", () => {
         BLOCKED_SITES_STORE,
         ACTIVITY_STORE,
         AI_SETUP_STORE,
+        SETTINGS_STORE,
       ].toSorted(),
     );
 

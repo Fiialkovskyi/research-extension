@@ -3,6 +3,7 @@ import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 import {
   ACTIVITY_STORE,
   AI_SETUP_STORE,
+  SETTINGS_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -249,6 +250,9 @@ export const UPGRADE_STEPS: Readonly<Record<number, UpgradeStep>> = {
     // The popup asks which jobs settled since a batch began; done jobs are
     // never deleted, so without an index that question scans every one.
     transaction.objectStore(JOB_STORE).createIndex("updatedAt", "updatedAt");
+  },
+  24: (database) => {
+    database.createObjectStore(SETTINGS_STORE, { keyPath: "id" });
   },
 };
 

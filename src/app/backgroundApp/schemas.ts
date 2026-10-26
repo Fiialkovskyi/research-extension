@@ -19,6 +19,7 @@ import {
 import { modelInstallRequestSchemas } from "@/features/modelInstall";
 import { modelRegistryRequestSchemas } from "@/features/modelRegistry";
 import { ollamaRequestSchemas } from "@/features/ollama";
+import { pageNoticeRequestSchemas } from "@/features/pageNotice";
 import { recordedDataRequestSchemas } from "@/features/recordedData";
 import { researchLibraryRequestSchemas } from "@/features/researchLibrary";
 import { researchMapRequestSchemas } from "@/features/researchMap";
@@ -46,6 +47,7 @@ export const requestSchemas = {
   ...modelInstallRequestSchemas,
   ...modelRegistryRequestSchemas,
   ...ollamaRequestSchemas,
+  ...pageNoticeRequestSchemas,
   ...recordedDataRequestSchemas,
   ...researchLibraryRequestSchemas,
   ...researchMapRequestSchemas,

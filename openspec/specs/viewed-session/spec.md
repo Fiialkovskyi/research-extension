@@ -1,6 +1,7 @@
 # viewed-session Specification
 
 ## Purpose
+
 Defines how the extension decides which research session its surfaces refer to while several sessions exist, so that choosing what to look at is separate from what is being recorded.
 
 ## Requirements

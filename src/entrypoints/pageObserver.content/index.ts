@@ -2,6 +2,7 @@ import { browser } from "wxt/browser";
 import { defineContentScript } from "wxt/utils/define-content-script";
 
 import { extractReadableText } from "@/features/pageSnapshots/model/extractReadableText";
+import { showPageNotice } from "@/features/pageNotice/model/showPageNotice";
 import { observePage } from "@/features/pageSignals/model/observePage";
 
 /**
@@ -38,6 +39,18 @@ export default defineContentScript({
         window.clearTimeout(handle);
       },
       extract: extractReadableText,
+      showNotice: (sessionTitle) => {
+        showPageNotice({
+          document,
+          sessionTitle,
+          isDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
+          isReducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+          setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
+          clearTimer: (handle) => {
+            window.clearTimeout(handle);
+          },
+        });
+      },
     });
   },
 });

@@ -45,6 +45,7 @@ let sent: { type: string; payload: unknown }[];
 let answer: unknown;
 let isExtensionGone: boolean;
 let requestListener: ((message: unknown) => Promise<unknown> | undefined) | undefined;
+let notices: string[];
 let extract: ReturnType<typeof vi.fn<PageObserverDependencies["extract"]>>;
 
 const observe = () =>
@@ -75,6 +76,9 @@ const observe = () =>
       timers.delete(handle);
     },
     extract,
+    showNotice: (sessionTitle) => {
+      notices.push(sessionTitle);
+    },
   });
 
 /** Paints a frame: runs every callback asked for before it. */
@@ -110,6 +114,7 @@ beforeEach(() => {
   timers = new Map();
   nextTimer = 0;
   sent = [];
+  notices = [];
   answer = buildRpcMessage("signal.recorded", {});
   isExtensionGone = false;
   requestListener = undefined;
@@ -322,6 +327,24 @@ describe("observePage", () => {
       type: "content.flushed",
     });
     expect(sent).toHaveLength(count);
+  });
+
+  it("shows the notice it is asked for, naming the session, and says it did", async () => {
+    observe();
+
+    expect(
+      await requestListener?.(
+        buildRpcMessage("pageNotice.show", { sessionTitle: "E-bike motors" }),
+      ),
+    ).toMatchObject({ type: "pageNotice.shown" });
+    expect(notices).toEqual(["E-bike motors"]);
+  });
+
+  it("shows no notice for a request that is not one", () => {
+    observe();
+
+    expect(requestListener?.({ type: "pageNotice.show", payload: {} })).toBeUndefined();
+    expect(notices).toEqual([]);
   });
 
   it("leaves messages meant for something else unanswered", () => {

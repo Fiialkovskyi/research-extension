@@ -17,6 +17,7 @@ import { LOCAL_INFERENCE_ORIGINS, MINILM_L6_V2 } from "@/shared/config";
 import { buildRpcMessage } from "@/shared/rpc";
 import {
   AI_SETUP_STORE,
+  SETTINGS_STORE,
   CHUNK_STORE,
   CLUSTERING_STORE,
   EDGE_STORE,
@@ -135,6 +136,7 @@ const buildDependencies = (
       executeScript: () => Promise.resolve([]),
       requestPageText: () => Promise.resolve(undefined),
       requestFlush: () => Promise.resolve(undefined),
+      requestNotice: () => Promise.resolve(undefined),
     },
     readFocusedTab: () => Promise.resolve(undefined),
     readIdleState: () => Promise.resolve("active"),
@@ -200,6 +202,7 @@ const createFreshDatabase = async () => {
   await database.clear(QUESTION_STORE);
   await database.clear(BLOCKED_SITES_STORE);
   await database.clear(AI_SETUP_STORE);
+  await database.clear(SETTINGS_STORE);
 
   return database;
 };
@@ -1556,9 +1559,12 @@ const createSignalsApp = async (overrides: Partial<BackgroundDependencies> = {})
   const executeScript = vi.fn((_injection: unknown) => Promise.resolve([]));
   const requestPageText = vi.fn((_tabId: number) => Promise.resolve(undefined));
   const requestFlush = vi.fn((_tabId: number) => Promise.resolve(undefined));
+  const requestNotice = vi.fn((_tabId: number, _sessionTitle: string) =>
+    Promise.resolve(undefined),
+  );
   const { app, database } = await createSessionApp({
     tabCapture: createTabCapture(sessionTab(), sessionTab({ id: 8, url: "https://example.org/c" })),
-    pageSignals: { executeScript, requestPageText, requestFlush },
+    pageSignals: { executeScript, requestPageText, requestFlush, requestNotice },
     readFocusedTab: () => Promise.resolve(clock.focusedTabId),
     now: () => clock.now,
     ...overrides,
@@ -1566,13 +1572,19 @@ const createSignalsApp = async (overrides: Partial<BackgroundDependencies> = {})
 
   await database.put(SESSION_STORE, activeSession);
 
-  return { app, database, clock, executeScript, requestPageText, requestFlush };
+  return { app, database, clock, executeScript, requestPageText, requestFlush, requestNotice };
 };
 
 const readNodeByUrl = async (
   database: Awaited<ReturnType<typeof createFreshDatabase>>,
   url: string,
 ) => (await database.getAll(NODE_STORE)).find((node) => node.url === url);
+
+/** Opens a page in the session and makes it deep read with a copy. */
+const deepRead = async (app: Awaited<ReturnType<typeof createSignalsApp>>["app"]) => {
+  await app.handleNavigationCommitted(commit("https://example.org/a"));
+  await app.handleContentMessage(batch(0.3, 1), FROM_PAGE_A);
+};
 
 describe("page signals and reading time through the background", () => {
   it("observes a page committed in a session tab, and none outside the group", async () => {
@@ -1590,24 +1602,52 @@ describe("page signals and reading time through the background", () => {
     });
   });
 
-  it("neither records, observes nor times a denylisted page in a session tab", async () => {
-    const { app, database, clock, executeScript } = await createSignalsApp();
+  describe("the notice that a page was added to research", () => {
+    it("is requested once the page's text is stored, naming the session", async () => {
+      const { app, requestNotice } = await createSignalsApp();
 
-    await app.handleNavigationCommitted(commit("https://www.paypal.com/myaccount"));
-    clock.focusedTabId = 7;
-    await app.handleTabActivated(7);
-    clock.now += 60_000;
-    clock.focusedTabId = 8;
-    await app.handleTabActivated(8);
+      await deepRead(app);
 
-    expect(await database.count(NODE_STORE)).toBe(0);
-    expect(executeScript).not.toHaveBeenCalled();
-    expect(
-      await app.handleContentMessage(batch(0.9, 1), {
-        tabId: 7,
-        url: "https://www.paypal.com/myaccount",
-      }),
-    ).toMatchObject({ type: "signal.dropped", payload: { stop: true } });
+      expect(requestNotice).not.toHaveBeenCalled();
+
+      await app.handleContentMessage(extracted("Mid-drive motors."), FROM_PAGE_A);
+
+      expect(requestNotice).toHaveBeenCalledWith(7, "E-bike motors");
+    });
+
+    it("is not requested for text from a page the tab has left", async () => {
+      const { app, requestNotice } = await createSignalsApp();
+
+      await app.handleNavigationCommitted(commit("https://example.org/a"));
+      await app.handleNavigationCommitted(commit("https://example.org/b"));
+      await app.handleContentMessage(extracted("Old page"), FROM_PAGE_A);
+
+      expect(requestNotice).not.toHaveBeenCalled();
+    });
+
+    it("is not requested once the user turned it off", async () => {
+      const { app, requestNotice } = await createSignalsApp();
+
+      await app.handleMessage(buildRpcMessage("pageNotice.set", { isEnabled: false }));
+      await deepRead(app);
+      await app.handleContentMessage(extracted("Mid-drive motors."), FROM_PAGE_A);
+
+      expect(requestNotice).not.toHaveBeenCalled();
+    });
+
+    it("does not hold the text back when the page refuses the notice", async () => {
+      const { app, database, requestNotice } = await createSignalsApp();
+
+      requestNotice.mockRejectedValue(new Error("No receiver."));
+      await deepRead(app);
+
+      expect(
+        await app.handleContentMessage(extracted("Mid-drive motors."), FROM_PAGE_A),
+      ).toMatchObject({
+        type: "content.stored",
+      });
+      expect(await database.count(SNAPSHOT_STORE)).toBe(1);
+    });
   });
 
   it("records nothing on a site the user added, and refuses an entry that names no site", async () => {
@@ -1630,6 +1670,21 @@ describe("page signals and reading time through the background", () => {
     expect(executeScript).not.toHaveBeenCalled();
     expect(await app.handleMessage(buildRpcMessage("denylist.read", {}))).toMatchObject({
       payload: { sites: ["myclinic.example"] },
+    });
+  });
+
+  it("keeps the page notice on until the user turns it off, and remembers the choice", async () => {
+    const { app } = await createSignalsApp();
+
+    expect(await app.handleMessage(buildRpcMessage("pageNotice.read", {}))).toMatchObject({
+      type: "pageNotice.status",
+      payload: { isEnabled: true },
+    });
+    expect(
+      await app.handleMessage(buildRpcMessage("pageNotice.set", { isEnabled: false })),
+    ).toMatchObject({ payload: { isEnabled: false } });
+    expect(await app.handleMessage(buildRpcMessage("pageNotice.read", {}))).toMatchObject({
+      payload: { isEnabled: false },
     });
   });
 

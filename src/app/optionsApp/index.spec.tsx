@@ -43,8 +43,9 @@ describe("OptionsApp", () => {
     render(<OptionsApp client={client} isInBrowserBackendEnabled />);
 
     expect(sent.map((message) => message.type)).toEqual([
-      // Children's effects run first: the blocked sites, the Ollama card, then the probe card.
+      // Children's effects run first: the blocked sites, the notice switch, the Ollama card, then the probe card.
       "denylist.read",
+      "pageNotice.read",
       "ollama.status",
       "spaces.list",
       "diagnostics.readProbes",

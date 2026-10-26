@@ -38,6 +38,7 @@ export { readToolbarBadge } from "./readToolbarBadge";
 export { type TabSnapshot, readTabs } from "./readTabs";
 export { reopenSavedTabGroup } from "./reopenSavedTabGroup";
 export { saveAndCloseTabGroup } from "./saveAndCloseTabGroup";
+export { type PageNoticeSnapshot, readNoticeInTabShowing } from "./readNoticeInTabShowing";
 export { scrollInTabShowing } from "./scrollInTabShowing";
 export { selectTabShowing } from "./selectTabShowing";
 export { type SystemColorScheme, setSystemColorScheme } from "./setSystemColorScheme";

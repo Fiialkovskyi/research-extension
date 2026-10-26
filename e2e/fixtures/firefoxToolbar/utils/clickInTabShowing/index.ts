@@ -12,26 +12,30 @@ import { leaveBrowserChrome } from "../leaveBrowserChrome";
  * would not count as the user's, and Firefox would refuse to open a link in a
  * new tab from it.
  *
- * @throws If no tab shows such a URL.
+ * @throws If no tab comes to show such a URL in time.
  */
 export const clickInTabShowing = async (urlEnding: string, selector: string): Promise<void> => {
   await leaveBrowserChrome();
 
   try {
-    let found = false;
+    // Polled: a page the tab was just sent to is not yet the one its window shows.
+    await browser.waitUntil(
+      async () => {
+        for (const handle of await browser.getWindowHandles()) {
+          await browser.switchToWindow(handle);
 
-    for (const handle of await browser.getWindowHandles()) {
-      await browser.switchToWindow(handle);
+          if ((await browser.getUrl()).endsWith(urlEnding)) {
+            return true;
+          }
+        }
 
-      if ((await browser.getUrl()).endsWith(urlEnding)) {
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      throw new Error(`No tab shows a URL ending in "${urlEnding}".`);
-    }
+        return false;
+      },
+      {
+        timeout: UI_TIMEOUT_MS,
+        timeoutMsg: `No tab shows a URL ending in "${urlEnding}".`,
+      },
+    );
 
     const element = $(selector);
 

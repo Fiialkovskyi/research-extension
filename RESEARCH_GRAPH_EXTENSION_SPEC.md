@@ -738,6 +738,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 **M6: Hardening and beta**
 
 - [x] Egress test suite, performance gates, accessibility audit. (Section 13) Built as `add-egress-suite`, which also fixed Ollama being polled once page access was allowed; `add-accessibility-audit`, axe against WCAG 2 A and AA on every extension page; and `add-performance-gates`, which gates NFR-001 and NFR-003 in e2e, with NFR-009 in unit.
+- [x] In-page notice that a page was added to research: a short, click-through notice in the page's top-right corner once its text is taken, in a closed shadow root, with an options switch (`show-page-captured-notice`).
 - [ ] Passphrase lock and denylist editor. (SEC-006, SEC-007) The denylist editor is built (`add-site-denylist-editor`); the passphrase lock is still open.
 - [x] Page access granted at install: `<all_urls>` is a required host permission, so a session needs no "Allow page access" click, and the popup still says and offers to undo access revoked in about:addons. Temporary installs get the grant too. Whether `permissions.request` can re-ask for a revoked required origin is a manual check still open (`grant-page-access-at-install`). (RT-002)
 - [ ] AMO submission with source and build instructions; beta onboarding. (RT-007)

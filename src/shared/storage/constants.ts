@@ -13,7 +13,7 @@ export const DATABASE_NAME = "research-graph";
  * rather than editing an existing one, so a profile that has already migrated
  * is never asked to migrate differently.
  */
-export const DATABASE_VERSION = 23;
+export const DATABASE_VERSION = 24;
 
 export const MODEL_STORE = "models";
 export const MODEL_FILE_STORE = "modelFiles";
@@ -50,6 +50,8 @@ export const BLOCKED_SITES_STORE = "blockedSites";
 export const ACTIVITY_STORE = "activity";
 /** Whether the user started setting AI up, and how the popup's setup banner is shown. One record. */
 export const AI_SETUP_STORE = "aiSetup";
+/** What the user chose in the options that no feature owns a store for. One record. */
+export const SETTINGS_STORE = "settings";
 
 /**
  * How many runs the log keeps. Runs are written on every embedding job and
