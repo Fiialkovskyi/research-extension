@@ -7,7 +7,6 @@ import {
   readEgressLog,
   startEgressLog,
 } from "../fixtures/egressLog/utils";
-import { grantPageAccess } from "../fixtures/firefoxExtension/utils";
 import { UI_TIMEOUT_MS } from "../fixtures/firefoxToolbar/constants";
 import {
   clickPopupButton,
@@ -73,7 +72,6 @@ describe("egress", () => {
       { timeout: UI_TIMEOUT_MS, timeoutMsg: `No tab group titled "${title}" appeared.` },
     );
     await closePopup();
-    await grantPageAccess();
 
     await loadUrlInSelectedTab(`${readOrigin()}/article.html`);
     await browser.waitUntil(

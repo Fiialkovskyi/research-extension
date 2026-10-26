@@ -1,6 +1,6 @@
 import { browser, expect } from "@wdio/globals";
 
-import { grantPageAccess } from "../fixtures/firefoxExtension/utils";
+import { grantPageAccess, revokePageAccess } from "../fixtures/firefoxExtension/utils";
 import { UI_TIMEOUT_MS } from "../fixtures/firefoxToolbar/constants";
 import {
   clickPopupButton,
@@ -109,6 +109,9 @@ describe("signals from a session page", () => {
       { timeout: UI_TIMEOUT_MS, timeoutMsg: `No tab group titled "${title}" appeared.` },
     );
     await closePopup();
+    // Access comes with the install; switched off here so that it can be
+    // granted after the article loaded.
+    await revokePageAccess();
 
     await loadUrlInSelectedTab(`${readOrigin()}/article.html`);
     await waitForGraph(

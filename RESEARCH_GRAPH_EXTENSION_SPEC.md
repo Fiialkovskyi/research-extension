@@ -83,8 +83,7 @@ The background is an MV3 event page, not a service worker. Firefox runs MV3 back
     "alarms"
   ],
   "optional_permissions": ["nativeMessaging"],
-  "optional_host_permissions": ["<all_urls>"],
-  "host_permissions": ["https://huggingface.co/*", "https://*.hf.co/*"],
+  "host_permissions": ["<all_urls>", "https://huggingface.co/*", "https://*.hf.co/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' https://huggingface.co https://*.hf.co http://127.0.0.1:11434"
   }
@@ -740,7 +739,7 @@ Work proceeds in six milestones. M0 spikes de-risk platform assumptions before a
 
 - [x] Egress test suite, performance gates, accessibility audit. (Section 13) Built as `add-egress-suite`, which also fixed Ollama being polled once page access was allowed; `add-accessibility-audit`, axe against WCAG 2 A and AA on every extension page; and `add-performance-gates`, which gates NFR-001 and NFR-003 in e2e, with NFR-009 in unit.
 - [ ] Passphrase lock and denylist editor. (SEC-006, SEC-007) The denylist editor is built (`add-site-denylist-editor`); the passphrase lock is still open.
-- [ ] Page access granted at install: move `<all_urls>` from `optional_host_permissions` to `host_permissions`, so a session no longer needs an "Allow page access" click; keep the popup's re-request for access revoked in about:addons. Open details: the stricter install prompt and AMO review, whether temporary installs (`npm run dev`) get the grant, and the `extension-shell` and `research-session` spec changes. Added by the maintainer's request (2026-10-13). (RT-002)
+- [x] Page access granted at install: `<all_urls>` is a required host permission, so a session needs no "Allow page access" click, and the popup still says and offers to undo access revoked in about:addons. Temporary installs get the grant too. Whether `permissions.request` can re-ask for a revoked required origin is a manual check still open (`grant-page-access-at-install`). (RT-002)
 - [ ] AMO submission with source and build instructions; beta onboarding. (RT-007)
 
 **Last: Export and import**

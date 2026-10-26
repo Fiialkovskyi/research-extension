@@ -67,18 +67,20 @@ export default defineConfig({
       "notifications",
     ],
     // Reading a session page's scroll, copies and text needs access to page
-    // contents. Optional, so it is never granted at install: the popup asks for
-    // it when a session starts, and capture carries on without it if refused.
-    optional_host_permissions: ["<all_urls>"],
-    // Derived from one list so the policy and the permissions cannot drift
-    // apart from each other, nor from the code that builds the request URLs.
-    // The local Ollama server is required rather than optional, so setting AI
-    // up asks for no permission: it is loopback only, nothing leaves the
-    // machine, and nothing is sent there until the user starts setup, which the
-    // background records rather than reading it from this grant.
-    host_permissions: [...ENABLED_MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS].map(
-      (origin) => `${origin}/*`,
-    ),
+    // contents, so `<all_urls>` is required and Firefox grants it with the
+    // install: a session needs no click, and one cannot quietly record less. It
+    // is used only to observe the tabs of a session, and the user can still
+    // revoke it in about:addons, which the popup says and offers to undo.
+    host_permissions: [
+      "<all_urls>",
+      // Derived from one list so the policy and the permissions cannot drift
+      // apart from each other, nor from the code that builds the request URLs.
+      // The local Ollama server is required rather than optional, so setting AI
+      // up asks for no permission: it is loopback only, nothing leaves the
+      // machine, and nothing is sent there until the user starts setup, which the
+      // background records rather than reading it from this grant.
+      ...[...ENABLED_MODEL_HOST_ORIGINS, ...LOCAL_INFERENCE_ORIGINS].map((origin) => `${origin}/*`),
+    ],
     content_security_policy: {
       // `wasm-unsafe-eval` lets the packaged ONNX Runtime compile its own
       // WebAssembly. It permits compilation of bundled bytes, not fetching

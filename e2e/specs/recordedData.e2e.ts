@@ -1,6 +1,5 @@
 import { browser, expect } from "@wdio/globals";
 
-import { grantPageAccess } from "../fixtures/firefoxExtension/utils";
 import { UI_TIMEOUT_MS } from "../fixtures/firefoxToolbar/constants";
 import {
   clickPopupButton,
@@ -116,7 +115,6 @@ describe("what was recorded", () => {
       (snapshot) => snapshot.nodes.some((node) => node.url.endsWith("/article.html")),
       "the article",
     );
-    await grantPageAccess();
     await browser.pause(500);
     await scrollInTabShowing("/article.html", 1);
     await copyInTabShowing("/article.html", "#headline");

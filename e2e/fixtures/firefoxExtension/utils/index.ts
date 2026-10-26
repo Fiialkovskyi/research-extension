@@ -18,6 +18,7 @@ export {
   buildFirefoxCapabilities,
 } from "./buildFirefoxCapabilities";
 export { grantPageAccess } from "./grantPageAccess";
+export { revokePageAccess } from "./revokePageAccess";
 export { isCanonicalUuid } from "./isCanonicalUuid";
 export { getExtensionUrl } from "./getExtensionUrl";
 export { type ProfilePreferences, buildProfilePreferences } from "./buildProfilePreferences";

@@ -35,11 +35,11 @@ describe("manifest", () => {
     ]);
   });
 
-  it("requires only the local Ollama server, and keeps page access optional", async () => {
+  it("requires page access and the local Ollama server, and nothing optional", async () => {
     const manifest = await readInstalledManifest();
 
-    expect(manifest["host_permissions"]).toEqual(["http://127.0.0.1:11434/*"]);
-    expect(manifest["optional_host_permissions"]).toEqual(["<all_urls>"]);
+    expect(manifest["host_permissions"]).toEqual(["<all_urls>", "http://127.0.0.1:11434/*"]);
+    expect(manifest["optional_host_permissions"] ?? []).toEqual([]);
   });
 
   it("admits no model host in its connection policy", async () => {

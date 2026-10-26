@@ -23,7 +23,7 @@ import {
   type RpcMessage,
   rpcResponseSchemas,
 } from "@/shared/rpc";
-import { Button, Panel } from "@/shared/ui";
+import { Button, Panel, StatusDot } from "@/shared/ui";
 
 /**
  * The popup's end of its conversation with the background.
@@ -609,8 +609,17 @@ export function PopupApp({ client, pageAccess, openSettings }: PopupAppProps) {
         </div>
       )}
       {viewed !== undefined && hasPageAccess === false && (
-        <div data-testid="page-access-missing" className="mt-3 text-sm">
-          <p>
+        <div
+          data-testid="page-access-missing"
+          role="region"
+          aria-label="Page access"
+          className="mt-3 rounded border border-amber-300 bg-amber-50 p-2 text-sm dark:border-amber-700 dark:bg-amber-950"
+        >
+          <div className="flex items-center gap-2">
+            <StatusDot tone="attention" />
+            <span className="font-medium">No access to page contents</span>
+          </div>
+          <p className="mt-1 text-slate-700 dark:text-slate-200">
             Reading and scrolling are not being recorded: the extension has no access to page
             contents.
           </p>
