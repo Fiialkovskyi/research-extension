@@ -1029,8 +1029,10 @@ export const createBackgroundApp = (dependencies: BackgroundDependencies): Backg
         now: getNow,
       });
       // The page's facts are settled: its cluster's summary is due in a while,
-      // and the session's open questions.
+      // and the session's open questions. Pages that state facts about one
+      // entity belong together, so the session is clustered again.
       if (job.sessionId !== undefined) {
+        scheduleRecluster();
         await enqueueClusterSummaries(openedDatabase, job.sessionId, getNow());
         await enqueueOpenQuestions(openedDatabase, job.sessionId, getNow());
       }

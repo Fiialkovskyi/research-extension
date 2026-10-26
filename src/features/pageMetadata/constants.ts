@@ -15,3 +15,7 @@ export const PRODUCT_BRAND_LIMIT = 100;
 export const PRODUCT_AVAILABILITY_LIMIT = 40;
 /** A price is a finite number above zero and below this. */
 export const PRODUCT_MAXIMUM_PRICE = 1_000_000_000;
+
+/** The schema.org types a page declares: how many are kept, how long each name. */
+export const PAGE_TYPES_MAXIMUM = 8;
+export const PAGE_TYPE_LIMIT = 40;

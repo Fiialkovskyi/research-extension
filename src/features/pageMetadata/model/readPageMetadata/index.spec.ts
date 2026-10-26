@@ -89,6 +89,16 @@ describe("readPageMetadata", () => {
     ).toBeUndefined();
   });
 
+  it("reads the types its JSON-LD declares", () => {
+    const metadata = readPageMetadata(
+      buildDocument(
+        `<script type="application/ld+json">{"@type":"Product","offers":{"@type":"Offer","price":"1"}}</script>`,
+      ),
+    );
+
+    expect(metadata?.schemaTypes).toEqual(["Product", "Offer"]);
+  });
+
   it("returns nothing for a page that says nothing of itself", () => {
     expect(readPageMetadata(buildDocument(""))).toBeUndefined();
   });

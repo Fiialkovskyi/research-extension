@@ -18,3 +18,9 @@ export const SEMANTIC_THRESHOLD = 0.55;
 
 /** A semantic edge weighs this × (similarity − τ) / (1 − τ): at most this, at similarity 1. */
 export const SEMANTIC_WEIGHT_SCALE = 1.2;
+
+/** A page that states facts of an entity is joined to the next such page by an edge of this weight: that of a recorded link. */
+export const ENTITY_EDGE_WEIGHT = 1;
+
+/** The fewest facts an entity needs to join pages, or to name a cluster. */
+export const MINIMUM_CLUSTER_ENTITY_FACTS = 3;

@@ -469,6 +469,8 @@ export interface StoredPageMetadata {
   /** As the page wrote it: not parsed, since pages write dates every way. */
   publishedAt?: string;
   canonicalUrl?: string;
+  /** The schema.org `@type` names the page's JSON-LD declares, as the page wrote them. */
+  schemaTypes?: string[];
   /** The main product the page describes in its markup, as the page gave it. */
   product?: {
     name?: string;

@@ -1,34 +1,45 @@
 import type { ComparisonTable } from "@/features/comparisonTable";
 
-import { MAXIMUM_CELL_GAPS } from "../../constants";
+import { MAXIMUM_CELL_GAPS, MAXIMUM_GAP_ATTRIBUTES, MINIMUM_GAP_ROW_FACTS } from "../../constants";
 
-/** An empty cell of a confirmed entity: which entity, which attribute. */
+/** What one entity lacks: the attributes it has no value for, and how many more it lacks. */
 export interface CellGap {
   entity: string;
-  attribute: string;
+  /** The first {@link MAXIMUM_GAP_ATTRIBUTES} missing attributes, in column order. */
+  attributes: string[];
+  moreCount: number;
 }
 
 /**
- * Finds the table's empty cells of confirmed entities (REQ-SYN-008): rows
- * whose facts come from at least two pages, counted from their cells'
- * sources. In row, then column order; the first {@link MAXIMUM_CELL_GAPS},
- * and how many more there are.
+ * Finds what the table's confirmed entities lack (REQ-SYN-008): rows with at
+ * least {@link MINIMUM_GAP_ROW_FACTS} facts from at least two pages, counted
+ * from their cells' sources, so a row seen thinly has no gaps. One gap for each
+ * such row that misses a value of a column the table shows, in row order; the
+ * first {@link MAXIMUM_CELL_GAPS}, and how many more rows there are.
  */
 export const findCellGaps = (
   table: Pick<ComparisonTable, "columns" | "rows">,
 ): { gaps: CellGap[]; moreCount: number } => {
-  const gaps = table.rows.flatMap((row) => {
-    const pages = new Set(
-      Object.values(row.cells).flatMap((cell) =>
-        cell.groups.flatMap(({ sources }) => sources.map(({ url }) => url)),
-      ),
+  const gaps = table.rows.flatMap((row): CellGap[] => {
+    const sources = Object.values(row.cells).flatMap((cell) =>
+      cell.groups.flatMap((group) => group.sources),
     );
+    const isConfirmed =
+      new Set(sources.map(({ factId }) => factId)).size >= MINIMUM_GAP_ROW_FACTS &&
+      new Set(sources.map(({ url }) => url)).size >= 2;
+    const missing = table.columns
+      .filter(({ key }) => row.cells[key] === undefined)
+      .map(({ label }) => label);
 
-    return pages.size < 2
-      ? []
-      : table.columns
-          .filter(({ key }) => row.cells[key] === undefined)
-          .map(({ label }) => ({ entity: row.name, attribute: label }));
+    return isConfirmed && missing.length > 0
+      ? [
+          {
+            entity: row.name,
+            attributes: missing.slice(0, MAXIMUM_GAP_ATTRIBUTES),
+            moreCount: Math.max(0, missing.length - MAXIMUM_GAP_ATTRIBUTES),
+          },
+        ]
+      : [];
   });
 
   return {

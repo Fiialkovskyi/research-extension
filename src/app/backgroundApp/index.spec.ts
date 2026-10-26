@@ -4435,9 +4435,8 @@ describe("fact extraction through the background", () => {
       payload: {
         gaps: {
           cellGaps: [],
-          categoryGaps: expect.arrayContaining([
-            expect.objectContaining({ text: "No reviews read yet" }),
-          ]),
+          // One page that declares no type: the session cannot tell which kinds are missing.
+          categoryGaps: [],
         },
       },
     });

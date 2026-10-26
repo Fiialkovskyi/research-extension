@@ -80,7 +80,11 @@ describe("egress", () => {
       { timeout: UI_TIMEOUT_MS, timeoutMsg: "The article was never recorded." },
     );
     await loadUrlInSelectedTab(`${readOrigin()}/a.html`);
-    await browser.pause(1_000);
+    // Pages that declare themselves shops, so the session can tell what it lacks.
+    for (const page of ["product.html", "shopB.html", "shopC.html"]) {
+      await loadUrlInSelectedTab(`${readOrigin()}/${page}`);
+      await browser.pause(1_000);
+    }
 
     await clickToolbarAction();
     await waitForPopupPanel();

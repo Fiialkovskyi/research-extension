@@ -3,28 +3,28 @@ import { describe, expect, it } from "vitest";
 import { findCategoryGaps } from ".";
 
 describe("findCategoryGaps", () => {
-  it("lists every other category when only shops were visited", () => {
-    expect(findCategoryGaps(["https://telemart.ua/a", "https://rozetka.com.ua/b"])).toEqual([
+  it("reports the kinds no page is when most pages are classified", () => {
+    expect(findCategoryGaps(["shop", "review", "shop", undefined])).toEqual(["forum", "video"]);
+  });
+
+  it("reports nothing when most pages are unclassified", () => {
+    expect(findCategoryGaps(["shop", undefined, undefined, undefined])).toEqual([]);
+  });
+
+  it("reports nothing for fewer than three pages", () => {
+    expect(findCategoryGaps(["shop", "review"])).toEqual([]);
+    expect(findCategoryGaps([])).toEqual([]);
+  });
+
+  it("reports nothing when every kind is read", () => {
+    expect(findCategoryGaps(["shop", "review", "forum", "video"])).toEqual([]);
+  });
+
+  it("counts half as most", () => {
+    expect(findCategoryGaps(["shop", "shop", undefined, undefined])).toEqual([
       "review",
       "forum",
       "video",
-      "reference",
     ]);
-  });
-
-  it("lists nothing once every category was visited", () => {
-    expect(
-      findCategoryGaps([
-        "https://www.rtings.com/a",
-        "https://www.reddit.com/r/x",
-        "https://www.youtube.com/watch?v=1",
-        "https://telemart.ua/a",
-        "https://en.wikipedia.org/wiki/X",
-      ]),
-    ).toEqual([]);
-  });
-
-  it("does not count unknown hosts, or what is not a URL, toward any category", () => {
-    expect(findCategoryGaps(["https://example.org/a", "nonsense"])).toHaveLength(5);
   });
 });

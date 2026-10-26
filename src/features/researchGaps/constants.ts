@@ -1,79 +1,42 @@
-/** The version of the host-to-category table, for anything that records it. */
-export const DOMAIN_CATEGORIES_VERSION = "domainCategories@1";
-
-/** What kind of source a page is, by its host (target spec §4, `domain_category`). */
-export const DOMAIN_CATEGORIES = [
-  "review",
-  "forum",
-  "video",
-  "retailer",
-  "reference",
-  "news",
-  "other",
-] as const;
-
 /**
- * Hosts by category, matched on the hostname without `www.`: exactly, as a
- * suffix after a dot, or — for an entry ending in `.*` — under any top-level
- * domain. Only hosts are matched, never paths. Bundled and versioned; a host
- * not listed is `other`.
+ * What a page declares about itself, by the kind of source it makes it: the
+ * schema.org types of its JSON-LD (compared without case) and the start of its
+ * `og:type`. Checked in this order, so a page with a forum post and an offer is
+ * a forum. A public vocabulary, with no host, brand or language in it.
  */
-export const DOMAIN_CATEGORY_HOSTS = {
-  review: [
-    "rtings.com",
-    "notebookcheck.net",
-    "techradar.com",
-    "tomsguide.com",
-    "pcmag.com",
-    "cnet.com",
-    "electrek.co",
-    "bikeradar.com",
-    "ixbt.com",
-    "itc.ua",
-  ],
-  forum: [
-    "reddit.com",
-    "stackexchange.com",
-    "stackoverflow.com",
-    "4pda.to",
-    "quora.com",
-    "hardforum.com",
-  ],
-  video: ["youtube.com", "youtu.be", "vimeo.com", "tiktok.com"],
-  retailer: [
-    "amazon.*",
-    "ebay.*",
-    "bestbuy.com",
-    "walmart.com",
-    "aliexpress.com",
-    "rozetka.com.ua",
-    "telemart.ua",
-    "comfy.ua",
-    "foxtrot.com.ua",
-    "allo.ua",
-    "citrus.ua",
-    "hotline.ua",
-    "prom.ua",
-    "olx.ua",
-  ],
-  reference: ["wikipedia.org", "wikidata.org", "britannica.com"],
-  news: ["bbc.com", "reuters.com", "theverge.com", "engadget.com", "arstechnica.com"],
+export const SOURCE_KIND_SIGNALS = {
+  forum: { schemaTypes: ["DiscussionForumPosting", "QAPage", "Question"], ogTypes: [] },
+  video: { schemaTypes: ["VideoObject"], ogTypes: ["video"] },
+  shop: { schemaTypes: ["Offer", "AggregateOffer"], ogTypes: ["product", "og:product"] },
+  review: { schemaTypes: ["Review", "CriticReview", "UserReview"], ogTypes: [] },
 } as const;
 
-/** The categories whose absence is a gap: news and other say nothing about a comparison. */
-export const GAP_CATEGORIES = ["review", "forum", "video", "retailer", "reference"] as const;
+/** The kinds of source whose absence is a gap. */
+export const GAP_CATEGORIES = ["shop", "review", "forum", "video"] as const;
 
-/** How a missing category reads, and the word a search for it adds. */
+/** How a missing kind reads, and the word a search for it adds. */
 export const CATEGORY_GAP_TEXT = {
+  shop: { text: "No shop pages read yet", word: "price" },
   review: { text: "No reviews read yet", word: "review" },
   forum: { text: "No forum discussions read yet", word: "forum" },
   video: { text: "No videos watched yet", word: "video review" },
-  retailer: { text: "No shop pages read yet", word: "price" },
-  reference: { text: "No reference pages read yet", word: "specifications" },
 } as const;
 
-/** The most cell gaps listed; the rest are counted. */
-export const MAXIMUM_CELL_GAPS = 20;
+/**
+ * A kind of source is reported missing only for a session of at least this many
+ * pages (searches are not pages), at least half of them classified: with most
+ * pages unclassified the kinds cannot be told.
+ */
+export const MINIMUM_CLASSIFIED_PAGES = 3;
+
+/** The most entities whose missing values are listed; the rest are counted. */
+export const MAXIMUM_CELL_GAPS = 5;
+
+/** The most missing attributes one gap names; the rest are counted. */
+export const MAXIMUM_GAP_ATTRIBUTES = 3;
+
+/** The fewest facts, from at least two pages, a row needs for its missing values to count. */
+export const MINIMUM_GAP_ROW_FACTS = 3;
 
 /** The longest query a gap's search carries. */
 export const MAXIMUM_QUERY_LENGTH = 120;

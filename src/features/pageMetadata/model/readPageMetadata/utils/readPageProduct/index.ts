@@ -1,14 +1,13 @@
 import {
   PRODUCT_AVAILABILITY_LIMIT,
   PRODUCT_BRAND_LIMIT,
-  PRODUCT_MAXIMUM_SCRIPT_LENGTH,
-  PRODUCT_MAXIMUM_SCRIPTS,
   PRODUCT_NAME_LIMIT,
 } from "../../../../constants";
 import type { PageProduct } from "../../../../types";
 import { cleanText } from "../cleanText";
 import { findJsonLdProduct } from "../findJsonLdProduct";
 import { parsePrice } from "../parsePrice";
+import { readJsonLd } from "../readJsonLd";
 import { readMetaContent } from "../readMetaContent";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -58,25 +57,11 @@ const readAvailability = (value: unknown): string | undefined =>
 
 /** The first JSON-LD product on the page, within the limits on scripts and their size. */
 const readJsonLdProduct = (document: Document): Record<string, unknown> | undefined => {
-  const scripts = Array.from(document.querySelectorAll("script")).filter(
-    (script) => script.getAttribute("type")?.toLowerCase() === "application/ld+json",
-  );
+  for (const root of readJsonLd(document)) {
+    const product = findJsonLdProduct(root);
 
-  for (const script of scripts.slice(0, PRODUCT_MAXIMUM_SCRIPTS)) {
-    const text = script.textContent ?? "";
-
-    if (text.length > PRODUCT_MAXIMUM_SCRIPT_LENGTH) {
-      continue;
-    }
-
-    try {
-      const product = findJsonLdProduct(JSON.parse(text));
-
-      if (product !== undefined) {
-        return product;
-      }
-    } catch {
-      // A script that is not JSON says nothing; the next may.
+    if (product !== undefined) {
+      return product;
     }
   }
 

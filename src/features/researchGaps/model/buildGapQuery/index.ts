@@ -17,8 +17,9 @@ const trimQuery = (query: string): string => {
 };
 
 /**
- * Phrases a gap and the search that would fill it (REQ-SYN-009): an empty
- * cell searches the entity and the attribute; a missing category searches
+ * Phrases a gap and the search that would fill it (REQ-SYN-009): an
+ * entity's missing values searches the entity and its first missing
+ * attributes, one search for the entity; a missing category searches
  * the session's subject — its main entity, or its title — with a word for
  * the category.
  */
@@ -27,10 +28,12 @@ export const buildGapQuery = (
   subject: string,
 ): ResearchGap => {
   if (gap.kind === "cell") {
+    const { entity, attributes, moreCount } = gap.cell;
+
     return {
       kind: "cell",
-      text: `No ${gap.cell.attribute} for ${gap.cell.entity}`,
-      query: trimQuery(`${gap.cell.entity} ${gap.cell.attribute}`),
+      text: `No ${attributes.join(", ")}${moreCount > 0 ? ` and ${moreCount} more` : ""} for ${entity}`,
+      query: trimQuery(`${entity} ${attributes.join(" ")}`),
     };
   }
 

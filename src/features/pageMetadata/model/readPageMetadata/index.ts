@@ -11,11 +11,12 @@ import { cleanText } from "./utils/cleanText";
 import { readCanonicalUrl } from "./utils/readCanonicalUrl";
 import { readMetaContent } from "./utils/readMetaContent";
 import { readPageProduct } from "./utils/readPageProduct";
+import { readPageTypes } from "./utils/readPageTypes";
 
 /**
  * Reads what a page says about itself in its head: its title, description,
  * site name, type, author, publication time and canonical address, each
- * cleaned and cut to its limit, and the main product it describes (name, brand,
+ * cleaned and cut to its limit, the schema.org types its JSON-LD declares, and the main product it describes (name, brand,
  * price, availability, rating). `og:` tags come before the plain ones, and no
  * other tag is read — `og:image` least of all.
  *
@@ -52,11 +53,16 @@ export const readPageMetadata = (document: Document): PageMetadata | undefined =
     canonicalUrl: readCanonicalUrl(document),
   };
   const product = readPageProduct(document);
+  const schemaTypes = readPageTypes(document);
 
   for (const [key, value] of Object.entries(fields)) {
     if (value !== undefined) {
-      metadata[key as keyof PageMetadata] = value;
+      Object.assign(metadata, { [key]: value });
     }
+  }
+
+  if (schemaTypes !== undefined) {
+    metadata.schemaTypes = schemaTypes;
   }
 
   if (product !== undefined) {

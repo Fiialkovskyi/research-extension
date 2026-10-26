@@ -23,4 +23,31 @@ describe("readClusterLabel", () => {
     );
     expect(readClusterLabel([node({ title: "  " })])).toBe("https://example.org/x");
   });
+
+  it("names a cluster after the entity its pages state most facts about", () => {
+    const members = [node({ id: "a", title: "Page A" }), node({ id: "b", title: "Page B" })];
+
+    expect(
+      readClusterLabel(members, [
+        {
+          name: "Pixel 10a",
+          factCount: 9,
+          pages: [
+            { nodeId: "a", factCount: 4 },
+            { nodeId: "b", factCount: 3 },
+          ],
+        },
+        { name: "Other", factCount: 9, pages: [{ nodeId: "z", factCount: 9 }] },
+      ]),
+    ).toBe("Pixel 10a");
+  });
+
+  it("falls back when no entity has three facts on the cluster's pages", () => {
+    expect(
+      readClusterLabel(
+        [node({ id: "a", title: "Page A" })],
+        [{ name: "Pixel", factCount: 9, pages: [{ nodeId: "a", factCount: 2 }] }],
+      ),
+    ).toBe("Page A");
+  });
 });

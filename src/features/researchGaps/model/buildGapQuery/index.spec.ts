@@ -3,10 +3,29 @@ import { describe, expect, it } from "vitest";
 import { buildGapQuery } from ".";
 
 describe("buildGapQuery", () => {
-  it("searches an empty cell's entity and attribute", () => {
+  it("searches an entity with its missing attributes, in one search", () => {
     expect(
-      buildGapQuery({ kind: "cell", cell: { entity: "MacBook Neo 13", attribute: "price" } }, "x"),
-    ).toEqual({ kind: "cell", text: "No price for MacBook Neo 13", query: "MacBook Neo 13 price" });
+      buildGapQuery(
+        {
+          kind: "cell",
+          cell: { entity: "MacBook Neo 13", attributes: ["price", "weight"], moreCount: 0 },
+        },
+        "x",
+      ),
+    ).toEqual({
+      kind: "cell",
+      text: "No price, weight for MacBook Neo 13",
+      query: "MacBook Neo 13 price weight",
+    });
+  });
+
+  it("says how many more attributes are missing", () => {
+    expect(
+      buildGapQuery(
+        { kind: "cell", cell: { entity: "Neo", attributes: ["a", "b", "c"], moreCount: 2 } },
+        "x",
+      ).text,
+    ).toBe("No a, b, c and 2 more for Neo");
   });
 
   it("searches the subject with a word for a missing category", () => {

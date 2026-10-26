@@ -4,6 +4,7 @@ import { readSessionGraph } from "@/features/researchGraph";
 import type { ResearchDatabaseSchema, StoredClustering } from "@/shared/storage";
 
 import { clusterSession } from "../clusterSession";
+import { readClusterEntities } from "../readClusterEntities";
 import { readPageVectors } from "../readPageVectors";
 import { readClustering } from "../readClustering";
 import { storeClustering } from "../storeClustering";
@@ -12,7 +13,8 @@ import { SESSION_STORE } from "@/shared/storage";
 /**
  * Clusters the active session's graph again and stores the result, keeping
  * cluster ids from its last clustering where they fit. With an embedding space,
- * the session's page vectors in it add semantic edges.
+ * the session's page vectors in it add semantic edges, and the entities it
+ * resolved link the pages that state facts about one.
  *
  * @returns The new clustering, or `undefined` without an active session.
  */
@@ -28,10 +30,11 @@ export const reclusterActiveSession = async (
   }
 
   const spaceId = session.activeEmbeddingSpaceId;
-  const [{ nodes, edges }, previous, vectors] = await Promise.all([
+  const [{ nodes, edges }, previous, vectors, entities] = await Promise.all([
     readSessionGraph(database, session.id),
     readClustering(database, session.id),
     spaceId === undefined ? undefined : readPageVectors(database, session.id, spaceId),
+    readClusterEntities(database, session.id),
   ]);
   const clustering = clusterSession({
     sessionId: session.id,
@@ -39,6 +42,7 @@ export const reclusterActiveSession = async (
     edges,
     previous: previous?.clusters ?? [],
     now,
+    entities,
     ...(spaceId === undefined || vectors === undefined ? {} : { semantic: { spaceId, vectors } }),
   });
 

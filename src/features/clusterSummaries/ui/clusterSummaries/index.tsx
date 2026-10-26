@@ -1,5 +1,4 @@
-import { describePageSource } from "@/shared/describePageSource";
-import { Button } from "@/shared/ui";
+import { Button, SourceLines } from "@/shared/ui";
 
 import type { ClusterSummaryView } from "../../types";
 import { ProductCards } from "../productCards";
@@ -80,32 +79,17 @@ function Cluster({
             {summary.statements.map((statement) => (
               <li key={statement.text} data-testid="summary-statement">
                 <span>{statement.text}</span>
-                <ul className="mt-1 flex flex-col gap-1 text-xs text-neutral-600 dark:text-neutral-400">
-                  {statement.citations.map((citation) => (
-                    <li key={citation.factId} data-testid="summary-citation">
-                      <a href={citation.url} target="_blank" rel="noreferrer" className="underline">
-                        {citation.pageTitle}
-                      </a>
-                      {describePageSource(citation) !== "" && (
-                        <span data-testid="summary-citation-details">
-                          {" "}
-                          ({describePageSource(citation)})
-                        </span>
-                      )}
-                      : <q>{citation.quote}</q>{" "}
-                      <button
-                        type="button"
-                        data-testid="summary-reject"
-                        className="cursor-pointer text-red-700 underline dark:text-red-400"
-                        onClick={() => {
-                          onReject([citation.factId]);
-                        }}
-                      >
-                        Wrong
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <details data-testid="summary-sources">
+                  <summary className="cursor-pointer text-xs text-neutral-600 dark:text-neutral-400">
+                    Sources ({new Set(statement.citations.map(({ url }) => url)).size})
+                  </summary>
+                  <SourceLines
+                    citations={statement.citations}
+                    onReject={onReject}
+                    lineTestId="summary-citation"
+                    rejectTestId="summary-reject"
+                  />
+                </details>
               </li>
             ))}
           </ul>

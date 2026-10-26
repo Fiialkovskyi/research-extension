@@ -77,26 +77,56 @@ describe("ClusterSummaries", () => {
     renderSummaries([SUMMARIZED]);
 
     const statement = screen.getByTestId("summary-statement");
-    const link = within(statement).getByRole("link", { name: "Volta review" });
+    const link = within(statement).getByRole("link", { name: "example.org" });
 
     expect(statement).toHaveTextContent("The Volta E5 weighs 23.5 kg.");
     expect(link).toHaveAttribute("href", "https://example.org/volta");
+    expect(link).toHaveAttribute("title", "Volta review");
     expect(within(statement).getByTestId("summary-citation")).toHaveTextContent("weighs 23.5 kg");
     expect(screen.queryByTestId("summary-summarize")).toBeNull();
   });
 
-  it("names a citation's site and day when its page gave them", () => {
+  it("names a citation by its site and shows the day", () => {
     renderSummaries([WITH_DETAILS]);
 
-    expect(screen.getByTestId("summary-citation-details")).toHaveTextContent(
-      "(Bike Lab, 2026-05-01)",
-    );
+    expect(screen.getByRole("link", { name: "Bike Lab" })).toHaveAttribute("title", "Volta review");
+    expect(screen.getByTestId("source-date")).toHaveTextContent("(2026-05-01)");
   });
 
-  it("shows a citation without details as it was", () => {
+  it("shows no day for a citation whose page gave none", () => {
     renderSummaries([SUMMARIZED]);
 
-    expect(screen.queryByTestId("summary-citation-details")).toBeNull();
+    expect(screen.queryByTestId("source-date")).toBeNull();
+  });
+
+  it("folds a statement's sources under a count of its pages", () => {
+    renderSummaries([SUMMARIZED]);
+
+    expect(screen.getByTestId("summary-sources")).toHaveTextContent("Sources (1)");
+  });
+
+  it("lists a page once, however many quotes it gave", () => {
+    const [statement] = SUMMARIZED.summary!.statements;
+    const citation = statement!.citations[0]!;
+
+    renderSummaries([
+      {
+        ...SUMMARIZED,
+        summary: {
+          ...SUMMARIZED.summary!,
+          statements: [
+            {
+              ...statement!,
+              citations: [citation, { ...citation, factId: "a:0:1", quote: "is 12 months old" }],
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(screen.getAllByTestId("summary-citation")).toHaveLength(1);
+    expect(screen.getByTestId("summary-sources")).toHaveTextContent("Sources (1)");
+    expect(screen.getByText("1 more quote")).toBeInTheDocument();
   });
 
   it("marks a cited fact wrong", () => {

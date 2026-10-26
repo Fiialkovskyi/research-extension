@@ -9,7 +9,7 @@ export const researchGapSchema = v.object({
 
 export const researchGapsSchema = v.object({
   cellGaps: v.array(researchGapSchema),
-  /** Cell gaps beyond those listed. */
+  /** Entities with missing values beyond those listed. */
   moreCellGaps: v.number(),
   categoryGaps: v.array(researchGapSchema),
 });

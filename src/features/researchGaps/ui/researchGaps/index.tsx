@@ -49,7 +49,7 @@ export function ResearchGaps({ gaps, onSearch }: ResearchGapsProps) {
           ))}
           {gaps.moreCellGaps > 0 && (
             <li data-testid="gaps-more" className="text-xs text-neutral-500 dark:text-neutral-400">
-              and {gaps.moreCellGaps} more missing values
+              and {gaps.moreCellGaps} more with missing values
             </li>
           )}
         </ul>

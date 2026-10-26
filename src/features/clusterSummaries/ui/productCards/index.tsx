@@ -1,4 +1,4 @@
-import { describePageSource } from "@/shared/describePageSource";
+import { SourceLines } from "@/shared/ui";
 
 import type { CardValue, ProductCard } from "../../types";
 
@@ -25,27 +25,12 @@ function Value({
       <summary className="cursor-pointer text-sm">
         <span className="text-neutral-600 dark:text-neutral-400">{value.label}:</span> {value.value}
       </summary>
-      <ul className="mt-1 flex flex-col gap-1 text-xs text-neutral-600 dark:text-neutral-400">
-        {value.citations.map((citation) => (
-          <li key={citation.factId} data-testid="card-source">
-            <a href={citation.url} target="_blank" rel="noreferrer" className="underline">
-              {citation.pageTitle}
-            </a>
-            {describePageSource(citation) !== "" && <span> ({describePageSource(citation)})</span>}:{" "}
-            <q>{citation.quote}</q>{" "}
-            <button
-              type="button"
-              data-testid="card-reject"
-              className="cursor-pointer text-red-700 underline dark:text-red-400"
-              onClick={() => {
-                onReject([citation.factId]);
-              }}
-            >
-              Wrong
-            </button>
-          </li>
-        ))}
-      </ul>
+      <SourceLines
+        citations={value.citations}
+        onReject={onReject}
+        lineTestId="card-source"
+        rejectTestId="card-reject"
+      />
     </details>
   );
 }

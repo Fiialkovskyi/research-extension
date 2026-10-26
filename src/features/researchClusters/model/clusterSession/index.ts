@@ -6,6 +6,7 @@ import type { StoredCluster, StoredClustering, StoredEdge, StoredNode } from "@/
 
 import { CLUSTER_ALGORITHM_VERSION, CLUSTER_CONFIG_VERSION, CLUSTER_SEED } from "../../constants";
 import { buildSeededRandom } from "./utils/buildSeededRandom";
+import { buildEntityEdges, type ClusterEntity } from "./utils/buildEntityEdges";
 import { buildSemanticEdges, type SemanticInput } from "./utils/buildSemanticEdges";
 import { matchClusterIdentity } from "./utils/matchClusterIdentity";
 import { readClusterLabel } from "./utils/readClusterLabel";
@@ -24,6 +25,11 @@ export interface ClusterSessionOptions {
    * between similar pages (REQ-CLU-002). Without them, recorded relations alone.
    */
   semantic?: SemanticInput;
+  /**
+   * The entities the session resolved: pages that state facts about the same
+   * one are linked, and a cluster is named after its main one.
+   */
+  entities?: readonly ClusterEntity[];
 }
 
 const compareRecorded = (first: StoredNode, second: StoredNode): number =>
@@ -38,7 +44,8 @@ const isDeadEnd = (node: StoredNode): boolean =>
  * with no model (REQ-CLU-001).
  *
  * Louvain community detection over the recorded edges, each counting by its
- * stored weight, and, given page vectors, semantic edges between similar pages, seeded so the same graph always gives the same clusters. Dead ends
+ * stored weight, and, given page vectors, semantic edges between similar pages,
+ * and, given entities, edges between pages that state facts about one, seeded so the same graph always gives the same clusters. Dead ends
  * stay out of detection — a page left at once says little about what it
  * belongs to — and join the cluster of the page they were reached from. A page
  * with no relation is a cluster of its own. Each cluster keeps the id of the
@@ -52,6 +59,7 @@ export const clusterSession = ({
   now,
   createId,
   semantic,
+  entities = [],
 }: ClusterSessionOptions): StoredClustering => {
   const ordered = nodes.toSorted(compareRecorded);
   const byId = new Map(ordered.map((node) => [node.id, node]));
@@ -65,10 +73,11 @@ export const clusterSession = ({
 
   const memberIds = graph.nodes();
   const semanticPairs = semantic === undefined ? [] : buildSemanticEdges(memberIds, semantic);
+  const entityPairs = buildEntityEdges(memberIds, entities);
   const recorded = edges.toSorted((first, second) => first.id.localeCompare(second.id));
 
-  // Recorded and semantic edges alike: a pair joined both ways weighs both.
-  for (const edge of [...recorded, ...semanticPairs]) {
+  // Recorded, semantic and entity edges alike: a pair joined several ways weighs them all.
+  for (const edge of [...recorded, ...semanticPairs, ...entityPairs]) {
     if (edge.from !== edge.to && graph.hasNode(edge.from) && graph.hasNode(edge.to)) {
       if (graph.hasEdge(edge.from, edge.to)) {
         graph.updateEdgeAttribute(
@@ -146,7 +155,7 @@ export const clusterSession = ({
     computedAt: now,
     clusters: members.map((group, index) => ({
       id: ids[index] as string,
-      label: readClusterLabel(group),
+      label: readClusterLabel(group, entities),
       memberIds: group.map(({ id }) => id),
     })),
   };

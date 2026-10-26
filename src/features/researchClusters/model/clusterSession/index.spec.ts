@@ -88,6 +88,26 @@ const axisVector = (axis: number) => {
   return vector;
 };
 
+const entity = (name: string, factCount: number, ...nodeIds: string[]) => ({
+  name,
+  factCount,
+  pages: nodeIds.map((nodeId) => ({ nodeId, factCount: 2 })),
+});
+
+const withEntities = (
+  nodes: StoredNode[],
+  entities: ReturnType<typeof entity>[],
+): ReturnType<typeof clusterSession> =>
+  clusterSession({
+    sessionId: "session-1",
+    nodes,
+    edges: [],
+    previous: [],
+    now: 99,
+    createId: ids(),
+    entities,
+  });
+
 describe("clusterSession", () => {
   it("separates two threads of research", () => {
     const { nodes, edges } = twoThreads();
@@ -183,6 +203,39 @@ describe("clusterSession", () => {
 
     expect(after?.memberIds.toSorted()).toEqual(["a", "b", "e", "s1"]);
     expect(after?.id).toBe(before?.id);
+  });
+
+  describe("entities", () => {
+    it("puts pages that state facts about one entity together", () => {
+      const nodes = [page("a"), page("b"), page("c")];
+
+      expect(readGroups(withEntities(nodes, [entity("Pixel 10a", 6, "a", "c")]))).toEqual([
+        ["a", "c"],
+        ["b"],
+      ]);
+    });
+
+    it("does not join pages through an entity with too few facts", () => {
+      const nodes = [page("a"), page("b")];
+
+      expect(readGroups(withEntities(nodes, [entity("Pixel 10a", 2, "a", "b")]))).toEqual([
+        ["a"],
+        ["b"],
+      ]);
+    });
+
+    it("names the cluster after its entity", () => {
+      const nodes = [page("a"), page("b")];
+      const result = withEntities(nodes, [entity("Pixel 10a", 6, "a", "b")]);
+
+      expect(result.clusters.map(({ label }) => label)).toEqual(["Pixel 10a"]);
+    });
+
+    it("clusters as before without entities", () => {
+      const nodes = [page("a"), page("b")];
+
+      expect(readGroups(withEntities(nodes, []))).toEqual([["a"], ["b"]]);
+    });
   });
 
   it("clusters 300 pages well within 200 ms", () => {

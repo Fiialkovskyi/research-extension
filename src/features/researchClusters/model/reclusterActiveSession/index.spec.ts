@@ -5,8 +5,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { reclusterActiveSession } from ".";
 import { readClustering } from "../readClustering";
+import { encryptBytes, getDataKey } from "@/features/dataProtection";
 import {
   CLUSTERING_STORE,
+  ENTITY_STORE,
+  FACT_STORE,
   EDGE_STORE,
   VECTOR_STORE,
   NODE_STORE,
@@ -50,6 +53,8 @@ beforeEach(async () => {
     database.clear(EDGE_STORE),
     database.clear(CLUSTERING_STORE),
     database.clear(VECTOR_STORE),
+    database.clear(ENTITY_STORE),
+    database.clear(FACT_STORE),
   ]);
   await database.put(SESSION_STORE, {
     id: "session-1",
@@ -133,5 +138,55 @@ describe("reclusterActiveSession", () => {
     expect(clustering?.clusters.map(({ memberIds }) => memberIds.toSorted())).toEqual([
       ["a", "b", "lone"],
     ]);
+  });
+
+  it("links pages that state facts about one entity, and names their cluster after it", async () => {
+    await database.put(NODE_STORE, page("lone", 3));
+
+    const sealEntity = await encryptBytes(
+      await getDataKey(database),
+      new TextEncoder().encode(JSON.stringify({ name: "Pixel 10a", type: "product" })),
+    );
+
+    await database.put(ENTITY_STORE, {
+      id: "e1",
+      sessionId: "session-1",
+      isSeparated: false,
+      createdAt: 1,
+      keyId: sealEntity.keyId,
+      iv: sealEntity.iv,
+      encryptedEntity: sealEntity.ciphertext,
+    });
+
+    for (const [id, nodeId] of [
+      ["f1", "b"],
+      ["f2", "b"],
+      ["f3", "lone"],
+    ]) {
+      const sealed = await encryptBytes(
+        await getDataKey(database),
+        new TextEncoder().encode(
+          JSON.stringify({ subject: "x", attribute: "a", value: id, quote: "q" }),
+        ),
+      );
+
+      await database.put(FACT_STORE, {
+        id,
+        nodeId,
+        sessionId: "session-1",
+        entityId: "e1",
+        keyId: sealed.keyId,
+        iv: sealed.iv,
+        provenance: { modelRef: "m", prompt: "p", chunkerVersion: "c", extractedAt: 1 },
+        encryptedFact: sealed.ciphertext,
+      } as never);
+    }
+
+    const clustering = await reclusterActiveSession(database, "session-1", 80);
+
+    expect(clustering?.clusters.map(({ memberIds }) => memberIds.toSorted())).toEqual([
+      ["a", "b", "lone"],
+    ]);
+    expect(clustering?.clusters[0]?.label).toBe("Pixel 10a");
   });
 });

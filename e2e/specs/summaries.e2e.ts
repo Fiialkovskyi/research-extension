@@ -7,6 +7,7 @@ import {
   closePopup,
   enterBrowserChrome,
   leaveBrowserChrome,
+  loadUrlInSelectedTab,
   placeToolbarAction,
   readPopup,
   readTabGroups,
@@ -14,13 +15,25 @@ import {
   submitPopupGroupTitle,
   waitForPopupPanel,
 } from "../fixtures/firefoxToolbar/utils";
+import { PAGE_ORIGIN_VARIABLE } from "../fixtures/pageServer/constants";
+import { readResearchDatabase } from "../fixtures/researchDatabase/utils";
 import {
   clickSummariesButton,
   readSummariesPage,
   type SummariesSnapshot,
 } from "../fixtures/summariesPage/utils";
 
-// A new session, with nothing read deeply and no generation model in the suite.
+const readOrigin = (): string => {
+  const origin = process.env[PAGE_ORIGIN_VARIABLE];
+
+  if (origin === undefined) {
+    throw new Error(`${PAGE_ORIGIN_VARIABLE} is not set; the page server did not start.`);
+  }
+
+  return origin;
+};
+
+// A new session of three shop pages, none read deeply, and no generation model in the suite.
 describe("summaries", () => {
   const title = `Summaries ${Date.now()}`;
 
@@ -43,6 +56,17 @@ describe("summaries", () => {
       { timeout: UI_TIMEOUT_MS, timeoutMsg: `No tab group titled "${title}" appeared.` },
     );
     await closePopup();
+
+    // Three pages that declare themselves shops: the session can tell what it lacks.
+    for (const [index, page] of ["product.html", "shopB.html", "shopC.html"].entries()) {
+      await loadUrlInSelectedTab(`${readOrigin()}/${page}`);
+      await browser.waitUntil(
+        async () =>
+          (await readResearchDatabase()).metadata.filter(({ product }) => product !== null).length >
+          index,
+        { timeout: UI_TIMEOUT_MS, timeoutMsg: `${page} was never recorded with its markup.` },
+      );
+    }
 
     await clickToolbarAction();
     await waitForPopupPanel();
@@ -79,8 +103,9 @@ describe("summaries", () => {
     expect(snapshot?.questionsNeedModel).toBe(true);
     // Nothing was marked wrong yet, so no count is shown.
     expect(snapshot?.hasRejected).toBe(false);
-    // Nothing was read, so every kind of source is a gap.
+    // Every page is a shop, so the session has read no reviews, forums or videos.
     expect(snapshot?.gaps).toContain("No reviews read yet");
+    expect(snapshot?.gaps).not.toContain("No shop pages read yet");
   });
 
   it("opens a gap's search in a new tab of the session's group", async () => {

@@ -64,9 +64,10 @@ describe("ProductCards", () => {
     const price = screen.getByTestId("card-price");
 
     expect(within(price).getByTestId("card-source")).toHaveTextContent(
-      "Pixel page (Ябко, 2026-02-01): From the page's data: price 24399 UAH",
+      "Ябко (2026-02-01): From the page's data: price 24399 UAH",
     );
     expect(within(price).getByRole("link")).toHaveAttribute("href", "https://jabko.ua/pixel");
+    expect(within(price).getByRole("link")).toHaveAttribute("title", "Pixel page");
 
     fireEvent.click(within(price).getByTestId("card-reject"));
 

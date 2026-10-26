@@ -8,6 +8,8 @@ import {
   METADATA_SITE_NAME_LIMIT,
   METADATA_TITLE_LIMIT,
   METADATA_TYPE_LIMIT,
+  PAGE_TYPE_LIMIT,
+  PAGE_TYPES_MAXIMUM,
   PRODUCT_AVAILABILITY_LIMIT,
   PRODUCT_BRAND_LIMIT,
   PRODUCT_MAXIMUM_PRICE,
@@ -50,6 +52,14 @@ export const pageMetadataSchema = v.object({
   ),
   canonicalUrl: v.optional(
     v.pipe(v.string(), v.url(), v.maxLength(METADATA_CANONICAL_URL_LIMIT), v.regex(/^https?:/u)),
+  ),
+  /** The schema.org `@type` names the page's JSON-LD declares. */
+  schemaTypes: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(PAGE_TYPE_LIMIT))),
+      v.minLength(1),
+      v.maxLength(PAGE_TYPES_MAXIMUM),
+    ),
   ),
   product: v.optional(pageProductSchema),
 });
