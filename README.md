@@ -1,5 +1,34 @@
 # Research Graph Extension
 
+## How to use it
+
+1. **Run it.** `npm install`, then `npm run dev`. Firefox opens with the extension already loaded
+   (see [Getting started](#getting-started) for requirements). If the Research Graph icon is not on
+   the toolbar, pin it from the puzzle-piece _Extensions_ menu next to the address bar.
+2. **Start a session.** Click the icon and create a **New session** with a title. Pages you read
+   while a session is recording are captured; nothing is sent anywhere, everything stays in your
+   browser. Sites you do not want recorded can be listed under **Sites never recorded** in
+   **Settings**, and the toolbar shows when a page gives the extension no access.
+3. **Browse as usual.** Open your search results, product pages and articles. The popup shows what
+   was captured, what is still unread, and where you left off. The **Notice on pages** switch
+   controls whether a page tells you it was recorded.
+4. **Look at what you collected.** The popup offers several views of the same session: the
+   **Research tree** (how you got from page to page, with an unread queue), the **Research map**
+   (pages grouped by similarity, with **Zoom in** / **Zoom out**), and a simple history.
+   **Recorded data** lists every captured page, and lets you delete it.
+5. **Turn on local AI (optional).** Without it, capture and the tree work as they are. With it,
+   similar pages are grouped, and pages can be summarised and compared. Click **Turn on AI** in the
+   popup (or open the setup page), then follow the checklist: install [Ollama](https://ollama.com),
+   open it, allow this extension once, and let the button download the recommended model. The full
+   walkthrough is in [Local AI with Ollama](#local-ai-with-ollama-optional). The popup's activity
+   strip says whether AI is ready, working, or paused because Ollama is closed.
+6. **Read the summaries.** Once page summaries are on, **Summaries** shows product cards and a
+   comparison table built from the pages in the session. **Summarize now** forces a run;
+   **Refresh** re-reads the current state.
+
+The popup follows your system light/dark appearance. Settings (model list, page access, diagnostics)
+live on the options page, reached from **Settings** at the bottom of the popup.
+
 A local-only browser extension for capturing and synthesising a research session as a graph.
 `RESEARCH_GRAPH_EXTENSION_SPEC.md` holds the long-term design; this repository currently contains the
 project scaffold and the extension's first surface — a toolbar popup.

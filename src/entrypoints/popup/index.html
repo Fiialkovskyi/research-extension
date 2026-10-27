@@ -4,6 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Research Graph</title>
+    <!-- Firefox sizes the popup to its content, so until React mounts it would
+         be zero-sized and blank. Same width as Panel; the height is a floor. -->
+    <style>
+      body {
+        margin: 0;
+        width: 26rem;
+        min-height: 12rem;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

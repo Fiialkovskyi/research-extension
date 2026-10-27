@@ -22,3 +22,7 @@ logs/
 
 # prompt-eval reports; fixtures and the baseline are committed
 evals/reports/
+
+# local secrets (tokens); never commit
+.env
+.env.local

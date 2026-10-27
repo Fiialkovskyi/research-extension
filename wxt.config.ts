@@ -44,8 +44,15 @@ export default defineConfig({
         },
       },
     },
+    // One SVG serves every size: Firefox rasterises it for the toolbar, the
+    // add-ons manager and the notification, so no PNG set has to be kept in step.
+    icons: {
+      "48": "icon.svg",
+      "96": "icon.svg",
+    },
     action: {
       default_title: "Research Graph",
+      default_icon: "icon.svg",
     },
     // A research session is a tab group (`tabGroups`). Capturing its pages needs
     // each tab's URL and title (`tabs`) and how each page was reached

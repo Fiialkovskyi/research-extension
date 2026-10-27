@@ -7,7 +7,7 @@
  */
 
 /** Stable add-on id declared under `browser_specific_settings.gecko.id`. */
-export const EXTENSION_ID = "research-graph@example.org";
+export const EXTENSION_ID = "research-graph@researchgraph.app";
 
 /** Minimum supported Firefox, per the target spec (Firefox ESR 140). */
 export const FIREFOX_MIN_VERSION = "140.0";
