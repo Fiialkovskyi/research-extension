@@ -1,0 +1,53 @@
+{
+  "facts": [
+    {
+      "concept": "screen size",
+      "value": "6.3"
+    },
+    {
+      "concept": "screen resolution",
+      "value": "2622 x 1206"
+    },
+    {
+      "concept": "processor model",
+      "value": "A19"
+    },
+    {
+      "concept": "processor cores",
+      "value": "6"
+    },
+    {
+      "concept": "front camera resolution",
+      "value": "18 Мп"
+    },
+    {
+      "concept": "weight",
+      "value": "177 г"
+    },
+    {
+      "concept": "water resistance",
+      "value": "IP68"
+    },
+    {
+      "concept": "dimensions",
+      "value": "71.5 x 149.6 x 7.95 мм"
+    },
+    {
+      "concept": "protective glass",
+      "value": "Ceramic Shield"
+    },
+    {
+      "concept": "charging power",
+      "value": "40 Вт"
+    },
+    {
+      "concept": "video resolution",
+      "value": "3840 x 2160"
+    }
+  ],
+  "sameConcept": [],
+  "differentConcept": [],
+  "products": [
+    "iPhone 17"
+  ]
+}

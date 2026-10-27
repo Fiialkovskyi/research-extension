@@ -1,0 +1,99 @@
+{
+  "facts": [
+    {
+      "concept": "screen size",
+      "value": "6.3"
+    },
+    {
+      "concept": "screen resolution",
+      "value": "2424 x 1080"
+    },
+    {
+      "concept": "processor model",
+      "value": "G4"
+    },
+    {
+      "concept": "processor cores",
+      "value": "8"
+    },
+    {
+      "concept": "front camera resolution",
+      "value": "13 Мп"
+    },
+    {
+      "concept": "weight",
+      "value": "184 г"
+    },
+    {
+      "concept": "water resistance",
+      "value": "IP68"
+    },
+    {
+      "concept": "dimensions",
+      "value": "154.94 x 73.66 x 10.16 мм"
+    },
+    {
+      "concept": "protective glass",
+      "value": "Corning Gorilla Glass 7i"
+    },
+    {
+      "concept": "battery capacity",
+      "value": "5100 мАг"
+    },
+    {
+      "concept": "charging power",
+      "value": "30 Вт"
+    }
+  ],
+  "sameConcept": [
+    [
+      "screen diagonal",
+      "screen size"
+    ],
+    [
+      "resolution",
+      "screen resolution"
+    ],
+    [
+      "memory volume",
+      "memory capacity"
+    ],
+    [
+      "device color",
+      "color"
+    ],
+    [
+      "battery capacity",
+      "battery size"
+    ],
+    [
+      "weight",
+      "mass"
+    ]
+  ],
+  "differentConcept": [
+    [
+      "screen diagonal",
+      "screen resolution"
+    ],
+    [
+      "processor",
+      "processor model"
+    ],
+    [
+      "processor model",
+      "processor cores"
+    ],
+    [
+      "front camera",
+      "battery capacity"
+    ],
+    [
+      "charging power",
+      "battery capacity"
+    ]
+  ],
+  "products": [
+    "Pixel 10a"
+  ]
+}

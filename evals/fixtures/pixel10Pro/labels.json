@@ -1,0 +1,53 @@
+{
+  "facts": [
+    {
+      "concept": "screen size",
+      "value": "6.3"
+    },
+    {
+      "concept": "screen resolution",
+      "value": "1280 x 2856"
+    },
+    {
+      "concept": "processor model",
+      "value": "G5"
+    },
+    {
+      "concept": "processor cores",
+      "value": "8"
+    },
+    {
+      "concept": "front camera resolution",
+      "value": "42 Мп"
+    },
+    {
+      "concept": "weight",
+      "value": "207 г"
+    },
+    {
+      "concept": "water resistance",
+      "value": "IP68"
+    },
+    {
+      "concept": "dimensions",
+      "value": "152.8 x 72 x 8.6 мм"
+    },
+    {
+      "concept": "protective glass",
+      "value": "Corning Gorilla Glass Victus 2"
+    },
+    {
+      "concept": "battery capacity",
+      "value": "4870 мАг"
+    },
+    {
+      "concept": "charging power",
+      "value": "30 Вт"
+    }
+  ],
+  "sameConcept": [],
+  "differentConcept": [],
+  "products": [
+    "Pixel 10 Pro"
+  ]
+}

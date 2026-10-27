@@ -263,6 +263,16 @@ exception is a **guard**: when a value carries a costly invariant no type can ex
 profile pinned to a commit, a runtime path that must never be a remote origin — a
 `constants.spec.ts` may check that invariant and nothing else.
 
+**Prompt evals** are a third layer, outside `verify`: `evals/` measures how the extraction and summary
+prompts behave on saved real pages with a local Ollama model. `npm run eval` runs the extension's own
+pipeline over every fixture under `evals/fixtures/<id>/` (`page.html`, `meta.json`, hand-written
+`labels.json`) and prints numbers next to the committed `evals/baseline.json` — never a pass or a fail,
+because a small model's answers vary. `EVAL_MODEL`, `EVAL_EMBEDDING_MODEL` (`none` turns embeddings off)
+and `EVAL_RUNS` tune a run; `npm run eval:baseline` rewrites the baseline; `npm run eval:capture --
+<url> <id>` saves a new page, which then needs its labels. The helpers carry unit tests like any other
+module and run in `npm run test`; the run itself (`evals/prompts.eval.ts`) needs Ollama and never does.
+Fixtures are copies of public pages, kept to measure with, not to redistribute.
+
 Name tests for the behaviour under test. Everything that touches Firefox UI internals
 (`CustomizableUI`, panel ids, the Marionette actor used to read the popup's DOM) stays inside
 `e2e/fixtures/firefoxToolbar/` so a Firefox change breaks one file rather than the suite. Do not

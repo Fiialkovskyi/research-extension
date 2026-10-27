@@ -19,3 +19,6 @@ logs/
 
 # macOS
 .DS_Store
+
+# prompt-eval reports; fixtures and the baseline are committed
+evals/reports/

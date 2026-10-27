@@ -1,0 +1,17 @@
+{
+  "facts": [
+    {
+      "concept": "coating",
+      "value": "DLC"
+    },
+    {
+      "concept": "material",
+      "value": "нержавіючої сталі"
+    }
+  ],
+  "sameConcept": [],
+  "differentConcept": [],
+  "products": [
+    "LAUT Steel Loop"
+  ]
+}

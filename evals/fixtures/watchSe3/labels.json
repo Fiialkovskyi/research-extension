@@ -1,0 +1,37 @@
+{
+  "facts": [
+    {
+      "concept": "screen resolution",
+      "value": "324 x 394"
+    },
+    {
+      "concept": "processor model",
+      "value": "S10"
+    },
+    {
+      "concept": "water resistance",
+      "value": "5 ATM"
+    },
+    {
+      "concept": "protective glass",
+      "value": "Ion-X"
+    },
+    {
+      "concept": "battery life",
+      "value": "18 годин"
+    },
+    {
+      "concept": "case size",
+      "value": "40mm"
+    },
+    {
+      "concept": "colour",
+      "value": "Starlight"
+    }
+  ],
+  "sameConcept": [],
+  "differentConcept": [],
+  "products": [
+    "Apple Watch SE 3"
+  ]
+}

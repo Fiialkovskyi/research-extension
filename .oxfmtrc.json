@@ -1,4 +1,11 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": [".output", ".wxt", "node_modules", "coverage"]
+  "ignorePatterns": [
+    ".output",
+    ".wxt",
+    "node_modules",
+    "coverage",
+    "evals/fixtures",
+    "evals/reports"
+  ]
 }
