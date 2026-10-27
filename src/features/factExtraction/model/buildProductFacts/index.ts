@@ -5,7 +5,7 @@ import type { ExtractedFact } from "../../types";
 
 /**
  * Makes facts of a page's product from the data the page gave about it — price
- * with its currency, brand, availability and rating — with the product's name
+ * with its currency, brand, availability, rating and how many rated it — with the product's name
  * as their subject. Each quote says it is from the page's data, so a reader
  * can tell it from a sentence the model read.
  *
@@ -57,6 +57,16 @@ export const buildProductFacts = (product: PageProduct | undefined): ExtractedFa
       product.ratingCount === undefined
         ? `rating ${product.ratingValue}`
         : `rating ${product.ratingValue} from ${product.ratingCount} reviews`,
+    );
+  }
+
+  if (product.ratingCount !== undefined) {
+    // Not "rating count": by its embedding that concept shares a column with "rating".
+    add(
+      "review count",
+      String(product.ratingCount),
+      undefined,
+      `review count ${product.ratingCount}`,
     );
   }
 

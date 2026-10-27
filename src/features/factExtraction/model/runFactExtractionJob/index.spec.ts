@@ -193,7 +193,7 @@ describe("runFactExtractionJob", () => {
       nodeId: "node-a",
       provenance: {
         modelRef: "ollama:qwen3:4b@abc",
-        prompt: "factExtraction@4",
+        prompt: "factExtraction@5",
         chunkerVersion: "chunker@1",
       },
     });
@@ -417,6 +417,45 @@ describe("runFactExtractionJob", () => {
       keptCount: CHUNK_COUNT,
       droppedCount: CHUNK_COUNT,
     });
+  });
+
+  it("keeps a fact whose quote is in the product name, though the passage does not state it", async () => {
+    const database = await openResearchDatabase();
+
+    await database.put(PAGE_METADATA_STORE, {
+      nodeId: "node-a",
+      sessionId: "session-1",
+      capturedAt: 1,
+      title: "BILLY bookcase - IKEA",
+      product: { name: "BILLY Bookcase - white 80x28x202 cm" },
+    });
+    await run({
+      generate: () =>
+        answerWith(
+          JSON.stringify({
+            entities: [],
+            facts: [
+              {
+                subject: "BILLY Bookcase",
+                attribute: "size",
+                concept: "dimensions",
+                value: "80x28x202",
+                unit: "cm",
+                quote: "white 80x28x202 cm",
+              },
+            ],
+          }),
+        ),
+    });
+
+    const dataKey = await getDataKey(database);
+    const attributes = await Promise.all(
+      (await database.getAll(FACT_STORE)).map(
+        async (fact) => (await readSealedFact(dataKey, fact)).attribute,
+      ),
+    );
+
+    expect(attributes).toContain("size");
   });
 
   describe("with product data from the page", () => {

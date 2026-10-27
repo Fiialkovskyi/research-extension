@@ -17,7 +17,7 @@
       "value": "4.9"
     },
     {
-      "concept": "rating count",
+      "concept": "review count",
       "value": "482"
     }
   ],
@@ -34,7 +34,7 @@
   "differentConcept": [
     [
       "rating",
-      "rating count"
+      "review count"
     ],
     [
       "price",

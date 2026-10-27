@@ -44,6 +44,13 @@ describe("buildProductFacts", () => {
         value: "5",
         quote: "From the page's data: rating 5 from 1 reviews",
       },
+      {
+        subject: "Pixel 10a",
+        attribute: "review count",
+        concept: "review count",
+        value: "1",
+        quote: "From the page's data: review count 1",
+      },
     ]);
   });
 

@@ -211,7 +211,11 @@ export const runFactExtractionJob = async ({
     // Kept only when the passage says it and its subject can be a thing a page is about; the
     // rest count as dropped.
     const { facts: grounded } = tidyFacts(
-      facts.filter((fact) => isQuoteGrounded(fact.quote, passage) && !isImplausibleSubject(fact)),
+      facts.filter(
+        (fact) =>
+          isQuoteGrounded(fact.quote, passage, [context.productName, context.title]) &&
+          !isImplausibleSubject(fact),
+      ),
       context.productName,
     );
     const provenance = { modelRef, prompt, chunkerVersion: CHUNKER_VERSION, extractedAt: now() };

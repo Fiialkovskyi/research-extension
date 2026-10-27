@@ -22,6 +22,13 @@ describe("isQuoteGrounded", () => {
     expect(isQuoteGrounded("weighs 24 kg", CHUNK)).toBe(false);
   });
 
+  it("grounds a quote that the page's product name or title states", () => {
+    const also = ["BILLY Bookcase - white 80x28x202 cm", undefined, "BILLY bookcase - IKEA UK"];
+
+    expect(isQuoteGrounded("white 80x28x202 cm", CHUNK, also)).toBe(true);
+    expect(isQuoteGrounded("white 80x28x300 cm", CHUNK, also)).toBe(false);
+  });
+
   it("grounds nothing with an empty quote", () => {
     expect(isQuoteGrounded("", CHUNK)).toBe(false);
     expect(isQuoteGrounded("   ", CHUNK)).toBe(false);

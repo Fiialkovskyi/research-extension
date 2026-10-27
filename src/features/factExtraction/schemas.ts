@@ -3,8 +3,8 @@ import * as v from "valibot";
 import { MAXIMUM_FACTS_PER_CHUNK, UNKNOWN_ENTITY_TYPE } from "./constants";
 
 /**
- * A `factExtraction@4` answer, as it must be before anything is stored.
- * Mirrors `prompts/factExtraction@4.schema.json`, which is what the model is
+ * A `factExtraction@5` answer, as it must be before anything is stored.
+ * Mirrors `prompts/factExtraction@5.schema.json`, which is what the model is
  * asked to follow; `constants.spec.ts` keeps the two in step.
  */
 export const factExtractionAnswerSchema = v.object({

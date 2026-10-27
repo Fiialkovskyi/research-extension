@@ -8,9 +8,10 @@ import { stripRepeatedUnit } from "./utils/stripRepeatedUnit";
 /**
  * Cleans the facts of one answer after their quotes are checked, for slips a small model makes that
  * the quote cannot show: a fact whose value is only another fact's label is dropped; one whose value
- * is its own attribute is a bare value the model took for a label (`S10`, `Starlight`) when it is one
- * word, and then its attribute becomes the concept, and a feature named without a value when it is
- * more, and then it is dropped; a subject the model garbled is
+ * is its own attribute (with its unit, if it has one) is a bare value the model took for a label
+ * (`S10`, `Starlight`, `80x28x202 cm`) when it is one word or has a number, and then its attribute
+ * becomes the concept, and a feature named without a value when it is more, and then it is
+ * dropped; a subject the model garbled is
  * given the page's product name (`repairSubject`); a unit written both in `value` and in `unit` is
  * kept once. The quote is left as it is, since it is evidence.
  *
@@ -23,7 +24,9 @@ export const tidyFacts = (
   const counts = Map.groupBy(facts, ({ attribute }) => normalizeEntityName(attribute));
   const kept = facts.flatMap((fact) => {
     const own = normalizeEntityName(fact.attribute);
-    const isNamedValue = normalizeEntityName(fact.value) === own;
+    const isNamedValue =
+      normalizeEntityName(fact.value) === own ||
+      normalizeEntityName(`${fact.value} ${fact.unit ?? ""}`) === own;
 
     // A value that is only a label of another fact of the answer, or a feature named with no value.
     if (
@@ -31,7 +34,7 @@ export const tidyFacts = (
         fact,
         (attribute) => (counts.get(attribute)?.length ?? 0) > Number(attribute === own),
       ) ||
-      (isNamedValue && own.split(" ").length > 1)
+      (isNamedValue && own.split(" ").length > 1 && !/\d/u.test(fact.value))
     ) {
       return [];
     }

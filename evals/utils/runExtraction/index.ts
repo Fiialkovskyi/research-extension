@@ -96,7 +96,9 @@ export const runExtraction = async (
         ]),
       );
 
-      const grounded = answer.answer.facts.filter((fact) => isQuoteGrounded(fact.quote, passage));
+      const grounded = answer.answer.facts.filter((fact) =>
+        isQuoteGrounded(fact.quote, passage, [context.productName, context.title]),
+      );
       const plausible = grounded.filter((fact) => !isImplausibleSubject(fact));
       const tidied = tidyFacts(plausible, context.productName);
 

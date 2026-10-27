@@ -36,6 +36,19 @@ describe("tidyFacts", () => {
     expect(tidied).toMatchObject({ attribute: "processor model", value: "S10" });
   });
 
+  it("keeps a measurement the model named as its own attribute, under the concept", () => {
+    const [bare, withUnit] = tidyFacts(
+      [
+        fact({ attribute: "80x28x202 cm", concept: "dimensions", value: "80x28x202 cm" }),
+        fact({ attribute: "77x147 cm", concept: "dimensions", value: "77x147", unit: "cm" }),
+      ],
+      undefined,
+    ).facts;
+
+    expect(bare).toMatchObject({ attribute: "dimensions", value: "80x28x202 cm" });
+    expect(withUnit).toMatchObject({ attribute: "dimensions", value: "77x147", unit: "cm" });
+  });
+
   it("keeps a unit once, and the quote as it was", () => {
     const [tidied] = tidyFacts(
       [fact({ value: "184 g", unit: "g", quote: "Weight 184 g" })],

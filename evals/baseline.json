@@ -1,14 +1,14 @@
 {
-  "junkSubjectRate": 0.031,
+  "junkSubjectRate": 0.01,
   "invalidAnswerRate": 0,
   "truncatedAnswerRate": 0,
-  "groundedRate": 0.992,
-  "labelRecall": 0.825,
+  "groundedRate": 1,
+  "labelRecall": 1,
   "mergeRecall": 0,
   "mergePrecision": 1,
   "statementNamingRate": 1,
   "statementComparingRate": 0.25,
   "cardCount": 6,
-  "durationSeconds": 506.1,
+  "durationSeconds": 429,
   "requestCount": 20
 }
