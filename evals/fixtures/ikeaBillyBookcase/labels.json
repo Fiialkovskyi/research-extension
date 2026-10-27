@@ -1,0 +1,47 @@
+{
+  "facts": [
+    {
+      "concept": "price",
+      "value": "55"
+    },
+    {
+      "concept": "dimensions",
+      "value": "80x28x202 cm"
+    },
+    {
+      "concept": "colour",
+      "value": "white"
+    },
+    {
+      "concept": "rating",
+      "value": "4.5"
+    },
+    {
+      "concept": "rating count",
+      "value": "2112"
+    }
+  ],
+  "sameConcept": [
+    [
+      "color",
+      "colour"
+    ],
+    [
+      "size",
+      "dimensions"
+    ]
+  ],
+  "differentConcept": [
+    [
+      "rating",
+      "rating count"
+    ],
+    [
+      "price",
+      "dimensions"
+    ]
+  ],
+  "products": [
+    "BILLY Bookcase"
+  ]
+}

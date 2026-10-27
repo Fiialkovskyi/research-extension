@@ -1,0 +1,47 @@
+{
+  "facts": [
+    {
+      "concept": "price",
+      "value": "49"
+    },
+    {
+      "concept": "dimensions",
+      "value": "77x147 cm"
+    },
+    {
+      "concept": "colour",
+      "value": "white"
+    },
+    {
+      "concept": "rating",
+      "value": "4.7"
+    },
+    {
+      "concept": "rating count",
+      "value": "8210"
+    }
+  ],
+  "sameConcept": [
+    [
+      "color",
+      "colour"
+    ],
+    [
+      "size",
+      "dimensions"
+    ]
+  ],
+  "differentConcept": [
+    [
+      "rating",
+      "rating count"
+    ],
+    [
+      "price",
+      "dimensions"
+    ]
+  ],
+  "products": [
+    "KALLAX Shelving unit"
+  ]
+}

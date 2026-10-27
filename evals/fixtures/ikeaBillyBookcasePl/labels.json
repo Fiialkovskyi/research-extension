@@ -1,0 +1,47 @@
+{
+  "facts": [
+    {
+      "concept": "price",
+      "value": "279"
+    },
+    {
+      "concept": "dimensions",
+      "value": "80x28x202 cm"
+    },
+    {
+      "concept": "colour",
+      "value": "biały"
+    },
+    {
+      "concept": "rating",
+      "value": "4.9"
+    },
+    {
+      "concept": "rating count",
+      "value": "482"
+    }
+  ],
+  "sameConcept": [
+    [
+      "color",
+      "colour"
+    ],
+    [
+      "size",
+      "dimensions"
+    ]
+  ],
+  "differentConcept": [
+    [
+      "rating",
+      "rating count"
+    ],
+    [
+      "price",
+      "dimensions"
+    ]
+  ],
+  "products": [
+    "BILLY Regał"
+  ]
+}
