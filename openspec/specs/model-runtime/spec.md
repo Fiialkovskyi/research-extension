@@ -203,14 +203,14 @@ The setup page SHALL let the user use a local inference server, once the user ha
 - **GIVEN** an active embedding model served by the local inference server
 - **WHEN** the server is stopped and a snapshot is to be embedded
 - **THEN** the embedding job fails with a reason naming the server, and is retried later
-- **AND** the popup says local AI is paused because Ollama is not running, while pages are still recorded
+- **AND** the popup's activity strip says local AI is not answering, while pages are still recorded
 
 #### Scenario: Server back
 
 - **GIVEN** embedding jobs that stopped because the local inference server did not answer, including ones out of retries
-- **WHEN** the server answers again, the next time a page is captured or the setup or options page looks at it
+- **WHEN** the server answers again, the next time a page is captured, AI is turned on, the popup shows the pause, or the setup or options page looks at it
 - **THEN** those jobs are queued again with their retries restored, and the pages are embedded
-- **AND** the popup no longer says local AI is paused
+- **AND** the popup's activity strip no longer shows local AI paused
 
 ### Requirement: Generation is bounded and interruptible
 
