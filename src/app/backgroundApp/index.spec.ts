@@ -3081,7 +3081,7 @@ const createFakeOllama = ({
   isRunning?: boolean;
   hasModel?: boolean;
   isBroken?: boolean;
-  /** Chat models Ollama has pulled, such as `qwen3:0.6b`. */
+  /** Chat models Ollama has pulled, such as `gemma4:4b`. */
   chatModels?: string[];
   isChatBroken?: boolean;
   /** How long a chat takes before it answers, as a long answer does. */
@@ -3147,7 +3147,7 @@ const createFakeOllama = ({
 
       state.pulls += 1;
 
-      if (model.includes("qwen")) {
+      if (!model.startsWith("nomic-embed-text")) {
         state.chatModels.push(model);
       } else {
         state.hasModel = true;
@@ -3232,7 +3232,7 @@ describe("Ollama through the background", () => {
         state: "running",
         models: [
           expect.objectContaining({ name: "nomic-embed-text:latest", registeredRef: null }),
-          expect.objectContaining({ name: "qwen3:4b", isPulled: false }),
+          expect.objectContaining({ name: "gemma4:12b", isPulled: false }),
         ],
       },
     });
@@ -3422,7 +3422,7 @@ describe("Turning AI on from the setup page", () => {
   });
 
   it("does not download a model Ollama already has", async () => {
-    const ollama = createFakeOllama({ hasModel: false, chatModels: ["qwen3:4b"] });
+    const ollama = createFakeOllama({ hasModel: false, chatModels: ["gemma4:12b"] });
     const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
 
     expect(await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}))).toMatchObject({
@@ -3453,12 +3453,12 @@ describe("Turning AI on from the setup page", () => {
   });
 
   it("keeps the embedding model on when the generation model fails", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"], isChatBroken: true });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:12b"], isChatBroken: true });
     const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
 
     expect(await app.handleMessage(buildRpcMessage("aiSetup.turnOn", {}))).toMatchObject({
       type: "aiSetup.turnOnFailed",
-      payload: { name: "qwen3:4b", stage: "checking" },
+      payload: { name: "gemma4:12b", stage: "checking" },
     });
     expect((await app.handleMessage(buildRpcMessage("aiSetup.read", {}))).payload).toMatchObject({
       isSetUp: true,
@@ -3466,7 +3466,7 @@ describe("Turning AI on from the setup page", () => {
   });
 
   it("lets a reopened page follow a run already under way", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 20 });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:12b"], chatDelayMs: 20 });
     const { app } = await createSessionApp({ fetchResource: ollama.fetchResource });
     const first = createFakePort();
     const second = createFakePort();
@@ -3588,14 +3588,14 @@ describe("Turning local AI on in one action", () => {
 
 describe("Page summaries through Ollama", () => {
   it("registers a chat model as a generation model and checks it by generating", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:12b"] });
     const { app, database } = await createSessionApp({
       fetchResource: ollama.fetchResource,
     });
-    const ref = `ollama:qwen3:4b@${ollama.chatDigest}`;
+    const ref = `ollama:gemma4:12b@${ollama.chatDigest}`;
 
     expect(
-      await app.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" })),
+      await app.handleMessage(buildRpcMessage("ollama.register", { name: "gemma4:12b" })),
     ).toMatchObject({ type: "ollama.registered", payload: { ref } });
     expect(await database.get(MODEL_STORE, ref)).toMatchObject({
       active: false,
@@ -3622,13 +3622,13 @@ describe("Page summaries through Ollama", () => {
   });
 
   it("keeps the embedding model active beside the generation model", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:12b"] });
     const { app, database } = await createSessionApp({
       fetchResource: ollama.fetchResource,
     });
 
     await app.handleMessage(buildRpcMessage("ollama.enable", { name: "nomic-embed-text" }));
-    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
+    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "gemma4:12b" }));
 
     const active = (await database.getAll(MODEL_STORE))
       .filter(({ active: isActive }) => isActive)
@@ -3638,28 +3638,28 @@ describe("Page summaries through Ollama", () => {
   });
 
   it("downloads the tagged model even when Ollama has another tag of it", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:0.6b"] });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:4b"] });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
     });
 
     expect(
-      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" })),
+      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "gemma4:12b" })),
     ).toMatchObject({
       type: "ollama.enabled",
-      payload: { ref: `ollama:qwen3:4b@${ollama.chatDigest}` },
+      payload: { ref: `ollama:gemma4:12b@${ollama.chatDigest}` },
     });
     expect(ollama.state.pulls).toBe(1);
   });
 
   it("refuses a model that does not answer in the schema, at the checking stage", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"], isChatBroken: true });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:12b"], isChatBroken: true });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
     });
 
     expect(
-      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" })),
+      await app.handleMessage(buildRpcMessage("ollama.enable", { name: "gemma4:12b" })),
     ).toMatchObject({
       type: "ollama.enableFailed",
       payload: {
@@ -3670,17 +3670,17 @@ describe("Page summaries through Ollama", () => {
   });
 
   it("times extraction from a page with the active generation model", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:12b"] });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
     });
 
-    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
+    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "gemma4:12b" }));
 
     expect(await app.handleMessage(buildRpcMessage("generation.measure", {}))).toMatchObject({
       type: "generation.measured",
       payload: {
-        ref: `ollama:qwen3:4b@${ollama.chatDigest}`,
+        ref: `ollama:gemma4:12b@${ollama.chatDigest}`,
         isValid: true,
         correctCount: 5,
         expectedCount: 15,
@@ -3701,16 +3701,16 @@ describe("Page summaries through Ollama", () => {
   });
 
   it("does not measure throughput for a generation model, and says where its measure is", async () => {
-    const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+    const ollama = createFakeOllama({ chatModels: ["gemma4:12b"] });
     const { app } = await createSessionApp({
       fetchResource: ollama.fetchResource,
     });
 
-    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "qwen3:4b" }));
+    await app.handleMessage(buildRpcMessage("ollama.enable", { name: "gemma4:12b" }));
 
     expect(
       await app.handleMessage(
-        buildRpcMessage("benchmark.run", { ref: `ollama:qwen3:4b@${ollama.chatDigest}` }),
+        buildRpcMessage("benchmark.run", { ref: `ollama:gemma4:12b@${ollama.chatDigest}` }),
       ),
     ).toMatchObject({
       type: "benchmark.failed",
@@ -3719,7 +3719,7 @@ describe("Page summaries through Ollama", () => {
   });
 
   it("holds the background loaded while extraction waits on the server, and lets go after", async () => {
-    const slow = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 300 });
+    const slow = createFakeOllama({ chatModels: ["gemma4:12b"], chatDelayMs: 300 });
     const touch = vi.fn(() => Promise.resolve());
     const { app, database } = await createSessionApp({
       fetchResource: slow.fetchResource,
@@ -3731,9 +3731,9 @@ describe("Page summaries through Ollama", () => {
       },
     });
 
-    await app.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" }));
+    await app.handleMessage(buildRpcMessage("ollama.register", { name: "gemma4:12b" }));
 
-    const registered = await database.get(MODEL_STORE, `ollama:qwen3:4b@${slow.chatDigest}`);
+    const registered = await database.get(MODEL_STORE, `ollama:gemma4:12b@${slow.chatDigest}`);
 
     if (registered === undefined) {
       throw new Error("The model was not registered.");
@@ -3759,16 +3759,16 @@ describe("Page summaries through Ollama", () => {
   });
 
   it("reports progress every second while extraction runs", async () => {
-    const slow = createFakeOllama({ chatModels: ["qwen3:4b"], chatDelayMs: 2_300 });
+    const slow = createFakeOllama({ chatModels: ["gemma4:12b"], chatDelayMs: 2_300 });
     const { app: slowApp, database } = await createSessionApp({
       fetchResource: slow.fetchResource,
     });
 
     // Registered and marked as having passed, rather than checked: the
     // checks would wait on the slow chat seven times.
-    await slowApp.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" }));
+    await slowApp.handleMessage(buildRpcMessage("ollama.register", { name: "gemma4:12b" }));
 
-    const registered = await database.get(MODEL_STORE, `ollama:qwen3:4b@${slow.chatDigest}`);
+    const registered = await database.get(MODEL_STORE, `ollama:gemma4:12b@${slow.chatDigest}`);
 
     if (registered === undefined) {
       throw new Error("The model was not registered.");
@@ -4098,9 +4098,9 @@ describe("the background-lifetime probe through the background", () => {
   });
 });
 
-/** A session app whose active generation model is Ollama's `qwen3:4b`, through the fake server. */
+/** A session app whose active generation model is Ollama's `gemma4:12b`, through the fake server. */
 const createExtractionApp = async (overrides: Partial<BackgroundDependencies> = {}) => {
-  const ollama = createFakeOllama({ chatModels: ["qwen3:4b"] });
+  const ollama = createFakeOllama({ chatModels: ["gemma4:12b"] });
   const signals = await createSignalsApp({
     fetchResource: ollama.fetchResource,
     ...overrides,
@@ -4108,9 +4108,9 @@ const createExtractionApp = async (overrides: Partial<BackgroundDependencies> = 
   const { app, database } = signals;
 
   await Promise.all([database.clear(FACT_STORE), database.clear(EXTRACTION_STORE)]);
-  await app.handleMessage(buildRpcMessage("ollama.register", { name: "qwen3:4b" }));
+  await app.handleMessage(buildRpcMessage("ollama.register", { name: "gemma4:12b" }));
 
-  const ref = `ollama:qwen3:4b@${ollama.chatDigest}`;
+  const ref = `ollama:gemma4:12b@${ollama.chatDigest}`;
   const registered = await database.get(MODEL_STORE, ref);
 
   if (registered === undefined) {
@@ -4817,7 +4817,7 @@ const stuckJob = (isOutOfRetries = true) =>
 
 describe("a pause that is over, through the background", () => {
   it("hands paused work back once AI is turned on, since Ollama has just answered", async () => {
-    const ollama = createFakeOllama({ hasModel: false, chatModels: ["qwen3:4b"] });
+    const ollama = createFakeOllama({ hasModel: false, chatModels: ["gemma4:12b"] });
     const { app, database } = await createSessionApp({ fetchResource: ollama.fetchResource });
 
     await database.put(JOB_STORE, stuckJob());

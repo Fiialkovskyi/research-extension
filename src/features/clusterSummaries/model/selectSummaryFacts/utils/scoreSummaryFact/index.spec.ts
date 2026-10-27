@@ -36,6 +36,17 @@ describe("scoreSummaryFact", () => {
     expect(corroborated).toBeGreaterThan(trivia);
   });
 
+  it("puts the page's brand and the like below a key spec, and above what two pages state", () => {
+    const brand = scoreSummaryFact(
+      fact({ isPageData: true, attributeKey: "brand" }),
+      false,
+      undefined,
+    );
+
+    expect(brand).toBeLessThan(scoreSummaryFact(fact(), false, 9));
+    expect(brand).toBeGreaterThan(scoreSummaryFact(fact(), true, undefined));
+  });
+
   it("does not count a place past the key specs", () => {
     expect(scoreSummaryFact(fact(), false, 10)).toBe(0);
   });

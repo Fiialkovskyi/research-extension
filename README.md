@@ -148,7 +148,7 @@ checklist then walks you through the rest, and each step ticks itself when it is
 
 Once local AI is on, the same section offers **Page summaries (optional)**. They let the extension
 write summaries and comparison tables from the pages you read. **Turn on page summaries** downloads a
-second, larger model through Ollama — `qwen3:4b`, about 2.5 GB — checks that it extracts facts
+second, larger model through Ollama — `gemma4:12b`, about 7.7 GB — checks that it extracts facts
 correctly and stops when told, and switches it on. Check that your computer has the free disk space
 first.
 

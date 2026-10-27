@@ -11,9 +11,12 @@
 export {
   EXTRACT_FACTS_JOB,
   EXTRACT_FACTS_PRIORITY,
+  FACT_ANSWER_MAX_TOKENS,
+  FACT_CONTEXT_TOKENS,
   FACT_EXTRACTION_PROMPT,
   MAXIMUM_FACTS_PER_CHUNK,
   PRODUCT_DATA_PROMPT,
+  PRODUCT_ENTITY_TYPE,
   UNKNOWN_ENTITY_TYPE,
 } from "./constants";
 export {
@@ -23,9 +26,13 @@ export {
 } from "./schemas";
 export type { ExtractedFact, ExtractFactsPayload, FactExtractionAnswer, SealedFact } from "./types";
 export { buildFactExtractionMessages } from "./model/buildFactExtractionMessages";
+export { buildProductFacts } from "./model/buildProductFacts";
 export { enqueueFactExtractions } from "./model/enqueueFactExtractions";
 export { getFactProducerVersion } from "./model/getFactProducerVersion";
+export { isImplausibleSubject } from "./model/isImplausibleSubject";
 export { isQuoteGrounded } from "./model/isQuoteGrounded";
+export { repairSubject } from "./model/repairSubject";
+export { tidyFacts } from "./model/tidyFacts";
 export { readFactAnswer } from "./model/readFactAnswer";
 export { readSealedFact } from "./model/readSealedFact";
 export {

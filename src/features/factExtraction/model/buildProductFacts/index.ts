@@ -1,7 +1,7 @@
 import type { PageProduct } from "@/features/pageMetadata";
 
-import { PRODUCT_DATA_QUOTE_PREFIX } from "../../../../constants";
-import type { ExtractedFact } from "../../../../types";
+import { PRODUCT_DATA_QUOTE_PREFIX } from "../../constants";
+import type { ExtractedFact } from "../../types";
 
 /**
  * Makes facts of a page's product from the data the page gave about it — price

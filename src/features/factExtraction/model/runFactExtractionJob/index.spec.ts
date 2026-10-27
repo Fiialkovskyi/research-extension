@@ -8,6 +8,7 @@ import type { GenerateRequest, GenerationStream } from "@/features/inference";
 import { recordSnapshot } from "@/features/pageSnapshots";
 import { chunkText } from "@/features/snapshotEmbeddings";
 
+import { FACT_ANSWER_MAX_TOKENS, FACT_CONTEXT_TOKENS } from "../../constants";
 import { readSealedFact } from "../readSealedFact";
 import {
   CHUNK_STORE,
@@ -192,7 +193,7 @@ describe("runFactExtractionJob", () => {
       nodeId: "node-a",
       provenance: {
         modelRef: "ollama:qwen3:4b@abc",
-        prompt: "factExtraction@3",
+        prompt: "factExtraction@4",
         chunkerVersion: "chunker@1",
       },
     });
@@ -254,9 +255,9 @@ describe("runFactExtractionJob", () => {
 
     expect(generate).toHaveBeenCalledTimes(CHUNK_COUNT);
     expect(generate.mock.calls[0]?.[0]).toMatchObject({
-      maxTokens: 1_024,
+      maxTokens: FACT_ANSWER_MAX_TOKENS,
       temperature: 0,
-      contextTokens: 4_096,
+      contextTokens: FACT_CONTEXT_TOKENS,
       responseSchema: expect.objectContaining({ required: ["entities", "facts"] }),
     });
   });

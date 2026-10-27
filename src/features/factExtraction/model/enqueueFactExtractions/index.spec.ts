@@ -107,7 +107,7 @@ describe("enqueueFactExtractions", () => {
     expect(jobs).toHaveLength(2);
     expect(jobs.every(({ type }) => type === "extractFacts")).toBe(true);
     expect(jobs.every(({ priority }) => priority < 0)).toBe(true);
-    expect(jobs[0]?.producerVersion).toMatch(/^factExtraction@3\|ollama:qwen3:4b@abc\|/u);
+    expect(jobs[0]?.producerVersion).toMatch(/^factExtraction@4\|ollama:qwen3:4b@abc\|/u);
     expect(jobs.map(({ payload }) => payload)).toEqual(
       expect.arrayContaining([{ snapshotId: expect.any(String) }]),
     );

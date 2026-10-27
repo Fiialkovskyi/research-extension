@@ -34,9 +34,11 @@ import { extractFactsCheckpointSchema, extractFactsPayloadSchema } from "../../s
 import { buildFactExtractionMessages } from "../buildFactExtractionMessages";
 import { isQuoteGrounded } from "../isQuoteGrounded";
 import { readFactAnswer } from "../readFactAnswer";
+import { repairSubject } from "../repairSubject";
+import { tidyFacts } from "../tidyFacts";
 import { buildExtractionRecord } from "./utils/buildExtractionRecord";
-import { buildProductFacts } from "./utils/buildProductFacts";
-import { isImplausibleSubject } from "./utils/isImplausibleSubject";
+import { buildProductFacts } from "../buildProductFacts";
+import { isImplausibleSubject } from "../isImplausibleSubject";
 import { sealFact } from "./utils/sealFact";
 
 export interface RunFactExtractionJobOptions {
@@ -202,14 +204,15 @@ export const runFactExtractionJob = async ({
     // Each subject's type, as the answer listed it among its entities.
     const types = new Map(
       (answer.isValid ? answer.answer.entities : []).map(({ name, entity_type: type }) => [
-        normalizeEntityName(name),
+        normalizeEntityName(repairSubject(name, context.productName)),
         type,
       ]),
     );
     // Kept only when the passage says it and its subject can be a thing a page is about; the
     // rest count as dropped.
-    const grounded = facts.filter(
-      (fact) => isQuoteGrounded(fact.quote, passage) && !isImplausibleSubject(fact),
+    const { facts: grounded } = tidyFacts(
+      facts.filter((fact) => isQuoteGrounded(fact.quote, passage) && !isImplausibleSubject(fact)),
+      context.productName,
     );
     const provenance = { modelRef, prompt, chunkerVersion: CHUNKER_VERSION, extractedAt: now() };
     const sealed = await Promise.all(

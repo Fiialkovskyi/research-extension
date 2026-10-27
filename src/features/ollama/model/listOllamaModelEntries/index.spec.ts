@@ -50,21 +50,21 @@ describe("listOllamaModelEntries", () => {
     expect(listOllamaModelEntries([], [])).toEqual([
       expect.objectContaining({ name: "nomic-embed-text", isPulled: false, size: "274 MB" }),
       expect.objectContaining({
-        name: "qwen3:4b",
+        name: "gemma4:12b",
         family: "text-generation",
         isPulled: false,
-        size: "2.5 GB",
+        size: "7.7 GB",
       }),
     ]);
   });
 
   it("does not take another tag of a tagged recommendation for it", () => {
     const names = listOllamaModelEntries(
-      [{ name: "qwen3:0.6b", digest: DIGEST, size: 500_000_000 }],
+      [{ name: "gemma4:4b", digest: DIGEST, size: 500_000_000 }],
       [],
     ).map(({ name }) => name);
 
-    expect(names).toContain("qwen3:4b");
+    expect(names).toContain("gemma4:12b");
   });
 
   it("does not take a re-pulled model for the registered one", () => {

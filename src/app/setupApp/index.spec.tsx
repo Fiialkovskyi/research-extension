@@ -45,7 +45,7 @@ const RUNNING = buildRpcMessage("ollama.state", {
   state: "running",
   models: [
     { ...ENTRY, name: "nomic-embed-text" },
-    { ...ENTRY, name: "qwen3:4b", family: "text-generation", size: "2.5 GB" },
+    { ...ENTRY, name: "gemma4:12b", family: "text-generation", size: "7.7 GB" },
   ],
 });
 
@@ -89,7 +89,7 @@ describe("SetupApp", () => {
 
     push(RUNNING);
     expect(readStep()).toBe("turnOn");
-    expect(screen.getByTestId("setup-size").textContent).toContain("about 2.8 GB");
+    expect(screen.getByTestId("setup-size").textContent).toContain("about 8.0 GB");
   });
 
   it("asks Ollama again every few seconds while waiting for the user", () => {
@@ -131,7 +131,7 @@ describe("SetupApp", () => {
 
     push(
       buildRpcMessage("aiSetup.turnOnProgress", {
-        name: "qwen3:4b",
+        name: "gemma4:12b",
         family: "text-generation",
         stage: "downloading",
         fraction: 0.5,
@@ -167,14 +167,14 @@ describe("SetupApp", () => {
     fireEvent.click(screen.getByTestId("setup-turn-on"));
     push(
       buildRpcMessage("aiSetup.turnOnFailed", {
-        name: "qwen3:4b",
+        name: "gemma4:12b",
         stage: "checking",
         reason: "It did not pass.",
       }),
     );
 
     expect(readStep()).toBe("turnOn");
-    expect(screen.getByRole("alert").textContent).toContain("qwen3:4b");
+    expect(screen.getByRole("alert").textContent).toContain("gemma4:12b");
     expect(screen.getByTestId("setup-turn-on").textContent).toBe("Try again");
   });
 
